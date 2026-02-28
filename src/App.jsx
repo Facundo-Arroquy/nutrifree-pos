@@ -155,6 +155,9 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
   const [custModal, setCustModal] = useState(false);
   const [payMethod, setPayMethod] = useState("cash");
   const [orderNotes, setOrderNotes] = useState("");
+  const [discountType, setDiscountType] = useState("pct"); // "pct" | "fixed"
+  const [discountValue, setDiscountValue] = useState("");
+  const [editingPrice, setEditingPrice] = useState(null);
 
   const categories = ["Todos", ...new Set(products.map(p => p.category))];
   const filtered = products.filter(p => p.active &&
@@ -171,7 +174,7 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
         return prev.map(i => i.productId===prod.id ? {...i, qty:i.qty+1, subtotal:(i.qty+1)*i.price} : i);
       }
       const price = priceList==="retail" ? prod.priceRetail : prod.priceWholesale;
-      return [...prev, { productId:prod.id, name:prod.name, qty:1, price, subtotal:price }];
+      return [...prev, { productId:prod.id, name:prod.name, qty:1, price, originalPrice:price, priceOverridden:false, subtotal:price }];
     });
   };
 
@@ -186,10 +189,23 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
 
   const removeItem = id => setCart(prev => prev.filter(i => i.productId !== id));
 
-  const subtotal = cart.reduce((a,b) => a+b.subtotal, 0);
-  const total = subtotal;
+  const overridePrice = (productId, newPrice) => {
+    const p = Number(newPrice);
+    if (isNaN(p) || p < 0) { setEditingPrice(null); return; }
+    setCart(prev => prev.map(i => i.productId===productId ? {...i, price:p, subtotal:i.qty*p, priceOverridden:true} : i));
+    setEditingPrice(null);
+  };
 
-  const clearCart = () => { setCart([]); setSelectedCustomer(null); setOrderNotes(""); setPriceList("retail"); };
+  const subtotal = cart.reduce((a,b) => a+b.subtotal, 0);
+  const discountAmt = discountType==="pct"
+    ? Math.round(subtotal * (Number(discountValue)||0) / 100)
+    : Math.min(Number(discountValue)||0, subtotal);
+  const total = subtotal - discountAmt;
+
+  const clearCart = () => {
+    setCart([]); setSelectedCustomer(null); setOrderNotes("");
+    setPriceList("retail"); setDiscountType("pct"); setDiscountValue(""); setEditingPrice(null);
+  };
 
   const completeSale = (status="closed") => {
     if (cart.length === 0) { showToast("El carrito está vacío", "error"); return; }
@@ -204,6 +220,9 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
       status,
       notes: orderNotes,
       createdAt: new Date().toISOString(),
+      discountType,
+      discountValue: Number(discountValue) || 0,
+      discountAmount: discountAmt,
     };
     // deduct stock
     setProducts(prev => prev.map(p => {
@@ -226,13 +245,14 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
     showToast(status==="closed" ? "Venta registrada ✓" : "Pedido guardado ✓");
   };
 
-  // recalc prices when list changes
+  // recalc prices when list changes (skip manually overridden items)
   useEffect(() => {
     setCart(prev => prev.map(i => {
+      if (i.priceOverridden) return i;
       const prod = products.find(p => p.id === i.productId);
       if (!prod) return i;
       const price = priceList==="retail" ? prod.priceRetail : prod.priceWholesale;
-      return {...i, price, subtotal:i.qty*price};
+      return {...i, price, originalPrice:price, subtotal:i.qty*price};
     }));
   }, [priceList]);
 
@@ -301,7 +321,22 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
             <div key={item.productId} className="cart-item">
               <div style={{ flex:1, minWidth:0 }}>
                 <div className="cart-item-name">{item.name}</div>
-                <div className="cart-item-sub">{$(item.price)} c/u</div>
+                <div className="cart-item-sub" style={{ display:"flex", alignItems:"center", gap:3 }}>
+                  {editingPrice===item.productId ? (
+                    <input type="number" defaultValue={item.price} autoFocus
+                      style={{ width:74, padding:"1px 5px", fontSize:".82em", borderRadius:5, border:"1px solid var(--border)" }}
+                      onBlur={e => overridePrice(item.productId, e.target.value)}
+                      onKeyDown={e => { if(e.key==="Enter") overridePrice(item.productId, e.target.value); if(e.key==="Escape") setEditingPrice(null); }}
+                    />
+                  ) : (
+                    <>
+                      <span style={item.priceOverridden ? {color:"var(--amber)",fontWeight:600} : {}}>{$(item.price)} c/u</span>
+                      <button className="btn btn-ghost btn-icon" style={{padding:2}} title="Editar precio" onClick={()=>setEditingPrice(item.productId)}>
+                        <Ico n="edit" s={10} c="var(--t4)"/>
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
               <div className="qty-ctrl">
                 <button className="qty-btn" onClick={()=>updateQty(item.productId,-1)}>−</button>
@@ -321,6 +356,18 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
         {/* Footer */}
         <div className="pos-cart-footer">
           <div className="tot-row"><span>Subtotal</span><span>{$(subtotal)}</span></div>
+          <div className="tot-row" style={{ alignItems:"center", gap:6 }}>
+            <span style={{ color:"var(--t2)", flexShrink:0 }}>Descuento</span>
+            <div style={{ display:"flex", alignItems:"center", gap:5, flex:1, justifyContent:"flex-end" }}>
+              <div style={{ display:"flex", border:"1px solid var(--border)", borderRadius:6, overflow:"hidden" }}>
+                <button style={{ padding:"2px 8px", background:discountType==="pct"?"var(--green)":"var(--s2)", color:discountType==="pct"?"white":"var(--t2)", border:"none", cursor:"pointer", fontWeight:700, fontSize:".74em" }} onClick={()=>setDiscountType("pct")}>%</button>
+                <button style={{ padding:"2px 8px", background:discountType==="fixed"?"var(--green)":"var(--s2)", color:discountType==="fixed"?"white":"var(--t2)", border:"none", cursor:"pointer", fontWeight:700, fontSize:".74em" }} onClick={()=>setDiscountType("fixed")}>$</button>
+              </div>
+              <input type="number" min="0" value={discountValue} onChange={e=>setDiscountValue(e.target.value)}
+                style={{ width:58, padding:"2px 6px", fontSize:".86em", textAlign:"right", borderRadius:6, border:"1px solid var(--border)", background:"var(--s1)" }} placeholder="0"/>
+              {discountAmt>0 && <span style={{ color:"var(--red)", fontWeight:600, minWidth:54, textAlign:"right" }}>-{$(discountAmt)}</span>}
+            </div>
+          </div>
           <div className="tot-row total"><span>TOTAL</span><span style={{color:"var(--green)"}}>{$(total)}</span></div>
           <div style={{ display:"flex", gap:8, marginTop:14 }}>
             <button className="btn btn-secondary" style={{ flex:1 }} disabled={cart.length===0}
@@ -348,7 +395,12 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
           </button>
           {customers.map(c => (
             <button key={c.id} className="btn btn-ghost btn-block btn-sm" style={{ marginBottom:6, justifyContent:"flex-start", textAlign:"left" }}
-              onClick={()=>{ setSelectedCustomer(c); setPriceList(c.priceList); setCustModal(false); }}>
+              onClick={()=>{
+                setSelectedCustomer(c);
+                setPriceList(c.priceList);
+                if ((c.discountPct||0) > 0) { setDiscountType("pct"); setDiscountValue(String(c.discountPct)); }
+                setCustModal(false);
+              }}>
               <Ico n="user" s={14}/>
               <div>
                 <div>{c.name}</div>
@@ -364,6 +416,20 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
       {/* PAYMENT MODAL */}
       {payModal && (
         <Modal title="Completar venta" onClose={()=>setPayModal(false)}>
+          {discountAmt > 0 && (
+            <div className="tot-row" style={{ marginBottom:4 }}>
+              <span style={{ color:"var(--t3)" }}>Subtotal</span>
+              <span style={{ color:"var(--t3)" }}>{$(subtotal)}</span>
+            </div>
+          )}
+          {discountAmt > 0 && (
+            <div className="tot-row" style={{ marginBottom:10 }}>
+              <span style={{ color:"var(--red)" }}>
+                Descuento {discountType==="pct" ? `${discountValue}%` : "fijo"}
+              </span>
+              <span style={{ color:"var(--red)", fontWeight:600 }}>-{$(discountAmt)}</span>
+            </div>
+          )}
           <div className="tot-row" style={{ fontSize:"1.1em", marginBottom:16 }}>
             <span style={{ fontWeight:700 }}>Total a cobrar:</span>
             <span style={{ fontWeight:800, color:"var(--green)", fontSize:"1.3em" }}>{$(total)}</span>
@@ -510,12 +576,12 @@ function OrdersPage({ sales, setSales, products, setProducts, customers, showToa
 function CustomersPage({ customers, setCustomers, sales, showToast }) {
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState(null); // null | "new" | customer
-  const [form, setForm] = useState({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0 });
+  const [form, setForm] = useState({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0, discountPct:0 });
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
 
   const filtered = customers.filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search));
 
-  const openNew = () => { setForm({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0 }); setModal("new"); };
+  const openNew = () => { setForm({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0, discountPct:0 }); setModal("new"); };
   const openEdit = c => { setForm({...c}); setModal(c); };
 
   const save = () => {
@@ -565,7 +631,7 @@ function CustomersPage({ customers, setCustomers, sales, showToast }) {
 
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Nombre</th><th>Teléfono</th><th>Lista</th><th>Saldo</th><th>Notas</th><th></th></tr></thead>
+          <thead><tr><th>Nombre</th><th>Teléfono</th><th>Lista</th><th>Descuento</th><th>Saldo</th><th>Notas</th><th></th></tr></thead>
           <tbody>
             {filtered.map(c => {
               const custSales = sales.filter(s=>s.customerId===c.id).length;
@@ -574,6 +640,7 @@ function CustomersPage({ customers, setCustomers, sales, showToast }) {
                   <td><div style={{ fontWeight:600 }}>{c.name}</div><div style={{ fontSize:".76em", color:"var(--t3)" }}>{custSales} compra{custSales!==1?"s":""}</div></td>
                   <td style={{ color:"var(--t2)" }}>{c.phone||"—"}</td>
                   <td><span className={`badge ${c.priceList==="wholesale"?"badge-blue":"badge-green"}`}>{c.priceList==="wholesale"?"Mayorista":"Minorista"}</span></td>
+                  <td>{(c.discountPct||0)>0 ? <span className="badge badge-amber">{c.discountPct}%</span> : <span style={{color:"var(--t4)"}}>—</span>}</td>
                   <td><span className={c.balance>0?"balance-pos":c.balance<0?"balance-neg":"balance-zero"}>{$(c.balance)}</span></td>
                   <td style={{ color:"var(--t3)", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.notes||"—"}</td>
                   <td>
@@ -600,6 +667,7 @@ function CustomersPage({ customers, setCustomers, sales, showToast }) {
             </div>
             <div className="form-group full"><label className="lbl">Dirección</label><input value={form.address} onChange={e=>set("address",e.target.value)}/></div>
             <div className="form-group"><label className="lbl">Saldo inicial ($)</label><input type="number" value={form.balance} onChange={e=>set("balance",e.target.value)}/></div>
+            <div className="form-group"><label className="lbl">Descuento por defecto (%)</label><input type="number" min="0" max="100" value={form.discountPct||0} onChange={e=>set("discountPct",e.target.value)}/></div>
             <div className="form-group full"><label className="lbl">Notas</label><textarea value={form.notes} onChange={e=>set("notes",e.target.value)}/></div>
           </div>
           {modal!=="new" && (
