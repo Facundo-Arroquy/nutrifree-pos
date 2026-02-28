@@ -62,7 +62,7 @@ const clamp = (v,mn,mx) => Math.min(Math.max(v,mn),mx);
 
 const STATUS_LABELS = { open:"Abierto", pending:"Pend. pago", ready:"Listo", delivered:"Entregado", cancelled:"Cancelado", closed:"Cerrado" };
 const STATUS_COLORS = { open:"badge-blue", pending:"badge-amber", ready:"badge-green", delivered:"badge-gray", cancelled:"badge-red", closed:"badge-gray" };
-const PAY_LABELS = { cash:"Efectivo", transfer:"Transferencia", account:"Cuenta corriente", other:"Otro" };
+const PAY_LABELS = { cash:"Efectivo", transfer:"Transferencia", card:"Tarjeta", account:"Cuenta corriente" };
 
 // ─── STYLES ───────────────────────────────────────────────────────────────────
 const CSS = `

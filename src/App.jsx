@@ -482,6 +482,13 @@ function OrdersPage({ sales, setSales, products, setProducts, customers, showToa
     showToast("Estado actualizado");
   };
 
+  const changePayment = (id, paymentMethod) => {
+    supabase.from("sales").update({ payment_method: paymentMethod }).eq("id", id).then(() => {});
+    setSales(prev => prev.map(s => s.id===id ? {...s,paymentMethod} : s));
+    if (selected?.id===id) setSelected(prev => ({...prev,paymentMethod}));
+    showToast("Método de pago actualizado");
+  };
+
   const cancelOrder = (sale) => {
     // restore stock
     setProducts(prev => prev.map(p => {
@@ -541,7 +548,24 @@ function OrdersPage({ sales, setSales, products, setProducts, customers, showToa
             <div><label className="lbl">Cliente</label><div style={{ marginTop:4 }}>{selected.customerName}</div></div>
             <div><label className="lbl">Estado</label><div style={{ marginTop:4 }}><span className={`badge ${STATUS_COLORS[selected.status]}`}>{STATUS_LABELS[selected.status]}</span></div></div>
             <div><label className="lbl">Fecha</label><div style={{ marginTop:4, fontSize:".88em" }}>{fmtDT(selected.createdAt)}</div></div>
-            <div><label className="lbl">Pago</label><div style={{ marginTop:4 }}>{PAY_LABELS[selected.paymentMethod]||selected.paymentMethod}</div></div>
+            <div style={{ gridColumn:"1/-1" }}>
+              <label className="lbl">Método de pago</label>
+              {selected.status!=="closed" && selected.status!=="cancelled" ? (
+                <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:6 }}>
+                  {Object.entries(PAY_LABELS).map(([k,v]) => (
+                    (!k.includes("account") || selected.customerId) && (
+                      <button key={k}
+                        className={`btn btn-sm ${selected.paymentMethod===k?"btn-primary":"btn-secondary"}`}
+                        onClick={()=>changePayment(selected.id, k)}>
+                        {selected.paymentMethod===k && <Ico n="check" s={12}/>}{v}
+                      </button>
+                    )
+                  ))}
+                </div>
+              ) : (
+                <div style={{ marginTop:4, fontWeight:600 }}>{PAY_LABELS[selected.paymentMethod]||selected.paymentMethod}</div>
+              )}
+            </div>
           </div>
           {selected.notes && <div style={{ background:"var(--amberl)", border:"1px solid var(--amberlb)", borderRadius:8, padding:"8px 12px", marginBottom:14, fontSize:".84em" }}>📝 {selected.notes}</div>}
           <div className="section-title">Items</div>
@@ -1083,6 +1107,13 @@ function ReportsPage({ sales, products }) {
 
   const stockAlert = products.filter(p=>p.active&&p.stock<=5).sort((a,b)=>a.stock-b.stock);
 
+  const closedSales = pSales.filter(s => s.status==="closed" || s.status==="delivered");
+  const payMethodTotals = {};
+  closedSales.forEach(s => {
+    const k = s.paymentMethod || "other";
+    payMethodTotals[k] = (payMethodTotals[k]||0) + s.total;
+  });
+
   return (
     <div className="page">
       <div className="page-header">
@@ -1134,6 +1165,26 @@ function ReportsPage({ sales, products }) {
             ))
           }
         </div>
+      </div>
+
+      <div className="card" style={{ marginBottom:16 }}>
+        <div className="section-title">Ingresos por método de pago</div>
+        {closedSales.length===0 ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin ventas en el período</div> :
+          Object.entries(PAY_LABELS).map(([k,v]) => {
+            const amt = payMethodTotals[k]||0;
+            const pct = totalIncome>0 ? Math.round(amt/totalIncome*100) : 0;
+            return (
+              <div key={k} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", borderBottom:"1px solid var(--border)" }}>
+                <span style={{ fontSize:".86em", color:"var(--t2)", width:130 }}>{v}</span>
+                <div style={{ flex:1, height:7, background:"var(--s2)", borderRadius:4, overflow:"hidden" }}>
+                  <div style={{ width:`${pct}%`, height:"100%", background:"var(--green)", borderRadius:4 }}/>
+                </div>
+                <span style={{ fontSize:".82em", color:"var(--t3)", width:32, textAlign:"right" }}>{pct}%</span>
+                <span style={{ fontWeight:700, color:amt>0?"var(--green)":"var(--t4)", width:80, textAlign:"right" }}>{$(amt)}</span>
+              </div>
+            );
+          })
+        }
       </div>
 
       <div className="card">
