@@ -66,3 +66,18 @@ export const recipeToDb = r => ({
   cook_time: r.cookTime, yield: r.yield, notes: r.notes,
   ingredients: r.ingredients, steps: r.steps,
 });
+
+export const dbToExpense = r => ({
+  id: r.id, date: r.date, supplier: r.supplier, concept: r.concept,
+  quantity: r.quantity, unit: r.unit, unitPrice: r.unit_price,
+  total: r.total, paymentMethod: r.payment_method,
+  paymentStatus: r.payment_status, category: r.category, notes: r.notes,
+  createdAt: r.created_at,
+});
+
+export const expenseToDb = e => ({
+  id: e.id, date: e.date, supplier: e.supplier, concept: e.concept,
+  quantity: e.quantity, unit: e.unit, unit_price: e.unitPrice,
+  total: e.total, payment_method: e.paymentMethod,
+  payment_status: e.paymentStatus, category: e.category, notes: e.notes,
+});

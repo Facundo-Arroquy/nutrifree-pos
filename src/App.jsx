@@ -11,6 +11,7 @@ import {
   dbToCustomer, customerToDb,
   dbToSale, saleToDb,
   dbToRecipe, recipeToDb,
+  dbToExpense, expenseToDb,
 } from "./supabase.js";
 
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
@@ -22,16 +23,18 @@ export default function App() {
   const [sales, setSales] = useState(SEED_SALES);
   const [recipes, setRecipes] = useState(SEED_RECIPES);
   const [categories, setCategories] = useState(SEED_CATEGORIES);
+  const [expenses, setExpenses] = useState([]);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: cats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }] = await Promise.all([
+      const [{ data: cats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }] = await Promise.all([
         supabase.from("categories").select("*"),
         supabase.from("products").select("*"),
         supabase.from("customers").select("*"),
         supabase.from("sales").select("*").order("created_at", { ascending: false }),
         supabase.from("recipes").select("*"),
+        supabase.from("expenses").select("*").order("created_at", { ascending: false }),
       ]);
       // If DB is empty for a table, seed it with default data
       if (cats && cats.length > 0) {
@@ -50,6 +53,7 @@ export default function App() {
         supabase.from("customers").insert(SEED_CUSTOMERS.map(customerToDb)).then(() => {});
       }
       if (sls && sls.length > 0) setSales(sls.map(dbToSale));
+      if (exps && exps.length > 0) setExpenses(exps.map(dbToExpense));
       if (recs && recs.length > 0) {
         setRecipes(recs.map(dbToRecipe));
       } else {
@@ -75,13 +79,14 @@ export default function App() {
     { id:"products", label:"Productos", icon:"products", roles:["admin","vendor"], section:"main" },
     { id:"production", label:"Producción", icon:"production", roles:["admin","vendor"], section:"admin" },
     { id:"recipes", label:"Recetas", icon:"recipes", roles:["admin","vendor"], section:"admin" },
+    { id:"expenses", label:"Gastos", icon:"expenses", roles:["admin"], section:"admin" },
     { id:"reports", label:"Reportes", icon:"reports", roles:["admin"], section:"admin" },
     { id:"settings", label:"Configuración", icon:"settings", roles:["admin"], section:"admin" },
   ].filter(n => n.roles.includes(user.role));
   const mainNav = nav.filter(n => n.section === "main");
   const adminNav = nav.filter(n => n.section === "admin");
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, showToast, setPage };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenses, setExpenses, showToast, setPage };
 
   return (
     <>
@@ -134,6 +139,7 @@ export default function App() {
             {page==="products" && <ProductsPage {...props}/>}
             {page==="production" && <ProductionPage {...props}/>}
             {page==="recipes" && <RecipesPage {...props}/>}
+            {page==="expenses" && <ExpensesPage {...props}/>}
             {page==="reports" && <ReportsPage {...props}/>}
             {page==="settings" && <SettingsPage {...props}/>}
           </div>
@@ -1088,6 +1094,233 @@ function RecipesPage({ recipes, setRecipes, products, showToast }) {
         </Modal>
       )}
     </div>
+  );
+}
+
+// ─── EXPENSES PAGE ────────────────────────────────────────────────────────────
+const EXPENSE_CATEGORIES = ["Ingredientes", "Servicios", "Envases", "Limpieza", "Otros"];
+const EXPENSE_UNITS = ["unidades", "kg", "g", "litros", "porciones"];
+
+function ExpensesPage({ expenses, setExpenses, recipes, setRecipes, showToast }) {
+  const emptyForm = { date:todayStr(), supplier:"", concept:"", quantity:1, unit:"unidades", unitPrice:0, total:0, paymentMethod:"", paymentStatus:"pending", category:"Ingredientes", notes:"" };
+  const [modal, setModal] = useState(null);
+  const [payModal, setPayModal] = useState(null);
+  const [form, setForm] = useState(emptyForm);
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterCat, setFilterCat] = useState("Todos");
+
+  const set = (k, v) => setForm(p => {
+    const np = {...p, [k]:v};
+    if (k==="quantity" || k==="unitPrice") np.total = Number(np.quantity||0) * Number(np.unitPrice||0);
+    return np;
+  });
+
+  const cats = ["Todos", ...EXPENSE_CATEGORIES];
+  const filtered = expenses
+    .filter(e => filterStatus==="all" || e.paymentStatus===filterStatus)
+    .filter(e => filterCat==="Todos" || e.category===filterCat)
+    .sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  const totalPaid    = expenses.filter(e=>e.paymentStatus==="paid").reduce((a,b)=>a+b.total,0);
+  const totalPending = expenses.filter(e=>e.paymentStatus==="pending").reduce((a,b)=>a+b.total,0);
+
+  const openNew  = () => { setForm(emptyForm); setModal("new"); };
+  const openEdit = e  => { setForm({...e}); setModal(e); };
+
+  // When saving an ingredient expense, update matching ingredient costs in recipes
+  const syncIngredientCosts = (concept, unitPrice) => {
+    if (!unitPrice || !concept) return 0;
+    const lc = concept.toLowerCase().trim();
+    let count = 0;
+    setRecipes(prev => prev.map(r => {
+      const hasMatch = r.ingredients.some(i => i.name.toLowerCase().includes(lc));
+      if (!hasMatch) return r;
+      const newIngredients = r.ingredients.map(i =>
+        i.name.toLowerCase().includes(lc) ? {...i, cost: Number(unitPrice)} : i
+      );
+      supabase.from("recipes").update({ ingredients: newIngredients }).eq("id", r.id).then(() => {});
+      count++;
+      return {...r, ingredients: newIngredients};
+    }));
+    return count;
+  };
+
+  const save = () => {
+    if (!form.concept) { showToast("El concepto es obligatorio", "error"); return; }
+    const data = {
+      ...form,
+      quantity: Number(form.quantity)||0,
+      unitPrice: Number(form.unitPrice)||0,
+      total: Number(form.total)||0,
+      paymentMethod: form.paymentMethod||null,
+    };
+    if (modal==="new") {
+      const newExp = {...data, id:uid()};
+      supabase.from("expenses").insert(expenseToDb(newExp)).then(() => {});
+      setExpenses(p => [newExp, ...p]);
+    } else {
+      supabase.from("expenses").update(expenseToDb(data)).eq("id", modal.id).then(() => {});
+      setExpenses(p => p.map(e => e.id===modal.id ? {...e,...data} : e));
+    }
+    if (data.category==="Ingredientes" && data.unitPrice > 0) {
+      const updated = syncIngredientCosts(data.concept, data.unitPrice);
+      if (updated > 0) showToast(`Gasto guardado · Costo actualizado en ${updated} receta${updated!==1?"s":""}`);
+      else showToast("Gasto guardado");
+    } else {
+      showToast("Gasto guardado");
+    }
+    setModal(null);
+  };
+
+  const del = id => {
+    if (confirm("¿Eliminar gasto?")) {
+      supabase.from("expenses").delete().eq("id", id).then(() => {});
+      setExpenses(p => p.filter(e => e.id!==id));
+      showToast("Eliminado");
+    }
+  };
+
+  const closeExpense = (expense, paymentMethod) => {
+    supabase.from("expenses").update({ payment_method: paymentMethod, payment_status:"paid" }).eq("id", expense.id).then(() => {});
+    setExpenses(p => p.map(e => e.id===expense.id ? {...e, paymentMethod, paymentStatus:"paid"} : e));
+    setPayModal(null);
+    showToast("Gasto cerrado ✓");
+  };
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <div><div className="page-title">Gastos</div><div className="page-sub">{expenses.length} registrados</div></div>
+        <button className="btn btn-primary" onClick={openNew}><Ico n="plus" s={14}/>Nuevo gasto</button>
+      </div>
+
+      <div className="stats-row" style={{ gridTemplateColumns:"repeat(3,1fr)" }}>
+        <div className="stat stat-red"><div className="stat-num">{$(totalPaid)}</div><div className="stat-label">Total pagado</div><div className="stat-icon">💸</div></div>
+        <div className="stat stat-amber"><div className="stat-num">{$(totalPending)}</div><div className="stat-label">Pendiente de pago</div><div className="stat-icon">⏳</div></div>
+        <div className="stat"><div className="stat-num">{expenses.length}</div><div className="stat-label">Gastos registrados</div><div className="stat-icon">📋</div></div>
+      </div>
+
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
+        {[["all","Todos"],["pending","Pendientes"],["paid","Pagados"]].map(([v,l]) => (
+          <button key={v} className={`btn btn-sm ${filterStatus===v?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterStatus(v)}>{l}</button>
+        ))}
+      </div>
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:16, alignItems:"center" }}>
+        <span style={{ fontSize:".74em", fontWeight:700, color:"var(--t4)", textTransform:"uppercase", letterSpacing:".5px" }}>Cat.:</span>
+        {cats.map(c => (
+          <button key={c} className={`btn btn-sm ${filterCat===c?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterCat(c)}>{c}</button>
+        ))}
+      </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Fecha</th><th>Proveedor</th><th>Concepto</th><th>Cant.</th><th>P. Unit.</th><th>Total</th><th>Categoría</th><th>Método pago</th><th>Estado</th><th></th></tr></thead>
+          <tbody>
+            {filtered.map(e => (
+              <tr key={e.id} className="tr-click" onClick={()=>openEdit(e)}>
+                <td style={{ fontSize:".82em", color:"var(--t3)", whiteSpace:"nowrap" }}>{fmtDate(e.date)}</td>
+                <td style={{ fontWeight:600 }}>{e.supplier||"—"}</td>
+                <td>{e.concept}</td>
+                <td style={{ color:"var(--t2)", whiteSpace:"nowrap" }}>{e.quantity} {e.unit}</td>
+                <td style={{ color:"var(--t2)" }}>{$(e.unitPrice)}</td>
+                <td style={{ fontWeight:700, color:"var(--red)" }}>{$(e.total)}</td>
+                <td><span className="tag">{e.category}</span></td>
+                <td style={{ fontSize:".82em", color:"var(--t3)" }}>{e.paymentMethod ? PAY_LABELS[e.paymentMethod]||e.paymentMethod : <span style={{color:"var(--t4)"}}>—</span>}</td>
+                <td>
+                  {e.paymentStatus==="paid"
+                    ? <span className="badge badge-green">Pagado</span>
+                    : <span className="badge badge-amber">Pendiente</span>}
+                </td>
+                <td onClick={ev=>ev.stopPropagation()} style={{ display:"flex", gap:4, alignItems:"center" }}>
+                  {e.paymentStatus==="pending" && (
+                    <button className="btn btn-sm btn-primary" style={{ fontSize:".76em", padding:"4px 9px" }} onClick={()=>setPayModal(e)}>
+                      <Ico n="check" s={12}/>Cerrar
+                    </button>
+                  )}
+                  <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>del(e.id)}><Ico n="trash" s={13} c="var(--red)"/></button>
+                </td>
+              </tr>
+            ))}
+            {filtered.length===0 && <tr><td colSpan={10}><div className="empty"><div className="empty-icon">💸</div><h3>Sin gastos</h3></div></td></tr>}
+          </tbody>
+        </table>
+      </div>
+
+      {modal && (
+        <Modal title={modal==="new"?"Nuevo gasto":form.concept} onClose={()=>setModal(null)} lg>
+          <div className="form-grid">
+            <div className="form-group"><label className="lbl">Fecha</label><input type="date" value={form.date} onChange={e=>set("date",e.target.value)}/></div>
+            <div className="form-group"><label className="lbl">Proveedor</label><input value={form.supplier} onChange={e=>set("supplier",e.target.value)} placeholder="Nombre del proveedor"/></div>
+            <div className="form-group full"><label className="lbl">Concepto / Producto *</label><input value={form.concept} onChange={e=>set("concept",e.target.value)} autoFocus placeholder="¿Qué se compró?"/></div>
+            <div className="form-group">
+              <label className="lbl">Cantidad</label>
+              <div style={{ display:"flex", gap:6 }}>
+                <input type="number" min="0" style={{ flex:1 }} value={form.quantity} onChange={e=>set("quantity",e.target.value)}/>
+                <select style={{ width:110 }} value={form.unit} onChange={e=>set("unit",e.target.value)}>
+                  {EXPENSE_UNITS.map(u=><option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="form-group"><label className="lbl">Precio unitario</label><input type="number" min="0" value={form.unitPrice} onChange={e=>set("unitPrice",e.target.value)}/></div>
+            <div className="form-group"><label className="lbl">Total</label><input type="number" min="0" value={form.total} onChange={e=>set("total",e.target.value)} style={{ fontWeight:700 }}/></div>
+            <div className="form-group"><label className="lbl">Categoría</label>
+              <select value={form.category} onChange={e=>set("category",e.target.value)}>
+                {EXPENSE_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="form-group"><label className="lbl">Método de pago</label>
+              <select value={form.paymentMethod||""} onChange={e=>set("paymentMethod",e.target.value||null)}>
+                <option value="">Pendiente</option>
+                {Object.entries(PAY_LABELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+            <div className="form-group"><label className="lbl">Estado de pago</label>
+              <select value={form.paymentStatus} onChange={e=>set("paymentStatus",e.target.value)}>
+                <option value="pending">Pendiente</option>
+                <option value="paid">Pagado</option>
+              </select>
+            </div>
+            <div className="form-group full"><label className="lbl">Notas</label><textarea value={form.notes||""} onChange={e=>set("notes",e.target.value)} placeholder="Observaciones opcionales..."/></div>
+          </div>
+          {form.category==="Ingredientes" && form.unitPrice>0 && (
+            <div style={{ background:"var(--bluel)", border:"1px solid var(--blueb)", borderRadius:8, padding:"8px 12px", marginTop:12, fontSize:".82em", color:"var(--blue)" }}>
+              <Ico n="refresh" s={13}/> Al guardar, se actualizará el costo de "<strong>{form.concept}</strong>" en las recetas donde aparezca ese ingrediente.
+            </div>
+          )}
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={()=>setModal(null)}>Cancelar</button>
+            <button className="btn btn-primary" onClick={save}><Ico n="check" s={13}/>Guardar</button>
+          </div>
+        </Modal>
+      )}
+
+      {payModal && <CloseExpenseModal expense={payModal} onClose={()=>setPayModal(null)} onConfirm={closeExpense}/>}
+    </div>
+  );
+}
+
+function CloseExpenseModal({ expense, onClose, onConfirm }) {
+  const [payMethod, setPayMethod] = useState(expense.paymentMethod||"cash");
+  return (
+    <Modal title="Cerrar gasto" onClose={onClose}>
+      <div style={{ background:"var(--s2)", borderRadius:8, padding:"12px 14px", marginBottom:16 }}>
+        <div style={{ fontWeight:700 }}>{expense.concept}</div>
+        <div style={{ fontSize:".83em", color:"var(--t3)", marginTop:2 }}>{expense.supplier||"Sin proveedor"} · {fmtDate(expense.date)}</div>
+        <div style={{ fontWeight:800, color:"var(--red)", fontSize:"1.15em", marginTop:6 }}>{$(expense.total)}</div>
+      </div>
+      <div className="section-title">Seleccioná el método de pago</div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:20 }}>
+        {Object.entries(PAY_LABELS).map(([k,v]) => (
+          <button key={k} className={`btn ${payMethod===k?"btn-primary":"btn-secondary"}`} onClick={()=>setPayMethod(k)}>
+            {payMethod===k && <Ico n="check" s={13}/>}{v}
+          </button>
+        ))}
+      </div>
+      <div className="modal-footer">
+        <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+        <button className="btn btn-primary" onClick={()=>onConfirm(expense, payMethod)}><Ico n="check" s={14}/>Confirmar pago</button>
+      </div>
+    </Modal>
   );
 }
 
