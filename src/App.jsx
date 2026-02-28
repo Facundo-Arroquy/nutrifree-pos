@@ -469,10 +469,13 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
 // ─── ORDERS PAGE ──────────────────────────────────────────────────────────────
 function OrdersPage({ sales, setSales, products, setProducts, customers, showToast }) {
   const [filter, setFilter] = useState("all");
+  const [filterPay, setFilterPay] = useState("all");
   const [selected, setSelected] = useState(null);
 
   const statuses = ["all","open","pending","ready","delivered","closed","cancelled"];
-  const filtered = sales.filter(s => filter==="all" || s.status===filter)
+  const filtered = sales
+    .filter(s => filter==="all" || s.status===filter)
+    .filter(s => filterPay==="all" || s.paymentMethod===filterPay)
     .sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt));
 
   const changeStatus = (id, status) => {
@@ -510,12 +513,19 @@ function OrdersPage({ sales, setSales, products, setProducts, customers, showToa
         <div><div className="page-title">Pedidos</div><div className="page-sub">{filtered.length} registros</div></div>
       </div>
 
-      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:16 }}>
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
         {statuses.map(s => (
           <button key={s} className={`btn btn-sm ${filter===s?"btn-primary":"btn-secondary"}`}
             onClick={()=>setFilter(s)}>
             {s==="all"?"Todos":STATUS_LABELS[s]}
           </button>
+        ))}
+      </div>
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:16, alignItems:"center" }}>
+        <span style={{ fontSize:".74em", fontWeight:700, color:"var(--t4)", textTransform:"uppercase", letterSpacing:".5px" }}>Pago:</span>
+        <button className={`btn btn-sm ${filterPay==="all"?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterPay("all")}>Todos</button>
+        {Object.entries(PAY_LABELS).map(([k,v]) => (
+          <button key={k} className={`btn btn-sm ${filterPay===k?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterPay(k)}>{v}</button>
         ))}
       </div>
 
