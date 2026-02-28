@@ -1325,7 +1325,7 @@ function CloseExpenseModal({ expense, onClose, onConfirm }) {
 }
 
 // ─── REPORTS PAGE ─────────────────────────────────────────────────────────────
-function ReportsPage({ sales, products }) {
+function ReportsPage({ sales, products, expenses }) {
   const [period, setPeriod] = useState("today");
 
   const now = new Date();
@@ -1357,6 +1357,17 @@ function ReportsPage({ sales, products }) {
     payMethodTotals[k] = (payMethodTotals[k]||0) + s.total;
   });
 
+  // Expenses in period (filter by date field)
+  const pExpenses = (expenses||[]).filter(e => new Date(e.date) >= cutoff);
+  const totalExpenses    = pExpenses.filter(e=>e.paymentStatus==="paid").reduce((a,b)=>a+b.total,0);
+  const pendingExpenses  = pExpenses.filter(e=>e.paymentStatus==="pending").reduce((a,b)=>a+b.total,0);
+  const netResult        = totalIncome - totalExpenses;
+  const expByCat = {};
+  pExpenses.filter(e=>e.paymentStatus==="paid").forEach(e => {
+    expByCat[e.category||"Otros"] = (expByCat[e.category||"Otros"]||0) + e.total;
+  });
+  const maxExpCat = Math.max(...Object.values(expByCat), 1);
+
   return (
     <div className="page">
       <div className="page-header">
@@ -1373,6 +1384,16 @@ function ReportsPage({ sales, products }) {
         <div className="stat stat-amber"><div className="stat-num">{$(pendingValue)}</div><div className="stat-label">Pendiente de cobro</div><div className="stat-icon">⏳</div></div>
         <div className="stat"><div className="stat-num">{pSales.length}</div><div className="stat-label">Ventas en período</div><div className="stat-icon">🧾</div></div>
         <div className="stat stat-blue"><div className="stat-num">{pending.length}</div><div className="stat-label">Pedidos activos</div><div className="stat-icon">📋</div></div>
+      </div>
+      <div className="stats-row" style={{ marginBottom:16 }}>
+        <div className="stat stat-red"><div className="stat-num">{$(totalExpenses)}</div><div className="stat-label">Gastos pagados</div><div className="stat-icon">💸</div></div>
+        <div className="stat stat-amber"><div className="stat-num">{$(pendingExpenses)}</div><div className="stat-label">Gastos pendientes</div><div className="stat-icon">📤</div></div>
+        <div className="stat"><div className="stat-num">{pExpenses.length}</div><div className="stat-label">Gastos en período</div><div className="stat-icon">🧾</div></div>
+        <div className={`stat ${netResult>=0?"stat-green":"stat-red"}`}>
+          <div className="stat-num">{netResult<0?"-":""}{$(Math.abs(netResult))}</div>
+          <div className="stat-label">Resultado neto</div>
+          <div className="stat-icon">{netResult>=0?"📈":"📉"}</div>
+        </div>
       </div>
 
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
@@ -1428,6 +1449,52 @@ function ReportsPage({ sales, products }) {
             );
           })
         }
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
+        <div className="card">
+          <div className="section-title">Gastos por categoría</div>
+          {Object.keys(expByCat).length===0
+            ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin gastos pagados en el período</div>
+            : EXPENSE_CATEGORIES.filter(c => expByCat[c]).map(c => {
+                const amt = expByCat[c]||0;
+                const pct = Math.round(amt/maxExpCat*100);
+                return (
+                  <div key={c} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+                    <div style={{ fontSize:".82em", color:"var(--t2)", width:100, flexShrink:0 }}>{c}</div>
+                    <div style={{ flex:1, height:7, background:"var(--s2)", borderRadius:4, overflow:"hidden" }}>
+                      <div style={{ width:`${pct}%`, height:"100%", background:"var(--red)", borderRadius:4 }}/>
+                    </div>
+                    <div style={{ fontWeight:700, color:"var(--red)", width:72, textAlign:"right", fontSize:".82em" }}>{$(amt)}</div>
+                  </div>
+                );
+              })
+          }
+        </div>
+
+        <div className="card">
+          <div className="section-title">Balance del período</div>
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
+              <span style={{ fontSize:".86em", color:"var(--t2)" }}>Ingresos cobrados</span>
+              <span style={{ fontWeight:700, color:"var(--green)" }}>{$(totalIncome)}</span>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
+              <span style={{ fontSize:".86em", color:"var(--t2)" }}>Gastos pagados</span>
+              <span style={{ fontWeight:700, color:"var(--red)" }}>-{$(totalExpenses)}</span>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom:"1px solid var(--border)" }}>
+              <span style={{ fontSize:".86em", color:"var(--t2)" }}>Gastos pendientes</span>
+              <span style={{ fontWeight:600, color:"var(--amber)" }}>-{$(pendingExpenses)}</span>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 12px", background:netResult>=0?"var(--greenl)":"var(--redl)", borderRadius:8, border:`1px solid ${netResult>=0?"var(--greenlb)":"var(--redlb)"}` }}>
+              <span style={{ fontWeight:700, fontSize:".9em" }}>Resultado neto</span>
+              <span style={{ fontWeight:800, fontSize:"1.1em", color:netResult>=0?"var(--green)":"var(--red)" }}>
+                {netResult<0?"-":""}{$(Math.abs(netResult))}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="card">
