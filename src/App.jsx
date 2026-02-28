@@ -5,6 +5,13 @@ import {
   STATUS_LABELS, STATUS_COLORS, PAY_LABELS,
   SEED_PRODUCTS, SEED_CUSTOMERS, SEED_RECIPES, SEED_SALES, SEED_CATEGORIES
 } from "./shared.jsx";
+import {
+  supabase,
+  dbToProduct, productToDb,
+  dbToCustomer, customerToDb,
+  dbToSale, saleToDb,
+  dbToRecipe, recipeToDb,
+} from "./supabase.js";
 
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
 export default function App() {
@@ -18,24 +25,39 @@ export default function App() {
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
-    try {
-      const d = localStorage.getItem("nutrifree_pos_v1");
-      if (d) {
-        const p = JSON.parse(d);
-        if (p.products) setProducts(p.products);
-        if (p.customers) setCustomers(p.customers);
-        if (p.sales) setSales(p.sales);
-        if (p.recipes) setRecipes(p.recipes);
-        if (p.categories) setCategories(p.categories);
+    const load = async () => {
+      const [{ data: cats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }] = await Promise.all([
+        supabase.from("categories").select("*"),
+        supabase.from("products").select("*"),
+        supabase.from("customers").select("*"),
+        supabase.from("sales").select("*").order("created_at", { ascending: false }),
+        supabase.from("recipes").select("*"),
+      ]);
+      // If DB is empty for a table, seed it with default data
+      if (cats && cats.length > 0) {
+        setCategories(cats.map(c => c.name));
+      } else {
+        supabase.from("categories").insert(SEED_CATEGORIES.map(name => ({ name }))).then(() => {});
       }
-    } catch(e) {}
+      if (prods && prods.length > 0) {
+        setProducts(prods.map(dbToProduct));
+      } else {
+        supabase.from("products").insert(SEED_PRODUCTS.map(productToDb)).then(() => {});
+      }
+      if (custs && custs.length > 0) {
+        setCustomers(custs.map(dbToCustomer));
+      } else {
+        supabase.from("customers").insert(SEED_CUSTOMERS.map(customerToDb)).then(() => {});
+      }
+      if (sls && sls.length > 0) setSales(sls.map(dbToSale));
+      if (recs && recs.length > 0) {
+        setRecipes(recs.map(dbToRecipe));
+      } else {
+        supabase.from("recipes").insert(SEED_RECIPES.map(recipeToDb)).then(() => {});
+      }
+    };
+    load();
   }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("nutrifree_pos_v1", JSON.stringify({ products, customers, sales, recipes, categories }));
-    } catch(e) {}
-  }, [products, customers, sales, recipes, categories]);
 
   const showToast = (msg, type="success") => setToast({ msg, type });
 
@@ -47,15 +69,17 @@ export default function App() {
   );
 
   const nav = [
-    { id:"pos", label:"Caja / POS", icon:"pos", roles:["admin","vendor"] },
-    { id:"orders", label:"Pedidos", icon:"orders", roles:["admin","vendor"] },
-    { id:"customers", label:"Clientes", icon:"customers", roles:["admin","vendor"] },
-    { id:"products", label:"Productos", icon:"products", roles:["admin","vendor"] },
-    { id:"production", label:"Producción", icon:"production", roles:["admin"] },
-    { id:"recipes", label:"Recetas", icon:"recipes", roles:["admin","vendor"] },
-    { id:"reports", label:"Reportes", icon:"reports", roles:["admin"] },
-    { id:"settings", label:"Configuración", icon:"settings", roles:["admin"] },
+    { id:"pos", label:"Caja / POS", icon:"pos", roles:["admin","vendor"], section:"main" },
+    { id:"orders", label:"Pedidos", icon:"orders", roles:["admin","vendor"], section:"main" },
+    { id:"customers", label:"Clientes", icon:"customers", roles:["admin","vendor"], section:"main" },
+    { id:"products", label:"Productos", icon:"products", roles:["admin","vendor"], section:"main" },
+    { id:"production", label:"Producción", icon:"production", roles:["admin","vendor"], section:"admin" },
+    { id:"recipes", label:"Recetas", icon:"recipes", roles:["admin","vendor"], section:"admin" },
+    { id:"reports", label:"Reportes", icon:"reports", roles:["admin"], section:"admin" },
+    { id:"settings", label:"Configuración", icon:"settings", roles:["admin"], section:"admin" },
   ].filter(n => n.roles.includes(user.role));
+  const mainNav = nav.filter(n => n.section === "main");
+  const adminNav = nav.filter(n => n.section === "admin");
 
   const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, showToast, setPage };
 
@@ -71,14 +95,14 @@ export default function App() {
           </div>
           <nav className="sb-nav">
             <div className="sb-section">Principal</div>
-            {nav.slice(0,4).map(n => (
+            {mainNav.map(n => (
               <button key={n.id} className={`ni${page===n.id?" active":""}`} onClick={() => setPage(n.id)}>
                 <Ico n={n.icon} s={15}/>{n.label}
               </button>
             ))}
-            {user.role === "admin" && <>
+            {adminNav.length > 0 && <>
               <div className="sb-section">Administración</div>
-              {nav.slice(4).map(n => (
+              {adminNav.map(n => (
                 <button key={n.id} className={`ni${page===n.id?" active":""}`} onClick={() => setPage(n.id)}>
                   <Ico n={n.icon} s={15}/>{n.label}
                 </button>
@@ -185,12 +209,17 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
     setProducts(prev => prev.map(p => {
       const ci = cart.find(i => i.productId === p.id);
       if (!ci) return p;
-      return {...p, stock: Math.max(0, p.stock - ci.qty)};
+      const newStock = Math.max(0, p.stock - ci.qty);
+      supabase.from("products").update({ stock: newStock }).eq("id", p.id).then(() => {});
+      return {...p, stock: newStock};
     }));
     // charge to account if selected
     if (payMethod === "account" && selectedCustomer) {
-      setCustomers(prev => prev.map(c => c.id===selectedCustomer.id ? {...c, balance:c.balance-total} : c));
+      const newBalance = selectedCustomer.balance - total;
+      supabase.from("customers").update({ balance: newBalance }).eq("id", selectedCustomer.id).then(() => {});
+      setCustomers(prev => prev.map(c => c.id===selectedCustomer.id ? {...c, balance: newBalance} : c));
     }
+    supabase.from("sales").insert(saleToDb(sale)).then(() => {});
     setSales(prev => [sale, ...prev]);
     setPayModal(false);
     clearCart();
@@ -381,6 +410,7 @@ function OrdersPage({ sales, setSales, products, setProducts, customers, showToa
     .sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt));
 
   const changeStatus = (id, status) => {
+    supabase.from("sales").update({ status }).eq("id", id).then(() => {});
     setSales(prev => prev.map(s => s.id===id ? {...s,status} : s));
     if (selected?.id===id) setSelected(prev => ({...prev,status}));
     showToast("Estado actualizado");
@@ -391,8 +421,11 @@ function OrdersPage({ sales, setSales, products, setProducts, customers, showToa
     setProducts(prev => prev.map(p => {
       const ci = sale.items.find(i => i.productId===p.id);
       if (!ci) return p;
-      return {...p, stock:p.stock+ci.qty};
+      const newStock = p.stock + ci.qty;
+      supabase.from("products").update({ stock: newStock }).eq("id", p.id).then(() => {});
+      return {...p, stock: newStock};
     }));
+    supabase.from("sales").update({ status: "cancelled" }).eq("id", sale.id).then(() => {});
     setSales(prev => prev.map(s => s.id===sale.id ? {...s,status:"cancelled"} : s));
     if (selected?.id===sale.id) setSelected(prev=>({...prev,status:"cancelled"}));
     showToast("Pedido cancelado");
@@ -488,18 +521,33 @@ function CustomersPage({ customers, setCustomers, sales, showToast }) {
   const save = () => {
     if (!form.name) { showToast("El nombre es obligatorio", "error"); return; }
     if (modal==="new") {
-      setCustomers(p => [...p, {...form, id:uid(), balance:Number(form.balance)||0}]);
+      const newCustomer = {...form, id:uid(), balance:Number(form.balance)||0};
+      supabase.from("customers").insert(customerToDb(newCustomer)).then(() => {});
+      setCustomers(p => [...p, newCustomer]);
     } else {
-      setCustomers(p => p.map(c => c.id===modal.id ? {...c,...form, balance:Number(form.balance)||0} : c));
+      const updated = {...form, balance:Number(form.balance)||0};
+      supabase.from("customers").update(customerToDb(updated)).eq("id", modal.id).then(() => {});
+      setCustomers(p => p.map(c => c.id===modal.id ? {...c,...updated} : c));
     }
     setModal(null);
     showToast("Cliente guardado");
   };
 
-  const del = id => { if (confirm("¿Eliminar cliente?")) { setCustomers(p=>p.filter(c=>c.id!==id)); showToast("Eliminado"); } };
+  const del = id => {
+    if (confirm("¿Eliminar cliente?")) {
+      supabase.from("customers").delete().eq("id", id).then(() => {});
+      setCustomers(p=>p.filter(c=>c.id!==id));
+      showToast("Eliminado");
+    }
+  };
 
   const adjustBalance = (id, amount) => {
-    setCustomers(p => p.map(c => c.id===id ? {...c, balance:c.balance+Number(amount)} : c));
+    setCustomers(p => p.map(c => {
+      if (c.id !== id) return c;
+      const newBalance = c.balance + Number(amount);
+      supabase.from("customers").update({ balance: newBalance }).eq("id", id).then(() => {});
+      return {...c, balance: newBalance};
+    }));
     showToast("Saldo actualizado");
   };
 
@@ -597,17 +645,32 @@ function ProductsPage({ products, setProducts, categories, showToast }) {
   const save = () => {
     if (!form.name) { showToast("El nombre es obligatorio", "error"); return; }
     if (modal==="new") {
-      setProducts(p => [...p, {...form, id:uid(), priceRetail:Number(form.priceRetail), priceWholesale:Number(form.priceWholesale), stock:Number(form.stock)}]);
+      const newProduct = {...form, id:uid(), priceRetail:Number(form.priceRetail), priceWholesale:Number(form.priceWholesale), stock:Number(form.stock)};
+      supabase.from("products").insert(productToDb(newProduct)).then(() => {});
+      setProducts(p => [...p, newProduct]);
     } else {
-      setProducts(p => p.map(x => x.id===modal.id ? {...x,...form, priceRetail:Number(form.priceRetail), priceWholesale:Number(form.priceWholesale), stock:Number(form.stock)} : x));
+      const updated = {...form, priceRetail:Number(form.priceRetail), priceWholesale:Number(form.priceWholesale), stock:Number(form.stock)};
+      supabase.from("products").update(productToDb(updated)).eq("id", modal.id).then(() => {});
+      setProducts(p => p.map(x => x.id===modal.id ? {...x,...updated} : x));
     }
     setModal(null);
     showToast("Producto guardado");
   };
 
-  const del = id => { if (confirm("¿Eliminar producto?")) { setProducts(p=>p.filter(x=>x.id!==id)); showToast("Eliminado"); } };
+  const del = id => {
+    if (confirm("¿Eliminar producto?")) {
+      supabase.from("products").delete().eq("id", id).then(() => {});
+      setProducts(p=>p.filter(x=>x.id!==id));
+      showToast("Eliminado");
+    }
+  };
 
-  const toggleActive = id => setProducts(p => p.map(x => x.id===id ? {...x,active:!x.active} : x));
+  const toggleActive = id => setProducts(p => p.map(x => {
+    if (x.id !== id) return x;
+    const active = !x.active;
+    supabase.from("products").update({ active }).eq("id", id).then(() => {});
+    return {...x, active};
+  }));
 
   return (
     <div className="page">
@@ -697,7 +760,12 @@ function ProductionPage({ products, setProducts, showToast }) {
   const applyProduction = (id) => {
     const q = Number(qty[id]);
     if (!q || q<=0) { showToast("Ingresá una cantidad válida", "error"); return; }
-    setProducts(p => p.map(x => x.id===id ? {...x, stock:x.stock+q} : x));
+    setProducts(p => p.map(x => {
+      if (x.id !== id) return x;
+      const newStock = x.stock + q;
+      supabase.from("products").update({ stock: newStock }).eq("id", id).then(() => {});
+      return {...x, stock: newStock};
+    }));
     setQty(p=>({...p,[id]:""}));
     showToast(`+${q} unidades registradas`);
   };
@@ -772,13 +840,25 @@ function RecipesPage({ recipes, setRecipes, products, showToast }) {
 
   const save = () => {
     if (!form.productId) { showToast("Seleccioná un producto", "error"); return; }
-    if (modal==="new") setRecipes(p=>[...p,{...form,id:uid()}]);
-    else setRecipes(p=>p.map(r=>r.id===modal.id?{...r,...form}:r));
+    if (modal==="new") {
+      const newRecipe = {...form, id:uid()};
+      supabase.from("recipes").insert(recipeToDb(newRecipe)).then(() => {});
+      setRecipes(p=>[...p, newRecipe]);
+    } else {
+      supabase.from("recipes").update(recipeToDb({...form, id:modal.id})).eq("id", modal.id).then(() => {});
+      setRecipes(p=>p.map(r=>r.id===modal.id?{...r,...form}:r));
+    }
     setModal(null);
     showToast("Receta guardada");
   };
 
-  const del = id => { if(confirm("¿Eliminar receta?")){ setRecipes(p=>p.filter(r=>r.id!==id)); showToast("Eliminada"); }};
+  const del = id => {
+    if(confirm("¿Eliminar receta?")) {
+      supabase.from("recipes").delete().eq("id", id).then(() => {});
+      setRecipes(p=>p.filter(r=>r.id!==id));
+      showToast("Eliminada");
+    }
+  };
 
   return (
     <div className="page">
@@ -1024,7 +1104,7 @@ function SettingsPage({ categories, setCategories, showToast }) {
             <div key={c} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
               <span style={{ fontSize:".88em" }}>{c}</span>
               {categories.length>1 && (
-                <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>{setCategories(p=>p.filter(x=>x!==c));showToast("Categoría eliminada");}}>
+                <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>{supabase.from("categories").delete().eq("name",c).then(()=>{});setCategories(p=>p.filter(x=>x!==c));showToast("Categoría eliminada");}}>
                   <Ico n="x" s={12} c="var(--red)"/>
                 </button>
               )}
@@ -1032,9 +1112,9 @@ function SettingsPage({ categories, setCategories, showToast }) {
           ))}
           <div style={{ display:"flex", gap:8, marginTop:12 }}>
             <input value={newCat} onChange={e=>setNewCat(e.target.value)} placeholder="Nueva categoría..."
-              onKeyDown={e=>{if(e.key==="Enter"&&newCat){setCategories(p=>[...p,newCat]);setNewCat("");showToast("Categoría agregada");}}}/>
+              onKeyDown={e=>{if(e.key==="Enter"&&newCat){supabase.from("categories").insert({name:newCat}).then(()=>{});setCategories(p=>[...p,newCat]);setNewCat("");showToast("Categoría agregada");}}}/>
             <button className="btn btn-primary btn-sm" disabled={!newCat||categories.includes(newCat)}
-              onClick={()=>{setCategories(p=>[...p,newCat]);setNewCat("");showToast("Categoría agregada");}}>
+              onClick={()=>{supabase.from("categories").insert({name:newCat}).then(()=>{});setCategories(p=>[...p,newCat]);setNewCat("");showToast("Categoría agregada");}}>
               <Ico n="plus" s={13}/>
             </button>
           </div>
