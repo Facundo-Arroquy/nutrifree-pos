@@ -81,3 +81,15 @@ export const expenseToDb = e => ({
   total: e.total, payment_method: e.paymentMethod,
   payment_status: e.paymentStatus, category: e.category, notes: e.notes,
 });
+
+export const dbToIngredient = r => ({
+  id: r.id, name: r.name, category: r.category, unit: r.unit,
+  stock: r.stock, stockMin: r.stock_min, unitCost: r.unit_cost,
+  supplier: r.supplier, notes: r.notes, createdAt: r.created_at,
+});
+
+export const ingredientToDb = i => ({
+  id: i.id, name: i.name, category: i.category, unit: i.unit,
+  stock: i.stock, stock_min: i.stockMin, unit_cost: i.unitCost,
+  supplier: i.supplier, notes: i.notes,
+});

@@ -12,6 +12,7 @@ import {
   dbToSale, saleToDb,
   dbToRecipe, recipeToDb,
   dbToExpense, expenseToDb,
+  dbToIngredient, ingredientToDb,
 } from "./supabase.js";
 
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
@@ -24,17 +25,19 @@ export default function App() {
   const [recipes, setRecipes] = useState(SEED_RECIPES);
   const [categories, setCategories] = useState(SEED_CATEGORIES);
   const [expenses, setExpenses] = useState([]);
+  const [ingredients, setIngredients] = useState([]);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: cats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }] = await Promise.all([
+      const [{ data: cats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }] = await Promise.all([
         supabase.from("categories").select("*"),
         supabase.from("products").select("*"),
         supabase.from("customers").select("*"),
         supabase.from("sales").select("*").order("created_at", { ascending: false }),
         supabase.from("recipes").select("*"),
         supabase.from("expenses").select("*").order("created_at", { ascending: false }),
+        supabase.from("ingredients").select("*").order("name"),
       ]);
       // If DB is empty for a table, seed it with default data
       if (cats && cats.length > 0) {
@@ -54,6 +57,7 @@ export default function App() {
       }
       if (sls && sls.length > 0) setSales(sls.map(dbToSale));
       if (exps && exps.length > 0) setExpenses(exps.map(dbToExpense));
+      if (ingrs && ingrs.length > 0) setIngredients(ingrs.map(dbToIngredient));
       if (recs && recs.length > 0) {
         setRecipes(recs.map(dbToRecipe));
       } else {
@@ -79,6 +83,7 @@ export default function App() {
     { id:"products", label:"Productos", icon:"products", roles:["admin","vendor"], section:"main" },
     { id:"production", label:"Producción", icon:"production", roles:["admin","vendor"], section:"admin" },
     { id:"recipes", label:"Recetas", icon:"recipes", roles:["admin","vendor"], section:"admin" },
+    { id:"ingredients", label:"Ingredientes", icon:"ingredients", roles:["admin","vendor"], section:"admin" },
     { id:"expenses", label:"Gastos", icon:"expenses", roles:["admin"], section:"admin" },
     { id:"reports", label:"Reportes", icon:"reports", roles:["admin"], section:"admin" },
     { id:"settings", label:"Configuración", icon:"settings", roles:["admin"], section:"admin" },
@@ -86,7 +91,7 @@ export default function App() {
   const mainNav = nav.filter(n => n.section === "main");
   const adminNav = nav.filter(n => n.section === "admin");
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenses, setExpenses, showToast, setPage };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenses, setExpenses, ingredients, setIngredients, showToast, setPage };
 
   return (
     <>
@@ -139,6 +144,7 @@ export default function App() {
             {page==="products" && <ProductsPage {...props}/>}
             {page==="production" && <ProductionPage {...props}/>}
             {page==="recipes" && <RecipesPage {...props}/>}
+            {page==="ingredients" && <IngredientsPage {...props}/>}
             {page==="expenses" && <ExpensesPage {...props}/>}
             {page==="reports" && <ReportsPage {...props}/>}
             {page==="settings" && <SettingsPage {...props}/>}
@@ -934,6 +940,53 @@ function RecipesPage({ recipes, setRecipes, products, showToast }) {
   const totalCost = (ingrs) => ingrs.reduce((a,b)=>a+Number(b.cost),0);
   const costPerUnit = (r) => r.yield>0 ? totalCost(r.ingredients)/r.yield : 0;
 
+  const exportRecipePDF = (r) => {
+    const prod = products.find(p=>p.id===r.productId);
+    const cost = totalCost(r.ingredients);
+    const cpu = costPerUnit(r);
+    const margin = prod ? ((prod.priceRetail - cpu)/prod.priceRetail*100) : 0;
+    const fmt = n => `$${Number(n||0).toLocaleString("es-AR",{minimumFractionDigits:0,maximumFractionDigits:0})}`;
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/><title>Receta - ${prod?.name||"Producto"}</title><style>
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:36px;color:#1a1a1a;font-size:14px}
+h1{font-size:24px;font-weight:800;margin-bottom:2px}.sub{color:#888;font-size:12px;margin-bottom:28px;border-bottom:1px solid #e5e7eb;padding-bottom:12px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px}.stat{border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px}
+.stat-label{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;font-weight:600}.stat-value{font-size:18px;font-weight:700;margin-top:4px}
+h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#4b5563;border-bottom:2px solid #22c55e;padding-bottom:4px;margin:22px 0 10px}
+table{width:100%;border-collapse:collapse}th{background:#f9fafb;text-align:left;padding:7px 10px;font-size:11px;color:#6b7280;border-bottom:1px solid #e5e7eb}
+td{padding:7px 10px;border-bottom:1px solid #f3f4f6;font-size:13px}.total-row td{font-weight:700;background:#f0fdf4;color:#16a34a}
+.costs{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:4px}.cost-box{border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px}
+.cost-label{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;font-weight:600}.cost-value{font-size:18px;font-weight:700;margin-top:4px}
+.step{display:flex;gap:10px;margin-bottom:10px;align-items:flex-start}.step-num{width:22px;height:22px;border-radius:50%;background:#22c55e;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.notes{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:13px;margin-top:16px}
+@media print{body{padding:20px}}
+</style></head><body>
+<h1>${prod?.name||"Producto eliminado"}</h1>
+<div class="sub">Ficha técnica &nbsp;·&nbsp; NutriFree POS</div>
+<div class="stats">
+  <div class="stat"><div class="stat-label">Tiempo preparación</div><div class="stat-value">${r.prepTime} min</div></div>
+  <div class="stat"><div class="stat-label">Tiempo cocción</div><div class="stat-value">${r.cookTime} min</div></div>
+  <div class="stat"><div class="stat-label">Rendimiento</div><div class="stat-value">${r.yield} unidades</div></div>
+</div>
+<h2>Ingredientes</h2>
+<table><thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Costo</th></tr></thead><tbody>
+${r.ingredients.map(i=>`<tr><td>${i.name}</td><td>${i.qty}</td><td>${i.unit}</td><td>${fmt(i.cost)}</td></tr>`).join("")}
+<tr class="total-row"><td colspan="3">TOTAL</td><td>${fmt(cost)}</td></tr>
+</tbody></table>
+<h2>Costos</h2>
+<div class="costs">
+  <div class="cost-box"><div class="cost-label">Costo total</div><div class="cost-value">${fmt(cost)}</div></div>
+  <div class="cost-box"><div class="cost-label">Costo por unidad</div><div class="cost-value">${fmt(cpu)}</div></div>
+  ${prod?`<div class="cost-box"><div class="cost-label">Margen estimado</div><div class="cost-value" style="color:${margin>30?"#16a34a":margin>10?"#d97706":"#dc2626"}">${margin.toFixed(1)}%</div></div>`:""}
+</div>
+${r.steps.length>0?`<h2>Pasos</h2>${r.steps.map((s,i)=>`<div class="step"><div class="step-num">${i+1}</div><div>${s}</div></div>`).join("")}`:""}
+${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
+</body></html>`;
+    const win = window.open("","_blank");
+    win.document.write(html);
+    win.document.close();
+    win.onload = () => win.print();
+  };
+
   const openNew = () => { setForm({ productId:products[0]?.id||"", prepTime:0, cookTime:0, yield:1, notes:"", ingredients:[], steps:[] }); setModal("new"); };
   const openEdit = r => { setForm({...r, ingredients:[...r.ingredients], steps:[...r.steps]}); setModal(r); };
 
@@ -994,6 +1047,7 @@ function RecipesPage({ recipes, setRecipes, products, showToast }) {
               </div>
               <div style={{ display:"flex", gap:6, marginTop:12 }}>
                 <button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();openEdit(r);}}><Ico n="edit" s={12}/>Editar</button>
+                <button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();exportRecipePDF(r);}} title="Exportar PDF"><Ico n="download" s={12}/>PDF</button>
                 <button className="btn btn-danger btn-sm" onClick={e=>{e.stopPropagation();del(r.id);}}><Ico n="trash" s={12}/></button>
               </div>
             </div>
@@ -1090,6 +1144,148 @@ function RecipesPage({ recipes, setRecipes, products, showToast }) {
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={()=>setModal(null)}>Cancelar</button>
             <button className="btn btn-primary" onClick={save}><Ico n="check" s={13}/>Guardar receta</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── INGREDIENTS PAGE ─────────────────────────────────────────────────────────
+const INGR_CATS = ["Harinas","Lácteos","Grasas/Aceites","Endulzantes","Frutas/Verduras","Especias","Proteínas","Otros"];
+const INGR_UNITS = ["g","kg","ml","l","unidad","unidades","cdas","ctas"];
+
+function IngredientsPage({ ingredients, setIngredients, showToast }) {
+  const emptyForm = { name:"", category:"Harinas", unit:"g", stock:0, stockMin:0, unitCost:0, supplier:"", notes:"" };
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState(emptyForm);
+  const [filterCat, setFilterCat] = useState("Todos");
+  const [stockEdit, setStockEdit] = useState({});
+  const setF = (k,v) => setForm(p=>({...p,[k]:v}));
+
+  const filtered = ingredients
+    .filter(i => filterCat==="Todos" || i.category===filterCat)
+    .sort((a,b) => a.name.localeCompare(b.name));
+
+  const lowStock = ingredients.filter(i => i.stockMin > 0 && i.stock <= i.stockMin);
+  const totalValue = ingredients.reduce((a,i) => a + i.stock * i.unitCost, 0);
+
+  const openNew  = () => { setForm(emptyForm); setModal("new"); };
+  const openEdit = i  => { setForm({...i}); setModal(i); };
+
+  const save = () => {
+    if (!form.name) { showToast("El nombre es obligatorio", "error"); return; }
+    const data = { ...form, stock:Number(form.stock)||0, stockMin:Number(form.stockMin)||0, unitCost:Number(form.unitCost)||0 };
+    if (modal==="new") {
+      const newIngr = { ...data, id:uid() };
+      supabase.from("ingredients").insert(ingredientToDb(newIngr)).then(()=>{});
+      setIngredients(p=>[...p, newIngr]);
+    } else {
+      supabase.from("ingredients").update(ingredientToDb(data)).eq("id", modal.id).then(()=>{});
+      setIngredients(p=>p.map(i=>i.id===modal.id?{...i,...data}:i));
+    }
+    setModal(null);
+    showToast("Ingrediente guardado");
+  };
+
+  const del = id => {
+    if (confirm("¿Eliminar ingrediente?")) {
+      supabase.from("ingredients").delete().eq("id", id).then(()=>{});
+      setIngredients(p=>p.filter(i=>i.id!==id));
+      showToast("Eliminado");
+    }
+  };
+
+  const applyStock = id => {
+    const qty = Number(stockEdit[id]);
+    if (!qty) return;
+    const ingr = ingredients.find(i=>i.id===id);
+    const newStock = (ingr?.stock||0) + qty;
+    supabase.from("ingredients").update({ stock: newStock }).eq("id", id).then(()=>{});
+    setIngredients(p=>p.map(i=>i.id===id?{...i,stock:newStock}:i));
+    setStockEdit(p=>({...p,[id]:""}));
+    showToast(`Stock: ${newStock} ${ingr?.unit}`);
+  };
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <div><div className="page-title">Ingredientes</div><div className="page-sub">{ingredients.length} registrados</div></div>
+        <button className="btn btn-primary" onClick={openNew}><Ico n="plus" s={14}/>Nuevo ingrediente</button>
+      </div>
+
+      <div className="stats-row" style={{ gridTemplateColumns:"repeat(3,1fr)" }}>
+        <div className="stat"><div className="stat-num">{ingredients.length}</div><div className="stat-label">Total ingredientes</div><div className="stat-icon">🧂</div></div>
+        <div className={`stat${lowStock.length>0?" stat-red":""}`}><div className="stat-num">{lowStock.length}</div><div className="stat-label">Stock bajo</div><div className="stat-icon">⚠️</div></div>
+        <div className="stat"><div className="stat-num">{$(totalValue)}</div><div className="stat-label">Valor en stock</div><div className="stat-icon">💰</div></div>
+      </div>
+
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:16 }}>
+        {["Todos",...INGR_CATS].map(c=>(
+          <button key={c} className={`btn btn-sm ${filterCat===c?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterCat(c)}>{c}</button>
+        ))}
+      </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Nombre</th><th>Categoría</th><th>Unidad</th><th>Stock</th><th>Mín.</th><th>Costo/unid.</th><th>Proveedor</th><th>Agregar stock</th><th></th></tr></thead>
+          <tbody>
+            {filtered.map(i => {
+              const low = i.stockMin > 0 && i.stock <= i.stockMin;
+              return (
+                <tr key={i.id} className="tr-click" onClick={()=>openEdit(i)}>
+                  <td style={{ fontWeight:600 }}>{i.name}</td>
+                  <td><span className="tag">{i.category}</span></td>
+                  <td style={{ color:"var(--t3)" }}>{i.unit}</td>
+                  <td>
+                    <span style={{ fontWeight:700, color:low?"var(--red)":i.stockMin>0&&i.stock<=i.stockMin*1.5?"var(--amber)":"var(--green)" }}>
+                      {i.stock} {i.unit}
+                    </span>
+                    {low && <span style={{ fontSize:".72em", color:"var(--red)", marginLeft:6 }}>⚠ bajo</span>}
+                  </td>
+                  <td style={{ color:"var(--t3)" }}>{i.stockMin} {i.unit}</td>
+                  <td style={{ fontWeight:600 }}>{$(i.unitCost)}</td>
+                  <td style={{ color:"var(--t3)", fontSize:".86em" }}>{i.supplier||"—"}</td>
+                  <td onClick={e=>e.stopPropagation()} style={{ display:"flex", gap:6, alignItems:"center" }}>
+                    <input type="number" style={{ width:80 }} placeholder="Cant." value={stockEdit[i.id]||""}
+                      onChange={e=>setStockEdit(p=>({...p,[i.id]:e.target.value}))}
+                      onKeyDown={e=>e.key==="Enter"&&applyStock(i.id)}/>
+                    <button className="btn btn-primary btn-sm" onClick={()=>applyStock(i.id)}><Ico n="plus" s={12}/></button>
+                  </td>
+                  <td onClick={e=>e.stopPropagation()}>
+                    <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>del(i.id)}><Ico n="trash" s={13} c="var(--red)"/></button>
+                  </td>
+                </tr>
+              );
+            })}
+            {filtered.length===0 && <tr><td colSpan={9}><div className="empty"><div className="empty-icon">🧂</div><h3>Sin ingredientes</h3></div></td></tr>}
+          </tbody>
+        </table>
+      </div>
+
+      {modal && (
+        <Modal title={modal==="new"?"Nuevo ingrediente":form.name} onClose={()=>setModal(null)} lg>
+          <div className="form-grid">
+            <div className="form-group full"><label className="lbl">Nombre *</label><input value={form.name} onChange={e=>setF("name",e.target.value)} autoFocus placeholder="Ej: Harina de arroz"/></div>
+            <div className="form-group"><label className="lbl">Categoría</label>
+              <select value={form.category} onChange={e=>setF("category",e.target.value)}>
+                {INGR_CATS.map(c=><option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="form-group"><label className="lbl">Unidad de medida</label>
+              <select value={form.unit} onChange={e=>setF("unit",e.target.value)}>
+                {INGR_UNITS.map(u=><option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+            <div className="form-group"><label className="lbl">Stock actual</label><input type="number" min="0" value={form.stock} onChange={e=>setF("stock",e.target.value)}/></div>
+            <div className="form-group"><label className="lbl">Stock mínimo (alerta)</label><input type="number" min="0" value={form.stockMin} onChange={e=>setF("stockMin",e.target.value)}/></div>
+            <div className="form-group"><label className="lbl">Costo por unidad</label><input type="number" min="0" step="0.01" value={form.unitCost} onChange={e=>setF("unitCost",e.target.value)}/></div>
+            <div className="form-group"><label className="lbl">Proveedor</label><input value={form.supplier} onChange={e=>setF("supplier",e.target.value)} placeholder="Nombre del proveedor"/></div>
+            <div className="form-group full"><label className="lbl">Notas</label><textarea value={form.notes} onChange={e=>setF("notes",e.target.value)} placeholder="Información adicional"/></div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={()=>setModal(null)}>Cancelar</button>
+            <button className="btn btn-primary" onClick={save}><Ico n="check" s={13}/>Guardar</button>
           </div>
         </Modal>
       )}
