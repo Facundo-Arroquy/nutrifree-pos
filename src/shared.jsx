@@ -63,6 +63,7 @@ const clamp = (v,mn,mx) => Math.min(Math.max(v,mn),mx);
 const STATUS_LABELS = { open:"Abierto", pending:"Pend. pago", ready:"Listo", delivered:"Entregado", cancelled:"Cancelado", closed:"Cerrado" };
 const STATUS_COLORS = { open:"badge-blue", pending:"badge-amber", ready:"badge-green", delivered:"badge-gray", cancelled:"badge-red", closed:"badge-gray" };
 const PAY_LABELS = { cash:"Efectivo", transfer:"Transferencia", card:"Tarjeta", account:"Cuenta corriente" };
+const PAY_ORDER_LABELS = { cash:"Efectivo", transfer:"Transferencia", account:"Cuenta corriente" };
 
 // ─── STYLES ───────────────────────────────────────────────────────────────────
 const CSS = `
@@ -343,4 +344,4 @@ function LoginPage({ onLogin }) {
   );
 }
 
-export { CSS, Ico, Toast, Modal, LoginPage, USERS, uid, $, fmtDate, fmtTime, fmtDT, todayStr, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, SEED_PRODUCTS, SEED_CUSTOMERS, SEED_RECIPES, SEED_SALES, SEED_CATEGORIES };
+export { CSS, Ico, Toast, Modal, LoginPage, USERS, uid, $, fmtDate, fmtTime, fmtDT, todayStr, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, PAY_ORDER_LABELS, SEED_PRODUCTS, SEED_CUSTOMERS, SEED_RECIPES, SEED_SALES, SEED_CATEGORIES };

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import {
   CSS, Ico, Toast, Modal, LoginPage,
   uid, $, fmtDate, fmtTime, fmtDT, todayStr,
-  STATUS_LABELS, STATUS_COLORS, PAY_LABELS,
+  STATUS_LABELS, STATUS_COLORS, PAY_LABELS, PAY_ORDER_LABELS,
   SEED_PRODUCTS, SEED_CUSTOMERS, SEED_RECIPES, SEED_SALES, SEED_CATEGORIES
 } from "./shared.jsx";
 import {
@@ -13,6 +13,7 @@ import {
   dbToRecipe, recipeToDb,
   dbToExpense, expenseToDb,
   dbToIngredient, ingredientToDb,
+  dbToAccountPayment, accountPaymentToDb,
 } from "./supabase.js";
 
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
@@ -26,11 +27,12 @@ export default function App() {
   const [categories, setCategories] = useState(SEED_CATEGORIES);
   const [expenses, setExpenses] = useState([]);
   const [ingredients, setIngredients] = useState([]);
+  const [accountPayments, setAccountPayments] = useState([]);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: cats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }] = await Promise.all([
+      const [{ data: cats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays }] = await Promise.all([
         supabase.from("categories").select("*"),
         supabase.from("products").select("*"),
         supabase.from("customers").select("*"),
@@ -38,6 +40,7 @@ export default function App() {
         supabase.from("recipes").select("*"),
         supabase.from("expenses").select("*").order("created_at", { ascending: false }),
         supabase.from("ingredients").select("*").order("name"),
+        supabase.from("account_payments").select("*").order("created_at", { ascending: false }),
       ]);
       // If DB is empty for a table, seed it with default data
       if (cats && cats.length > 0) {
@@ -61,6 +64,7 @@ export default function App() {
       if (recs && recs.length > 0) {
         setRecipes(recs.map(dbToRecipe));
       }
+      if (accPays && accPays.length > 0) setAccountPayments(accPays.map(dbToAccountPayment));
     };
     load();
   }, []);
@@ -82,14 +86,14 @@ export default function App() {
     { id:"production", label:"Producción", icon:"production", roles:["admin","vendor"], section:"admin" },
     { id:"recipes", label:"Recetas", icon:"recipes", roles:["admin","vendor"], section:"admin" },
     { id:"ingredients", label:"Ingredientes", icon:"ingredients", roles:["admin","vendor"], section:"admin" },
-    { id:"expenses", label:"Gastos", icon:"expenses", roles:["admin"], section:"admin" },
+    { id:"expenses", label:"Gastos", icon:"expenses", roles:["admin","vendor"], section:"admin" },
     { id:"reports", label:"Reportes", icon:"reports", roles:["admin"], section:"admin" },
-    { id:"settings", label:"Configuración", icon:"settings", roles:["admin"], section:"admin" },
+    { id:"settings", label:"Configuración", icon:"settings", roles:["admin","vendor"], section:"admin" },
   ].filter(n => n.roles.includes(user.role));
   const mainNav = nav.filter(n => n.section === "main");
   const adminNav = nav.filter(n => n.section === "admin");
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenses, setExpenses, ingredients, setIngredients, showToast, setPage };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, showToast, setPage };
 
   return (
     <>
@@ -242,12 +246,6 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
       supabase.from("products").update({ stock: newStock }).eq("id", p.id).then(() => {});
       return {...p, stock: newStock};
     }));
-    // charge to account if selected
-    if (payMethod === "account" && selectedCustomer) {
-      const newBalance = selectedCustomer.balance - total;
-      supabase.from("customers").update({ balance: newBalance }).eq("id", selectedCustomer.id).then(() => {});
-      setCustomers(prev => prev.map(c => c.id===selectedCustomer.id ? {...c, balance: newBalance} : c));
-    }
     supabase.from("sales").insert(saleToDb(sale)).then(() => {});
     setSales(prev => [sale, ...prev]);
     setPayModal(false);
@@ -451,8 +449,8 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
           )}
           <div className="section-title">Método de pago</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:16 }}>
-            {Object.entries(PAY_LABELS).map(([k,v]) => (
-              (!k.includes("account") || selectedCustomer) && (
+            {Object.entries(PAY_ORDER_LABELS).map(([k,v]) => (
+              (k !== "account" || selectedCustomer) && (
                 <button key={k} className={`btn ${payMethod===k?"btn-primary":"btn-secondary"}`}
                   onClick={()=>setPayMethod(k)}>
                   {payMethod===k && <Ico n="check" s={13}/>}{v}
@@ -477,12 +475,16 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
 }
 
 // ─── ORDERS PAGE ──────────────────────────────────────────────────────────────
-function OrdersPage({ sales, setSales, products, setProducts, customers, showToast }) {
+function OrdersPage({ sales, setSales, products, setProducts, customers, setCustomers, accountPayments, setAccountPayments, showToast }) {
   const [filter, setFilter] = useState("all");
   const [filterPay, setFilterPay] = useState("all");
   const [selected, setSelected] = useState(null);
 
-  const statuses = ["all","open","pending","ready","delivered","closed","cancelled"];
+  const statuses = ["all","open","ready","delivered","closed","cancelled"];
+
+  const isPendingPayment = (s) =>
+    !["closed","cancelled"].includes(s.status) ||
+    (s.status === "closed" && s.paymentMethod === "account");
   const filtered = sales
     .filter(s => filter==="all" || s.status===filter)
     .filter(s => filterPay==="all" || s.paymentMethod===filterPay)
@@ -502,6 +504,26 @@ function OrdersPage({ sales, setSales, products, setProducts, customers, showToa
     showToast("Método de pago actualizado");
   };
 
+  const closeOrder = async (sale) => {
+    if (!sale.paymentMethod) { showToast("Seleccioná un método de pago", "error"); return; }
+    await supabase.from("sales").update({ status: "closed" }).eq("id", sale.id);
+    setSales(prev => prev.map(s => s.id===sale.id ? {...s, status:"closed"} : s));
+    setSelected(prev => prev ? {...prev, status:"closed"} : prev);
+    if (sale.paymentMethod === "account" && sale.customerId) {
+      const customer = customers.find(c => c.id === sale.customerId);
+      if (customer) {
+        const newBalance = customer.balance - sale.total;
+        supabase.from("customers").update({ balance: newBalance }).eq("id", sale.customerId).then(() => {});
+        setCustomers(prev => prev.map(c => c.id===sale.customerId ? {...c, balance: newBalance} : c));
+        const charge = { id: crypto.randomUUID(), customerId: sale.customerId, saleId: sale.id,
+          amount: sale.total, type: "charge", paymentMethod: null, date: todayStr(), notes: "" };
+        supabase.from("account_payments").insert(accountPaymentToDb(charge)).then(() => {});
+        setAccountPayments(prev => [...prev, charge]);
+      }
+    }
+    showToast("Pedido cerrado");
+  };
+
   const cancelOrder = (sale) => {
     // restore stock
     setProducts(prev => prev.map(p => {
@@ -511,6 +533,19 @@ function OrdersPage({ sales, setSales, products, setProducts, customers, showToa
       supabase.from("products").update({ stock: newStock }).eq("id", p.id).then(() => {});
       return {...p, stock: newStock};
     }));
+    // restore balance if was closed with account
+    if (sale.status === "closed" && sale.paymentMethod === "account" && sale.customerId) {
+      const customer = customers.find(c => c.id === sale.customerId);
+      if (customer) {
+        const newBalance = customer.balance + sale.total;
+        supabase.from("customers").update({ balance: newBalance }).eq("id", sale.customerId).then(() => {});
+        setCustomers(prev => prev.map(c => c.id===sale.customerId ? {...c, balance: newBalance} : c));
+        const reversal = { id: crypto.randomUUID(), customerId: sale.customerId, saleId: sale.id,
+          amount: sale.total, type: "payment", paymentMethod: null, date: todayStr(), notes: "Reverso por cancelación" };
+        supabase.from("account_payments").insert(accountPaymentToDb(reversal)).then(() => {});
+        setAccountPayments(prev => [...prev, reversal]);
+      }
+    }
     supabase.from("sales").update({ status: "cancelled" }).eq("id", sale.id).then(() => {});
     setSales(prev => prev.map(s => s.id===sale.id ? {...s,status:"cancelled"} : s));
     if (selected?.id===sale.id) setSelected(prev=>({...prev,status:"cancelled"}));
@@ -534,7 +569,7 @@ function OrdersPage({ sales, setSales, products, setProducts, customers, showToa
       <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:16, alignItems:"center" }}>
         <span style={{ fontSize:".74em", fontWeight:700, color:"var(--t4)", textTransform:"uppercase", letterSpacing:".5px" }}>Pago:</span>
         <button className={`btn btn-sm ${filterPay==="all"?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterPay("all")}>Todos</button>
-        {Object.entries(PAY_LABELS).map(([k,v]) => (
+        {Object.entries(PAY_ORDER_LABELS).map(([k,v]) => (
           <button key={k} className={`btn btn-sm ${filterPay===k?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterPay(k)}>{v}</button>
         ))}
       </div>
@@ -550,7 +585,10 @@ function OrdersPage({ sales, setSales, products, setProducts, customers, showToa
                 <td style={{ color:"var(--t2)" }}>{s.items.length} ítem{s.items.length!==1?"s":""}</td>
                 <td style={{ fontWeight:700, color:"var(--green)" }}>{$(s.total)}</td>
                 <td style={{ color:"var(--t3)" }}>{PAY_LABELS[s.paymentMethod]||s.paymentMethod}</td>
-                <td><span className={`badge ${STATUS_COLORS[s.status]||"badge-gray"}`}>{STATUS_LABELS[s.status]||s.status}</span></td>
+                <td>
+                  <span className={`badge ${STATUS_COLORS[s.status]||"badge-gray"}`}>{STATUS_LABELS[s.status]||s.status}</span>
+                  {isPendingPayment(s) && <span className="badge badge-amber" style={{ marginLeft:4 }}>Pend. pago</span>}
+                </td>
                 <td style={{ color:"var(--t3)", fontSize:".82em" }}>{fmtDT(s.createdAt)}</td>
                 <td>
                   <button className="btn btn-ghost btn-sm btn-icon" onClick={e=>{e.stopPropagation();setSelected(s);}}><Ico n="eye" s={14}/></button>
@@ -572,8 +610,8 @@ function OrdersPage({ sales, setSales, products, setProducts, customers, showToa
               <label className="lbl">Método de pago</label>
               {selected.status!=="closed" && selected.status!=="cancelled" ? (
                 <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:6 }}>
-                  {Object.entries(PAY_LABELS).map(([k,v]) => (
-                    (!k.includes("account") || selected.customerId) && (
+                  {Object.entries(PAY_ORDER_LABELS).map(([k,v]) => (
+                    (k !== "account" || selected.customerId) && (
                       <button key={k}
                         className={`btn btn-sm ${selected.paymentMethod===k?"btn-primary":"btn-secondary"}`}
                         onClick={()=>changePayment(selected.id, k)}>
@@ -583,7 +621,7 @@ function OrdersPage({ sales, setSales, products, setProducts, customers, showToa
                   ))}
                 </div>
               ) : (
-                <div style={{ marginTop:4, fontWeight:600 }}>{PAY_LABELS[selected.paymentMethod]||selected.paymentMethod}</div>
+                <div style={{ marginTop:4, fontWeight:600 }}>{PAY_ORDER_LABELS[selected.paymentMethod]||PAY_LABELS[selected.paymentMethod]||selected.paymentMethod}</div>
               )}
             </div>
           </div>
@@ -603,11 +641,15 @@ function OrdersPage({ sales, setSales, products, setProducts, customers, showToa
 
           {selected.status !== "closed" && selected.status !== "cancelled" && (
             <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:16 }}>
-              {selected.status==="open" && <button className="btn btn-amber" onClick={()=>changeStatus(selected.id,"pending")}><Ico n="clock" s={13}/>Pend. pago</button>}
-              {(selected.status==="open"||selected.status==="pending") && <button className="btn btn-blue" onClick={()=>changeStatus(selected.id,"ready")}><Ico n="box" s={13}/>Listo</button>}
+              {selected.status==="open" && <button className="btn btn-blue" onClick={()=>changeStatus(selected.id,"ready")}><Ico n="box" s={13}/>Listo</button>}
               {selected.status==="ready" && <button className="btn btn-primary" onClick={()=>changeStatus(selected.id,"delivered")}><Ico n="check" s={13}/>Entregado</button>}
-              <button className="btn btn-secondary" onClick={()=>changeStatus(selected.id,"closed")}><Ico n="check" s={13}/>Cerrar</button>
+              <button className="btn btn-secondary" onClick={()=>closeOrder(selected)}><Ico n="check" s={13}/>Cerrar</button>
               <button className="btn btn-danger" onClick={()=>cancelOrder(selected)}><Ico n="x" s={13}/>Cancelar</button>
+            </div>
+          )}
+          {selected.status === "closed" && (
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:16 }}>
+              <button className="btn btn-danger" onClick={()=>cancelOrder(selected)}><Ico n="x" s={13}/>Cancelar pedido</button>
             </div>
           )}
         </Modal>
@@ -617,11 +659,13 @@ function OrdersPage({ sales, setSales, products, setProducts, customers, showToa
 }
 
 // ─── CUSTOMERS PAGE ───────────────────────────────────────────────────────────
-function CustomersPage({ customers, setCustomers, sales, showToast }) {
+function CustomersPage({ customers, setCustomers, sales, accountPayments, setAccountPayments, showToast }) {
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState(null); // null | "new" | customer
   const [form, setForm] = useState({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0, discountPct:0 });
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
+  const [payModal, setPayModal] = useState(null); // customer object
+  const [payForm, setPayForm] = useState({ amount:"", paymentMethod:"cash", notes:"" });
 
   const filtered = customers.filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search));
 
@@ -661,6 +705,21 @@ function CustomersPage({ customers, setCustomers, sales, showToast }) {
     showToast("Saldo actualizado");
   };
 
+  const registerPayment = async () => {
+    const amount = Number(payForm.amount);
+    if (!amount || amount <= 0) { showToast("Monto inválido", "error"); return; }
+    const newBalance = payModal.balance + amount;
+    const { error } = await supabase.from("customers").update({ balance: newBalance }).eq("id", payModal.id);
+    if (error) { showToast("Error: " + error.message, "error"); return; }
+    setCustomers(prev => prev.map(c => c.id===payModal.id ? {...c, balance: newBalance} : c));
+    const payment = { id: crypto.randomUUID(), customerId: payModal.id, saleId: null,
+      amount, type: "payment", paymentMethod: payForm.paymentMethod, date: todayStr(), notes: payForm.notes };
+    supabase.from("account_payments").insert(accountPaymentToDb(payment)).then(() => {});
+    setAccountPayments(prev => [...prev, payment]);
+    setPayModal(null);
+    showToast("Pago registrado");
+  };
+
   return (
     <div className="page">
       <div className="page-header">
@@ -675,7 +734,7 @@ function CustomersPage({ customers, setCustomers, sales, showToast }) {
 
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Nombre</th><th>Teléfono</th><th>Lista</th><th>Descuento</th><th>Saldo</th><th>Notas</th><th></th></tr></thead>
+          <thead><tr><th>Nombre</th><th>Teléfono</th><th>Lista</th><th>Descuento</th><th>Saldo</th><th>Notas</th><th></th><th></th></tr></thead>
           <tbody>
             {filtered.map(c => {
               const custSales = sales.filter(s=>s.customerId===c.id).length;
@@ -688,12 +747,19 @@ function CustomersPage({ customers, setCustomers, sales, showToast }) {
                   <td><span className={c.balance>0?"balance-pos":c.balance<0?"balance-neg":"balance-zero"}>{$(c.balance)}</span></td>
                   <td style={{ color:"var(--t3)", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.notes||"—"}</td>
                   <td>
+                    {c.balance < 0 && (
+                      <button className="btn btn-amber btn-sm" onClick={e=>{e.stopPropagation();setPayModal(c);setPayForm({amount:"",paymentMethod:"cash",notes:""});}}>
+                        Registrar Pago
+                      </button>
+                    )}
+                  </td>
+                  <td>
                     <button className="btn btn-ghost btn-icon btn-sm" onClick={e=>{e.stopPropagation();del(c.id);}}><Ico n="trash" s={13} c="var(--red)"/></button>
                   </td>
                 </tr>
               );
             })}
-            {filtered.length===0 && <tr><td colSpan={6}><div className="empty"><div className="empty-icon">👥</div><h3>Sin clientes</h3></div></td></tr>}
+            {filtered.length===0 && <tr><td colSpan={8}><div className="empty"><div className="empty-icon">👥</div><h3>Sin clientes</h3></div></td></tr>}
           </tbody>
         </table>
       </div>
@@ -729,6 +795,49 @@ function CustomersPage({ customers, setCustomers, sales, showToast }) {
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={()=>setModal(null)}>Cancelar</button>
             <button className="btn btn-primary" onClick={save}><Ico n="check" s={13}/>Guardar</button>
+          </div>
+        </Modal>
+      )}
+
+      {payModal && (
+        <Modal title={`Registrar pago — ${payModal.name}`} onClose={()=>setPayModal(null)}>
+          <div style={{ background:"var(--redl)", border:"1px solid var(--redlb)", borderRadius:8, padding:"10px 14px", marginBottom:16, fontSize:".9em" }}>
+            Deuda actual: <strong className="balance-neg">{$(payModal.balance)}</strong>
+          </div>
+          <div className="form-grid" style={{ marginBottom:14 }}>
+            <div className="form-group full">
+              <label className="lbl">Monto a pagar ($) *</label>
+              <input type="number" min="0" value={payForm.amount} onChange={e=>setPayForm(p=>({...p,amount:e.target.value}))} autoFocus placeholder="0"/>
+            </div>
+            <div className="form-group full">
+              <label className="lbl">Método de pago</label>
+              <div style={{ display:"flex", gap:8, marginTop:4 }}>
+                {[["cash","Efectivo"],["transfer","Transferencia"]].map(([k,v]) => (
+                  <button key={k} className={`btn btn-sm ${payForm.paymentMethod===k?"btn-primary":"btn-secondary"}`}
+                    onClick={()=>setPayForm(p=>({...p,paymentMethod:k}))}>
+                    {payForm.paymentMethod===k && <Ico n="check" s={12}/>}{v}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {payForm.amount > 0 && (
+              <div className="form-group full">
+                <label className="lbl">Saldo resultante</label>
+                <div style={{ marginTop:4, fontWeight:700, fontSize:"1.05em" }}>
+                  <span className={(payModal.balance + Number(payForm.amount)) >= 0 ? "balance-pos" : "balance-neg"}>
+                    {$(payModal.balance + Number(payForm.amount))}
+                  </span>
+                </div>
+              </div>
+            )}
+            <div className="form-group full">
+              <label className="lbl">Notas</label>
+              <textarea value={payForm.notes} onChange={e=>setPayForm(p=>({...p,notes:e.target.value}))} placeholder="Observaciones opcionales..."/>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={()=>setPayModal(null)}>Cancelar</button>
+            <button className="btn btn-primary" onClick={registerPayment}><Ico n="check" s={13}/>Confirmar pago</button>
           </div>
         </Modal>
       )}
