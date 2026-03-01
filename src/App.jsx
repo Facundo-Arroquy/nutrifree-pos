@@ -866,7 +866,7 @@ function ProductsPage({ products, setProducts, categories, showToast }) {
 }
 
 // ─── PRODUCTION PAGE ──────────────────────────────────────────────────────────
-function ProductionPage({ products, setProducts, showToast }) {
+function ProductionPage({ products, setProducts, recipes, setIngredients, showToast }) {
   const [qty, setQty] = useState({});
 
   const setQ = (id,v) => setQty(p=>({...p,[id]:v}));
@@ -880,6 +880,18 @@ function ProductionPage({ products, setProducts, showToast }) {
       supabase.from("products").update({ stock: newStock }).eq("id", id).then(() => {});
       return {...x, stock: newStock};
     }));
+    // Reducir stock de ingredientes según la receta
+    const recipe = recipes.find(r => r.productId === id);
+    if (recipe && recipe.yield > 0) {
+      const factor = q / recipe.yield;
+      setIngredients(prev => prev.map(ing => {
+        const ri = recipe.ingredients.find(r => r.ingredientId === ing.id);
+        if (!ri) return ing;
+        const newStock = ing.stock - ri.qty * factor;
+        supabase.from("ingredients").update({ stock: newStock }).eq("id", ing.id).then(() => {});
+        return {...ing, stock: newStock};
+      }));
+    }
     setQty(p=>({...p,[id]:""}));
     showToast(`+${q} unidades registradas`);
   };
@@ -929,11 +941,11 @@ function ProductionPage({ products, setProducts, showToast }) {
 }
 
 // ─── RECIPES PAGE ─────────────────────────────────────────────────────────────
-function RecipesPage({ recipes, setRecipes, products, showToast }) {
+function RecipesPage({ recipes, setRecipes, products, ingredients, showToast }) {
   const [modal, setModal] = useState(null);
   const [viewModal, setViewModal] = useState(null);
   const [form, setForm] = useState({ productId:"", prepTime:0, cookTime:0, yield:1, notes:"", ingredients:[], steps:[] });
-  const [newIngr, setNewIngr] = useState({ name:"", qty:"", unit:"g", cost:"" });
+  const [newIngr, setNewIngr] = useState({ ingredientId:"", qty:"" });
   const [newStep, setNewStep] = useState("");
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
 
@@ -991,9 +1003,13 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
   const openEdit = r => { setForm({...r, ingredients:[...r.ingredients], steps:[...r.steps]}); setModal(r); };
 
   const addIngr = () => {
-    if (!newIngr.name) return;
-    setForm(p=>({...p, ingredients:[...p.ingredients, {...newIngr, qty:Number(newIngr.qty), cost:Number(newIngr.cost)}]}));
-    setNewIngr({ name:"", qty:"", unit:"g", cost:"" });
+    if (!newIngr.ingredientId || !newIngr.qty) return;
+    const ing = ingredients.find(i => i.id === newIngr.ingredientId);
+    if (!ing) return;
+    const qty = Number(newIngr.qty);
+    const cost = qty * ing.unitCost;
+    setForm(p=>({...p, ingredients:[...p.ingredients, { ingredientId: ing.id, name: ing.name, qty, unit: ing.unit, cost }]}));
+    setNewIngr({ ingredientId:"", qty:"" });
   };
   const removeIngr = i => setForm(p=>({...p,ingredients:p.ingredients.filter((_,idx)=>idx!==i)}));
   const addStep = () => { if (!newStep) return; setForm(p=>({...p,steps:[...p.steps,newStep]})); setNewStep(""); };
@@ -1118,13 +1134,12 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
               <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>removeIngr(i)}><Ico n="x" s={12} c="var(--red)"/></button>
             </div>
           ))}
-          <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr auto", gap:6, marginBottom:16 }}>
-            <input placeholder="Ingrediente" value={newIngr.name} onChange={e=>setNewIngr(p=>({...p,name:e.target.value}))}/>
-            <input placeholder="Cant." type="number" value={newIngr.qty} onChange={e=>setNewIngr(p=>({...p,qty:e.target.value}))}/>
-            <select value={newIngr.unit} onChange={e=>setNewIngr(p=>({...p,unit:e.target.value}))}>
-              {["g","kg","ml","l","unidad","unidades","cdas","ctas"].map(u=><option key={u}>{u}</option>)}
+          <div style={{ display:"grid", gridTemplateColumns:"3fr 1fr auto", gap:6, marginBottom:16 }}>
+            <select value={newIngr.ingredientId} onChange={e=>setNewIngr(p=>({...p,ingredientId:e.target.value}))}>
+              <option value="">-- Seleccionar ingrediente --</option>
+              {ingredients.map(i=><option key={i.id} value={i.id}>{i.name} ({i.unit}) — ${i.unitCost}/{i.unit}</option>)}
             </select>
-            <input placeholder="Costo $" type="number" value={newIngr.cost} onChange={e=>setNewIngr(p=>({...p,cost:e.target.value}))}/>
+            <input placeholder="Cant." type="number" value={newIngr.qty} onChange={e=>setNewIngr(p=>({...p,qty:e.target.value}))}/>
             <button className="btn btn-primary btn-sm" onClick={addIngr}><Ico n="plus" s={12}/></button>
           </div>
 
