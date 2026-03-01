@@ -25,6 +25,7 @@ export default function App() {
   const [sales, setSales] = useState(SEED_SALES);
   const [recipes, setRecipes] = useState([]);
   const [categories, setCategories] = useState(SEED_CATEGORIES);
+  const [expenseCategories, setExpenseCategories] = useState(["Ingredientes","Servicios","Envases","Limpieza","Otros"]);
   const [expenses, setExpenses] = useState([]);
   const [ingredients, setIngredients] = useState([]);
   const [accountPayments, setAccountPayments] = useState([]);
@@ -32,8 +33,9 @@ export default function App() {
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: cats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays }] = await Promise.all([
+      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }] = await Promise.all([
         supabase.from("categories").select("*"),
+        supabase.from("expense_categories").select("*").order("name"),
         supabase.from("products").select("*"),
         supabase.from("customers").select("*"),
         supabase.from("sales").select("*").order("created_at", { ascending: false }),
@@ -42,11 +44,15 @@ export default function App() {
         supabase.from("ingredients").select("*").order("name"),
         supabase.from("account_payments").select("*").order("created_at", { ascending: false }),
       ]);
+      if (accPaysErr) console.error("[account_payments] Error al cargar:", accPaysErr);
       // If DB is empty for a table, seed it with default data
       if (cats && cats.length > 0) {
         setCategories(cats.map(c => c.name));
       } else {
         supabase.from("categories").insert(SEED_CATEGORIES.map(name => ({ name }))).then(() => {});
+      }
+      if (expCats && expCats.length > 0) {
+        setExpenseCategories(expCats.map(c => c.name));
       }
       if (prods && prods.length > 0) {
         setProducts(prods.map(dbToProduct));
@@ -93,7 +99,7 @@ export default function App() {
   const mainNav = nav.filter(n => n.section === "main");
   const adminNav = nav.filter(n => n.section === "admin");
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, showToast, setPage };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, showToast, setPage };
 
   return (
     <>
@@ -159,7 +165,12 @@ export default function App() {
 }
 
 // ─── POS PAGE ─────────────────────────────────────────────────────────────────
-function POSPage({ products, setProducts, customers, setCustomers, sales, setSales, showToast }) {
+function POSPage({ products, setProducts, customers, setCustomers, sales, setSales, accountPayments, setAccountPayments, showToast }) {
+  const custBal = (id) => {
+    const c = customers.find(x => x.id === id);
+    return (c?.balance ?? 0) + accountPayments.filter(p => p.customerId === id)
+      .reduce((sum, p) => p.type === "payment" ? sum + p.amount : sum - p.amount, 0);
+  };
   const [cart, setCart] = useState([]);
   const [priceList, setPriceList] = useState("retail");
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -221,7 +232,7 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
     setPriceList("retail"); setDiscountType("pct"); setDiscountValue(""); setEditingPrice(null);
   };
 
-  const completeSale = (status="closed") => {
+  const completeSale = async (status="closed") => {
     if (cart.length === 0) { showToast("El carrito está vacío", "error"); return; }
     const sale = {
       id: uid(),
@@ -239,14 +250,29 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
       discountAmount: discountAmt,
     };
     // deduct stock
+    const stockUpdates = cart.map(ci => {
+      const p = products.find(x => x.id === ci.productId);
+      if (!p) return null;
+      return { id: p.id, newStock: Math.max(0, p.stock - ci.qty) };
+    }).filter(Boolean);
+    for (const { id, newStock } of stockUpdates) {
+      const { error } = await supabase.from("products").update({ stock: newStock }).eq("id", id);
+      if (error) console.error("Error al descontar stock:", error.message);
+    }
     setProducts(prev => prev.map(p => {
-      const ci = cart.find(i => i.productId === p.id);
-      if (!ci) return p;
-      const newStock = Math.max(0, p.stock - ci.qty);
-      supabase.from("products").update({ stock: newStock }).eq("id", p.id).then(() => {});
-      return {...p, stock: newStock};
+      const upd = stockUpdates.find(u => u.id === p.id);
+      return upd ? {...p, stock: upd.newStock} : p;
     }));
-    supabase.from("sales").insert(saleToDb(sale)).then(() => {});
+    const { error: saleErr } = await supabase.from("sales").insert(saleToDb(sale));
+    if (saleErr) { showToast("Error al guardar venta: " + saleErr.message, "error"); return; }
+    // if closed sale with account payment → record charge in account_payments
+    if (status === "closed" && payMethod === "account" && selectedCustomer) {
+      const charge = { id: crypto.randomUUID(), customerId: selectedCustomer.id, saleId: sale.id,
+        amount: total, type: "charge", paymentMethod: null, date: todayStr(), notes: "" };
+      const { error: payErr } = await supabase.from("account_payments").insert(accountPaymentToDb(charge));
+      if (payErr) { showToast("Error al registrar movimiento: " + payErr.message, "error"); return; }
+      setAccountPayments(prev => [...prev, charge]);
+    }
     setSales(prev => [sale, ...prev]);
     setPayModal(false);
     clearCart();
@@ -413,7 +439,7 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
               <div>
                 <div>{c.name}</div>
                 <div style={{ fontSize:".74em", color:"var(--t3)" }}>
-                  Saldo: <span className={c.balance>0?"balance-pos":c.balance<0?"balance-neg":"balance-zero"}>{$(c.balance)}</span>
+                  {(() => { const b = custBal(c.id); return <span className={b>0?"balance-pos":b<0?"balance-neg":"balance-zero"}>Saldo: {$(b)}</span>; })()}
                 </div>
               </div>
             </button>
@@ -444,7 +470,7 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
           </div>
           {selectedCustomer && (
             <div style={{ background:"var(--greenl)", border:"1px solid var(--greenlb)", borderRadius:8, padding:"8px 12px", marginBottom:14, fontSize:".84em" }}>
-              Cliente: <strong>{selectedCustomer.name}</strong> · Saldo actual: <span className={selectedCustomer.balance>=0?"balance-pos":"balance-neg"}>{$(selectedCustomer.balance)}</span>
+              {(() => { const b = custBal(selectedCustomer.id); return <>Cliente: <strong>{selectedCustomer.name}</strong> · Saldo actual: <span className={b>=0?"balance-pos":"balance-neg"}>{$(b)}</span></>; })()}
             </div>
           )}
           <div className="section-title">Método de pago</div>
@@ -490,15 +516,17 @@ function OrdersPage({ sales, setSales, products, setProducts, customers, setCust
     .filter(s => filterPay==="all" || s.paymentMethod===filterPay)
     .sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt));
 
-  const changeStatus = (id, status) => {
-    supabase.from("sales").update({ status }).eq("id", id).then(() => {});
+  const changeStatus = async (id, status) => {
+    const { error } = await supabase.from("sales").update({ status }).eq("id", id);
+    if (error) { showToast("Error al actualizar estado: " + error.message, "error"); return; }
     setSales(prev => prev.map(s => s.id===id ? {...s,status} : s));
     if (selected?.id===id) setSelected(prev => ({...prev,status}));
     showToast("Estado actualizado");
   };
 
-  const changePayment = (id, paymentMethod) => {
-    supabase.from("sales").update({ payment_method: paymentMethod }).eq("id", id).then(() => {});
+  const changePayment = async (id, paymentMethod) => {
+    const { error } = await supabase.from("sales").update({ payment_method: paymentMethod }).eq("id", id);
+    if (error) { showToast("Error al actualizar método: " + error.message, "error"); return; }
     setSales(prev => prev.map(s => s.id===id ? {...s,paymentMethod} : s));
     if (selected?.id===id) setSelected(prev => ({...prev,paymentMethod}));
     showToast("Método de pago actualizado");
@@ -506,47 +534,38 @@ function OrdersPage({ sales, setSales, products, setProducts, customers, setCust
 
   const closeOrder = async (sale) => {
     if (!sale.paymentMethod) { showToast("Seleccioná un método de pago", "error"); return; }
-    await supabase.from("sales").update({ status: "closed" }).eq("id", sale.id);
+    const { error: saleErr } = await supabase.from("sales").update({ status: "closed" }).eq("id", sale.id);
+    if (saleErr) { showToast("Error al cerrar: " + saleErr.message, "error"); return; }
     setSales(prev => prev.map(s => s.id===sale.id ? {...s, status:"closed"} : s));
     setSelected(prev => prev ? {...prev, status:"closed"} : prev);
     if (sale.paymentMethod === "account" && sale.customerId) {
-      const customer = customers.find(c => c.id === sale.customerId);
-      if (customer) {
-        const newBalance = customer.balance - sale.total;
-        supabase.from("customers").update({ balance: newBalance }).eq("id", sale.customerId).then(() => {});
-        setCustomers(prev => prev.map(c => c.id===sale.customerId ? {...c, balance: newBalance} : c));
-        const charge = { id: crypto.randomUUID(), customerId: sale.customerId, saleId: sale.id,
-          amount: sale.total, type: "charge", paymentMethod: null, date: todayStr(), notes: "" };
-        supabase.from("account_payments").insert(accountPaymentToDb(charge)).then(() => {});
-        setAccountPayments(prev => [...prev, charge]);
-      }
+      const charge = { id: crypto.randomUUID(), customerId: sale.customerId, saleId: sale.id,
+        amount: sale.total, type: "charge", paymentMethod: null, date: todayStr(), notes: "" };
+      const { error: payErr } = await supabase.from("account_payments").insert(accountPaymentToDb(charge));
+      if (payErr) { showToast("Error al registrar movimiento: " + payErr.message, "error"); return; }
+      setAccountPayments(prev => [...prev, charge]);
     }
     showToast("Pedido cerrado");
   };
 
-  const cancelOrder = (sale) => {
+  const cancelOrder = async (sale) => {
     // restore stock
-    setProducts(prev => prev.map(p => {
-      const ci = sale.items.find(i => i.productId===p.id);
-      if (!ci) return p;
-      const newStock = p.stock + ci.qty;
-      supabase.from("products").update({ stock: newStock }).eq("id", p.id).then(() => {});
-      return {...p, stock: newStock};
-    }));
-    // restore balance if was closed with account
-    if (sale.status === "closed" && sale.paymentMethod === "account" && sale.customerId) {
-      const customer = customers.find(c => c.id === sale.customerId);
-      if (customer) {
-        const newBalance = customer.balance + sale.total;
-        supabase.from("customers").update({ balance: newBalance }).eq("id", sale.customerId).then(() => {});
-        setCustomers(prev => prev.map(c => c.id===sale.customerId ? {...c, balance: newBalance} : c));
-        const reversal = { id: crypto.randomUUID(), customerId: sale.customerId, saleId: sale.id,
-          amount: sale.total, type: "payment", paymentMethod: null, date: todayStr(), notes: "Reverso por cancelación" };
-        supabase.from("account_payments").insert(accountPaymentToDb(reversal)).then(() => {});
-        setAccountPayments(prev => [...prev, reversal]);
-      }
+    for (const p of sale.items) {
+      const prod = products.find(x => x.id === p.productId);
+      if (!prod) continue;
+      const newStock = prod.stock + p.qty;
+      await supabase.from("products").update({ stock: newStock }).eq("id", p.productId);
+      setProducts(prev => prev.map(x => x.id===p.productId ? {...x, stock: newStock} : x));
     }
-    supabase.from("sales").update({ status: "cancelled" }).eq("id", sale.id).then(() => {});
+    // reverse charge if was closed with account
+    if (sale.status === "closed" && sale.paymentMethod === "account" && sale.customerId) {
+      const reversal = { id: crypto.randomUUID(), customerId: sale.customerId, saleId: sale.id,
+        amount: sale.total, type: "payment", paymentMethod: null, date: todayStr(), notes: "Reverso por cancelación" };
+      const { error: payErr } = await supabase.from("account_payments").insert(accountPaymentToDb(reversal));
+      if (payErr) { showToast("Error al registrar reverso: " + payErr.message, "error"); return; }
+      setAccountPayments(prev => [...prev, reversal]);
+    }
+    await supabase.from("sales").update({ status: "cancelled" }).eq("id", sale.id);
     setSales(prev => prev.map(s => s.id===sale.id ? {...s,status:"cancelled"} : s));
     if (selected?.id===sale.id) setSelected(prev=>({...prev,status:"cancelled"}));
     showToast("Pedido cancelado");
@@ -660,6 +679,11 @@ function OrdersPage({ sales, setSales, products, setProducts, customers, setCust
 
 // ─── CUSTOMERS PAGE ───────────────────────────────────────────────────────────
 function CustomersPage({ customers, setCustomers, sales, accountPayments, setAccountPayments, showToast }) {
+  const custBal = (id) => {
+    const c = customers.find(x => x.id === id);
+    return (c?.balance ?? 0) + accountPayments.filter(p => p.customerId === id)
+      .reduce((sum, p) => p.type === "payment" ? sum + p.amount : sum - p.amount, 0);
+  };
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState(null); // null | "new" | customer
   const [form, setForm] = useState({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0, discountPct:0 });
@@ -672,49 +696,49 @@ function CustomersPage({ customers, setCustomers, sales, accountPayments, setAcc
   const openNew = () => { setForm({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0, discountPct:0 }); setModal("new"); };
   const openEdit = c => { setForm({...c}); setModal(c); };
 
-  const save = () => {
+  const save = async () => {
     if (!form.name) { showToast("El nombre es obligatorio", "error"); return; }
     if (modal==="new") {
       const newCustomer = {...form, id:uid(), balance:Number(form.balance)||0};
-      supabase.from("customers").insert(customerToDb(newCustomer)).then(() => {});
+      const { error } = await supabase.from("customers").insert(customerToDb(newCustomer));
+      if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
       setCustomers(p => [...p, newCustomer]);
     } else {
       const updated = {...form, balance:Number(form.balance)||0};
-      supabase.from("customers").update(customerToDb(updated)).eq("id", modal.id).then(() => {});
+      const { error } = await supabase.from("customers").update(customerToDb(updated)).eq("id", modal.id);
+      if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
       setCustomers(p => p.map(c => c.id===modal.id ? {...c,...updated} : c));
     }
     setModal(null);
     showToast("Cliente guardado");
   };
 
-  const del = id => {
+  const del = async (id) => {
     if (confirm("¿Eliminar cliente?")) {
-      supabase.from("customers").delete().eq("id", id).then(() => {});
+      const { error } = await supabase.from("customers").delete().eq("id", id);
+      if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
       setCustomers(p=>p.filter(c=>c.id!==id));
       showToast("Eliminado");
     }
   };
 
-  const adjustBalance = (id, amount) => {
-    setCustomers(p => p.map(c => {
-      if (c.id !== id) return c;
-      const newBalance = c.balance + Number(amount);
-      supabase.from("customers").update({ balance: newBalance }).eq("id", id).then(() => {});
-      return {...c, balance: newBalance};
-    }));
+  const adjustBalance = async (id, amount) => {
+    const customer = customers.find(c => c.id === id);
+    if (!customer) return;
+    const newBalance = customer.balance + Number(amount);
+    const { error } = await supabase.from("customers").update({ balance: newBalance }).eq("id", id);
+    if (error) { showToast("Error al ajustar saldo: " + error.message, "error"); return; }
+    setCustomers(p => p.map(c => c.id===id ? {...c, balance: newBalance} : c));
     showToast("Saldo actualizado");
   };
 
   const registerPayment = async () => {
     const amount = Number(payForm.amount);
     if (!amount || amount <= 0) { showToast("Monto inválido", "error"); return; }
-    const newBalance = payModal.balance + amount;
-    const { error } = await supabase.from("customers").update({ balance: newBalance }).eq("id", payModal.id);
-    if (error) { showToast("Error: " + error.message, "error"); return; }
-    setCustomers(prev => prev.map(c => c.id===payModal.id ? {...c, balance: newBalance} : c));
     const payment = { id: crypto.randomUUID(), customerId: payModal.id, saleId: null,
       amount, type: "payment", paymentMethod: payForm.paymentMethod, date: todayStr(), notes: payForm.notes };
-    supabase.from("account_payments").insert(accountPaymentToDb(payment)).then(() => {});
+    const { error: payErr } = await supabase.from("account_payments").insert(accountPaymentToDb(payment));
+    if (payErr) { showToast("Error al registrar pago: " + payErr.message, "error"); return; }
     setAccountPayments(prev => [...prev, payment]);
     setPayModal(null);
     showToast("Pago registrado");
@@ -744,10 +768,10 @@ function CustomersPage({ customers, setCustomers, sales, accountPayments, setAcc
                   <td style={{ color:"var(--t2)" }}>{c.phone||"—"}</td>
                   <td><span className={`badge ${c.priceList==="wholesale"?"badge-blue":"badge-green"}`}>{c.priceList==="wholesale"?"Mayorista":"Minorista"}</span></td>
                   <td>{(c.discountPct||0)>0 ? <span className="badge badge-amber">{c.discountPct}%</span> : <span style={{color:"var(--t4)"}}>—</span>}</td>
-                  <td><span className={c.balance>0?"balance-pos":c.balance<0?"balance-neg":"balance-zero"}>{$(c.balance)}</span></td>
+                  <td>{(() => { const b = custBal(c.id); return <span className={b>0?"balance-pos":b<0?"balance-neg":"balance-zero"}>{$(b)}</span>; })()}</td>
                   <td style={{ color:"var(--t3)", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.notes||"—"}</td>
                   <td>
-                    {c.balance < 0 && (
+                    {custBal(c.id) < 0 && (
                       <button className="btn btn-amber btn-sm" onClick={e=>{e.stopPropagation();setPayModal(c);setPayForm({amount:"",paymentMethod:"cash",notes:""});}}>
                         Registrar Pago
                       </button>
@@ -792,6 +816,35 @@ function CustomersPage({ customers, setCustomers, sales, accountPayments, setAcc
               </div>
             </div>
           )}
+          {modal!=="new" && (() => {
+            const movements = accountPayments
+              .filter(p => p.customerId === modal.id)
+              .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+            if (!movements.length) return null;
+            return (
+              <div style={{ marginBottom:14 }}>
+                <div className="section-title">Historial cuenta corriente</div>
+                <div className="table-wrap">
+                  <table>
+                    <thead><tr><th>Fecha</th><th>Tipo</th><th>Monto</th><th>Método</th><th>Notas</th></tr></thead>
+                    <tbody>
+                      {movements.map(p => (
+                        <tr key={p.id}>
+                          <td style={{ fontSize:".82em", color:"var(--t3)" }}>{fmtDate(p.date)}</td>
+                          <td><span className={`badge ${p.type==="charge"?"badge-red":"badge-green"}`}>{p.type==="charge"?"Cargo":"Pago"}</span></td>
+                          <td style={{ fontWeight:700, color: p.type==="charge"?"var(--red)":"var(--green)" }}>
+                            {p.type==="charge"?"-":"+"}{$(p.amount)}
+                          </td>
+                          <td style={{ fontSize:".84em" }}>{PAY_LABELS[p.paymentMethod]||"—"}</td>
+                          <td style={{ fontSize:".82em", color:"var(--t3)" }}>{p.notes||"—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={()=>setModal(null)}>Cancelar</button>
             <button className="btn btn-primary" onClick={save}><Ico n="check" s={13}/>Guardar</button>
@@ -802,7 +855,7 @@ function CustomersPage({ customers, setCustomers, sales, accountPayments, setAcc
       {payModal && (
         <Modal title={`Registrar pago — ${payModal.name}`} onClose={()=>setPayModal(null)}>
           <div style={{ background:"var(--redl)", border:"1px solid var(--redlb)", borderRadius:8, padding:"10px 14px", marginBottom:16, fontSize:".9em" }}>
-            Deuda actual: <strong className="balance-neg">{$(payModal.balance)}</strong>
+            Deuda actual: <strong className="balance-neg">{$(custBal(payModal.id))}</strong>
           </div>
           <div className="form-grid" style={{ marginBottom:14 }}>
             <div className="form-group full">
@@ -824,9 +877,7 @@ function CustomersPage({ customers, setCustomers, sales, accountPayments, setAcc
               <div className="form-group full">
                 <label className="lbl">Saldo resultante</label>
                 <div style={{ marginTop:4, fontWeight:700, fontSize:"1.05em" }}>
-                  <span className={(payModal.balance + Number(payForm.amount)) >= 0 ? "balance-pos" : "balance-neg"}>
-                    {$(payModal.balance + Number(payForm.amount))}
-                  </span>
+                  {(() => { const r = custBal(payModal.id) + Number(payForm.amount); return <span className={r >= 0 ? "balance-pos" : "balance-neg"}>{$(r)}</span>; })()}
                 </div>
               </div>
             )}
@@ -863,35 +914,40 @@ function ProductsPage({ products, setProducts, categories, showToast }) {
   const openNew = () => { setForm(emptyForm); setModal("new"); };
   const openEdit = p => { setForm({...p}); setModal(p); };
 
-  const save = () => {
+  const save = async () => {
     if (!form.name) { showToast("El nombre es obligatorio", "error"); return; }
     if (modal==="new") {
       const newProduct = {...form, id:uid(), priceRetail:Number(form.priceRetail), priceWholesale:Number(form.priceWholesale), stock:Number(form.stock)};
-      supabase.from("products").insert(productToDb(newProduct)).then(() => {});
+      const { error } = await supabase.from("products").insert(productToDb(newProduct));
+      if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
       setProducts(p => [...p, newProduct]);
     } else {
       const updated = {...form, priceRetail:Number(form.priceRetail), priceWholesale:Number(form.priceWholesale), stock:Number(form.stock)};
-      supabase.from("products").update(productToDb(updated)).eq("id", modal.id).then(() => {});
+      const { error } = await supabase.from("products").update(productToDb(updated)).eq("id", modal.id);
+      if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
       setProducts(p => p.map(x => x.id===modal.id ? {...x,...updated} : x));
     }
     setModal(null);
     showToast("Producto guardado");
   };
 
-  const del = id => {
+  const del = async (id) => {
     if (confirm("¿Eliminar producto?")) {
-      supabase.from("products").delete().eq("id", id).then(() => {});
+      const { error } = await supabase.from("products").delete().eq("id", id);
+      if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
       setProducts(p=>p.filter(x=>x.id!==id));
       showToast("Eliminado");
     }
   };
 
-  const toggleActive = id => setProducts(p => p.map(x => {
-    if (x.id !== id) return x;
-    const active = !x.active;
-    supabase.from("products").update({ active }).eq("id", id).then(() => {});
-    return {...x, active};
-  }));
+  const toggleActive = async (id) => {
+    const product = products.find(p => p.id === id);
+    if (!product) return;
+    const active = !product.active;
+    const { error } = await supabase.from("products").update({ active }).eq("id", id);
+    if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
+    setProducts(p => p.map(x => x.id===id ? {...x, active} : x));
+  };
 
   return (
     <div className="page">
@@ -978,22 +1034,18 @@ function ProductionPage({ products, setProducts, recipes, setIngredients, showTo
 
   const setQ = (id,v) => setQty(p=>({...p,[id]:v}));
 
-  const applyProduction = (id) => {
+  const applyProduction = async (id) => {
     const q = Number(qty[id]);
     if (!q || q<=0) { showToast("Ingresá una cantidad válida", "error"); return; }
 
-    setProducts(p => p.map(x => {
-      if (x.id !== id) return x;
-      const newStock = x.stock + q;
-      supabase.from("products").update({ stock: newStock }).eq("id", id).then(() => {});
-      return {...x, stock: newStock};
-    }));
+    const product = products.find(x => x.id === id);
+    if (!product) return;
+    const newProductStock = product.stock + q;
+    const { error: prodErr } = await supabase.from("products").update({ stock: newProductStock }).eq("id", id);
+    if (prodErr) { showToast("Error al actualizar stock: " + prodErr.message, "error"); return; }
+    setProducts(p => p.map(x => x.id===id ? {...x, stock: newProductStock} : x));
 
     const recipe = recipes.find(r => r.productId === id);
-    console.log("[Producción] productId:", id);
-    console.log("[Producción] receta encontrada:", recipe);
-    console.log("[Producción] todas las recetas:", recipes.map(r => ({ id: r.id, productId: r.productId })));
-
     if (!recipe) {
       setQty(p=>({...p,[id]:""}));
       showToast(`+${q} unidades · sin receta asociada`, "error");
@@ -1006,6 +1058,7 @@ function ProductionPage({ products, setProducts, recipes, setIngredients, showTo
     }
 
     const factor = q / (recipe.yield > 0 ? recipe.yield : 1);
+    const ingUpdates = [];
     setIngredients(prev => {
       let matched = 0;
       const next = prev.map(ing => {
@@ -1016,12 +1069,16 @@ function ProductionPage({ products, setProducts, recipes, setIngredients, showTo
         if (!ri) return ing;
         matched++;
         const newStock = ing.stock - ri.qty * factor;
-        supabase.from("ingredients").update({ stock: newStock }).eq("id", ing.id).then(() => {});
+        ingUpdates.push({ id: ing.id, newStock });
         return {...ing, stock: newStock};
       });
       console.log("[Producción] ingredientes descontados:", matched);
       return next;
     });
+    for (const { id: ingId, newStock } of ingUpdates) {
+      const { error } = await supabase.from("ingredients").update({ stock: newStock }).eq("id", ingId);
+      if (error) console.error("Error al descontar ingrediente:", error.message);
+    }
 
     setQty(p=>({...p,[id]:""}));
     showToast(`+${q} unidades registradas · ingredientes descontados`);
@@ -1168,9 +1225,10 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
     showToast("Receta guardada");
   };
 
-  const del = id => {
+  const del = async (id) => {
     if(confirm("¿Eliminar receta?")) {
-      supabase.from("recipes").delete().eq("id", id).then(() => {});
+      const { error } = await supabase.from("recipes").delete().eq("id", id);
+      if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
       setRecipes(p=>p.filter(r=>r.id!==id));
       showToast("Eliminada");
     }
@@ -1344,20 +1402,22 @@ function IngredientsPage({ ingredients, setIngredients, showToast }) {
     showToast("Ingrediente guardado");
   };
 
-  const del = id => {
+  const del = async (id) => {
     if (confirm("¿Eliminar ingrediente?")) {
-      supabase.from("ingredients").delete().eq("id", id).then(()=>{});
+      const { error } = await supabase.from("ingredients").delete().eq("id", id);
+      if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
       setIngredients(p=>p.filter(i=>i.id!==id));
       showToast("Eliminado");
     }
   };
 
-  const applyStock = id => {
+  const applyStock = async (id) => {
     const qty = Number(stockEdit[id]);
     if (!qty) return;
     const ingr = ingredients.find(i=>i.id===id);
     const newStock = (ingr?.stock||0) + qty;
-    supabase.from("ingredients").update({ stock: newStock }).eq("id", id).then(()=>{});
+    const { error } = await supabase.from("ingredients").update({ stock: newStock }).eq("id", id);
+    if (error) { showToast("Error al actualizar stock: " + error.message, "error"); return; }
     setIngredients(p=>p.map(i=>i.id===id?{...i,stock:newStock}:i));
     setStockEdit(p=>({...p,[id]:""}));
     showToast(`Stock: ${newStock} ${ingr?.unit}`);
@@ -1450,11 +1510,11 @@ function IngredientsPage({ ingredients, setIngredients, showToast }) {
 }
 
 // ─── EXPENSES PAGE ────────────────────────────────────────────────────────────
-const EXPENSE_CATEGORIES = ["Ingredientes", "Servicios", "Envases", "Limpieza", "Otros"];
 const EXPENSE_UNITS = ["unidades", "kg", "g", "litros", "porciones"];
 
-function ExpensesPage({ expenses, setExpenses, recipes, setRecipes, showToast }) {
-  const emptyForm = { date:todayStr(), supplier:"", concept:"", quantity:1, unit:"unidades", unitPrice:0, total:0, paymentMethod:"", paymentStatus:"pending", category:"Ingredientes", notes:"" };
+function ExpensesPage({ expenses, setExpenses, expenseCategories, recipes, setRecipes, showToast }) {
+  const defaultCat = expenseCategories[0] || "Ingredientes";
+  const emptyForm = { date:todayStr(), supplier:"", concept:"", quantity:1, unit:"unidades", unitPrice:0, total:0, paymentMethod:"", paymentStatus:"pending", category:defaultCat, notes:"" };
   const [modal, setModal] = useState(null);
   const [payModal, setPayModal] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -1467,7 +1527,7 @@ function ExpensesPage({ expenses, setExpenses, recipes, setRecipes, showToast })
     return np;
   });
 
-  const cats = ["Todos", ...EXPENSE_CATEGORIES];
+  const cats = ["Todos", ...expenseCategories];
   const filtered = expenses
     .filter(e => filterStatus==="all" || e.paymentStatus===filterStatus)
     .filter(e => filterCat==="Todos" || e.category===filterCat)
@@ -1480,24 +1540,27 @@ function ExpensesPage({ expenses, setExpenses, recipes, setRecipes, showToast })
   const openEdit = e  => { setForm({...e}); setModal(e); };
 
   // When saving an ingredient expense, update matching ingredient costs in recipes
-  const syncIngredientCosts = (concept, unitPrice) => {
+  const syncIngredientCosts = async (concept, unitPrice) => {
     if (!unitPrice || !concept) return 0;
     const lc = concept.toLowerCase().trim();
-    let count = 0;
+    const updates = [];
     setRecipes(prev => prev.map(r => {
       const hasMatch = r.ingredients.some(i => i.name.toLowerCase().includes(lc));
       if (!hasMatch) return r;
       const newIngredients = r.ingredients.map(i =>
         i.name.toLowerCase().includes(lc) ? {...i, cost: Number(unitPrice)} : i
       );
-      supabase.from("recipes").update({ ingredients: newIngredients }).eq("id", r.id).then(() => {});
-      count++;
+      updates.push({ id: r.id, ingredients: newIngredients });
       return {...r, ingredients: newIngredients};
     }));
-    return count;
+    for (const { id, ingredients } of updates) {
+      const { error } = await supabase.from("recipes").update({ ingredients }).eq("id", id);
+      if (error) console.error("Error al sincronizar receta:", error.message);
+    }
+    return updates.length;
   };
 
-  const save = () => {
+  const save = async () => {
     if (!form.concept) { showToast("El concepto es obligatorio", "error"); return; }
     const data = {
       ...form,
@@ -1508,14 +1571,16 @@ function ExpensesPage({ expenses, setExpenses, recipes, setRecipes, showToast })
     };
     if (modal==="new") {
       const newExp = {...data, id:uid()};
-      supabase.from("expenses").insert(expenseToDb(newExp)).then(() => {});
+      const { error } = await supabase.from("expenses").insert(expenseToDb(newExp));
+      if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
       setExpenses(p => [newExp, ...p]);
     } else {
-      supabase.from("expenses").update(expenseToDb(data)).eq("id", modal.id).then(() => {});
+      const { error } = await supabase.from("expenses").update(expenseToDb(data)).eq("id", modal.id);
+      if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
       setExpenses(p => p.map(e => e.id===modal.id ? {...e,...data} : e));
     }
     if (data.category==="Ingredientes" && data.unitPrice > 0) {
-      const updated = syncIngredientCosts(data.concept, data.unitPrice);
+      const updated = await syncIngredientCosts(data.concept, data.unitPrice);
       if (updated > 0) showToast(`Gasto guardado · Costo actualizado en ${updated} receta${updated!==1?"s":""}`);
       else showToast("Gasto guardado");
     } else {
@@ -1524,16 +1589,18 @@ function ExpensesPage({ expenses, setExpenses, recipes, setRecipes, showToast })
     setModal(null);
   };
 
-  const del = id => {
+  const del = async (id) => {
     if (confirm("¿Eliminar gasto?")) {
-      supabase.from("expenses").delete().eq("id", id).then(() => {});
+      const { error } = await supabase.from("expenses").delete().eq("id", id);
+      if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
       setExpenses(p => p.filter(e => e.id!==id));
       showToast("Eliminado");
     }
   };
 
-  const closeExpense = (expense, paymentMethod) => {
-    supabase.from("expenses").update({ payment_method: paymentMethod, payment_status:"paid" }).eq("id", expense.id).then(() => {});
+  const closeExpense = async (expense, paymentMethod) => {
+    const { error } = await supabase.from("expenses").update({ payment_method: paymentMethod, payment_status:"paid" }).eq("id", expense.id);
+    if (error) { showToast("Error al cerrar gasto: " + error.message, "error"); return; }
     setExpenses(p => p.map(e => e.id===expense.id ? {...e, paymentMethod, paymentStatus:"paid"} : e));
     setPayModal(null);
     showToast("Gasto cerrado ✓");
@@ -1617,7 +1684,7 @@ function ExpensesPage({ expenses, setExpenses, recipes, setRecipes, showToast })
             <div className="form-group"><label className="lbl">Total</label><input type="number" min="0" value={form.total} onChange={e=>set("total",e.target.value)} style={{ fontWeight:700 }}/></div>
             <div className="form-group"><label className="lbl">Categoría</label>
               <select value={form.category} onChange={e=>set("category",e.target.value)}>
-                {EXPENSE_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+                {expenseCategories.map(c=><option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div className="form-group"><label className="lbl">Método de pago</label>
@@ -1677,7 +1744,14 @@ function CloseExpenseModal({ expense, onClose, onConfirm }) {
 }
 
 // ─── REPORTS PAGE ─────────────────────────────────────────────────────────────
-function ReportsPage({ sales, products, expenses }) {
+// Parse date-only strings ("2026-03-01") as local time, not UTC
+const parseLocalDate = d => {
+  if (!d) return new Date(0);
+  if (typeof d === "string" && d.length === 10) return new Date(d + "T00:00:00");
+  return new Date(d);
+};
+
+function ReportsPage({ sales, products, expenses, expenseCategories, accountPayments }) {
   const [period, setPeriod] = useState("today");
 
   const now = new Date();
@@ -1688,11 +1762,45 @@ function ReportsPage({ sales, products, expenses }) {
     return new Date(0);
   }, [period]);
 
-  const pSales = sales.filter(s => new Date(s.createdAt)>=cutoff && s.status!=="cancelled");
-  const totalIncome = pSales.filter(s=>s.status==="closed"||s.status==="delivered").reduce((a,b)=>a+b.total,0);
-  const pending = sales.filter(s=>["open","pending","ready"].includes(s.status));
-  const pendingValue = pending.reduce((a,b)=>a+b.total,0);
+  // ── Sales in period ──────────────────────────────────────────────────────────
+  const pSales = sales.filter(s => new Date(s.createdAt) >= cutoff && s.status !== "cancelled");
+  const closedSales = pSales.filter(s => s.status === "closed" || s.status === "delivered");
 
+  // Cash actually received: closed sales paid directly (not account)
+  const directIncome = closedSales
+    .filter(s => s.paymentMethod !== "account")
+    .reduce((a, b) => a + b.total, 0);
+
+  // Account payments received in period (customer paying their debt)
+  const pAccountPayments = (accountPayments || []).filter(p =>
+    p.type === "payment" && p.paymentMethod && parseLocalDate(p.date) >= cutoff
+  );
+  const accountIncome = pAccountPayments.reduce((a, b) => a + b.amount, 0);
+
+  // Total income = cash received directly + account debt collected
+  const totalIncome = directIncome + accountIncome;
+
+  // Outstanding account debt (all time)
+  const allCharges  = (accountPayments || []).filter(p => p.type === "charge").reduce((a, b) => a + b.amount, 0);
+  const allPayments = (accountPayments || []).filter(p => p.type === "payment").reduce((a, b) => a + b.amount, 0);
+  const outstandingDebt = Math.max(0, allCharges - allPayments);
+
+  // Active open orders (all time — always relevant)
+  const activeOrders = sales.filter(s => ["open", "pending", "ready"].includes(s.status));
+  const activeOrdersValue = activeOrders.reduce((a, b) => a + b.total, 0);
+
+  // Pay method totals: direct sales + account payments received
+  const payMethodTotals = {};
+  closedSales.filter(s => s.paymentMethod !== "account").forEach(s => {
+    const k = s.paymentMethod || "other";
+    payMethodTotals[k] = (payMethodTotals[k] || 0) + s.total;
+  });
+  pAccountPayments.forEach(p => {
+    const k = p.paymentMethod;
+    payMethodTotals[k] = (payMethodTotals[k] || 0) + p.amount;
+  });
+
+  // ── Products ─────────────────────────────────────────────────────────────────
   const productCount = {};
   pSales.forEach(s => s.items.forEach(i => {
     productCount[i.name] = (productCount[i.name]||0)+i.qty;
@@ -1702,18 +1810,11 @@ function ReportsPage({ sales, products, expenses }) {
 
   const stockAlert = products.filter(p=>p.active&&p.stock<=5).sort((a,b)=>a.stock-b.stock);
 
-  const closedSales = pSales.filter(s => s.status==="closed" || s.status==="delivered");
-  const payMethodTotals = {};
-  closedSales.forEach(s => {
-    const k = s.paymentMethod || "other";
-    payMethodTotals[k] = (payMethodTotals[k]||0) + s.total;
-  });
-
-  // Expenses in period (filter by date field)
-  const pExpenses = (expenses||[]).filter(e => new Date(e.date) >= cutoff);
-  const totalExpenses    = pExpenses.filter(e=>e.paymentStatus==="paid").reduce((a,b)=>a+b.total,0);
-  const pendingExpenses  = pExpenses.filter(e=>e.paymentStatus==="pending").reduce((a,b)=>a+b.total,0);
-  const netResult        = totalIncome - totalExpenses;
+  // ── Expenses in period ───────────────────────────────────────────────────────
+  const pExpenses = (expenses||[]).filter(e => parseLocalDate(e.date) >= cutoff);
+  const totalExpenses   = pExpenses.filter(e=>e.paymentStatus==="paid").reduce((a,b)=>a+b.total,0);
+  const pendingExpenses = pExpenses.filter(e=>e.paymentStatus==="pending").reduce((a,b)=>a+b.total,0);
+  const netResult       = totalIncome - totalExpenses;
   const expByCat = {};
   pExpenses.filter(e=>e.paymentStatus==="paid").forEach(e => {
     expByCat[e.category||"Otros"] = (expByCat[e.category||"Otros"]||0) + e.total;
@@ -1732,10 +1833,10 @@ function ReportsPage({ sales, products, expenses }) {
       </div>
 
       <div className="stats-row">
-        <div className="stat stat-green"><div className="stat-num">{$(totalIncome)}</div><div className="stat-label">Ingresos cobrados</div><div className="stat-icon">💰</div></div>
-        <div className="stat stat-amber"><div className="stat-num">{$(pendingValue)}</div><div className="stat-label">Pendiente de cobro</div><div className="stat-icon">⏳</div></div>
+        <div className="stat stat-green"><div className="stat-num">{$(totalIncome)}</div><div className="stat-label">Cobrado en período</div><div className="stat-icon">💰</div></div>
+        <div className="stat stat-amber"><div className="stat-num">{$(outstandingDebt)}</div><div className="stat-label">Deuda en cuentas</div><div className="stat-icon">⏳</div></div>
         <div className="stat"><div className="stat-num">{pSales.length}</div><div className="stat-label">Ventas en período</div><div className="stat-icon">🧾</div></div>
-        <div className="stat stat-blue"><div className="stat-num">{pending.length}</div><div className="stat-label">Pedidos activos</div><div className="stat-icon">📋</div></div>
+        <div className="stat stat-blue"><div className="stat-num">{$(activeOrdersValue)}</div><div className="stat-label">Pedidos activos ({activeOrders.length})</div><div className="stat-icon">📋</div></div>
       </div>
       <div className="stats-row" style={{ marginBottom:16 }}>
         <div className="stat stat-red"><div className="stat-num">{$(totalExpenses)}</div><div className="stat-label">Gastos pagados</div><div className="stat-icon">💸</div></div>
@@ -1766,8 +1867,8 @@ function ReportsPage({ sales, products, expenses }) {
 
         <div className="card">
           <div className="section-title">Pedidos activos</div>
-          {pending.length===0 ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin pedidos activos</div> :
-            pending.slice(0,8).map(s=>(
+          {activeOrders.length===0 ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin pedidos activos</div> :
+            activeOrders.slice(0,8).map(s=>(
               <div key={s.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderBottom:"1px solid var(--border)" }}>
                 <div>
                   <div style={{ fontSize:".86em", fontWeight:600 }}>{s.customerName}</div>
@@ -1785,8 +1886,8 @@ function ReportsPage({ sales, products, expenses }) {
 
       <div className="card" style={{ marginBottom:16 }}>
         <div className="section-title">Ingresos por método de pago</div>
-        {closedSales.length===0 ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin ventas en el período</div> :
-          Object.entries(PAY_LABELS).map(([k,v]) => {
+        {totalIncome === 0 ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin cobros en el período</div> :
+          Object.entries(PAY_LABELS).filter(([k]) => (payMethodTotals[k]||0) > 0 || k !== "account").map(([k,v]) => {
             const amt = payMethodTotals[k]||0;
             const pct = totalIncome>0 ? Math.round(amt/totalIncome*100) : 0;
             return (
@@ -1808,7 +1909,7 @@ function ReportsPage({ sales, products, expenses }) {
           <div className="section-title">Gastos por categoría</div>
           {Object.keys(expByCat).length===0
             ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin gastos pagados en el período</div>
-            : EXPENSE_CATEGORIES.filter(c => expByCat[c]).map(c => {
+            : (expenseCategories||[]).filter(c => expByCat[c]).map(c => {
                 const amt = expByCat[c]||0;
                 const pct = Math.round(amt/maxExpCat*100);
                 return (
@@ -1826,20 +1927,32 @@ function ReportsPage({ sales, products, expenses }) {
 
         <div className="card">
           <div className="section-title">Balance del período</div>
-          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
-              <span style={{ fontSize:".86em", color:"var(--t2)" }}>Ingresos cobrados</span>
-              <span style={{ fontWeight:700, color:"var(--green)" }}>{$(totalIncome)}</span>
+              <span style={{ fontSize:".84em", color:"var(--t3)" }}>Ventas cobradas directamente</span>
+              <span style={{ fontWeight:600, color:"var(--green)" }}>{$(directIncome)}</span>
             </div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
-              <span style={{ fontSize:".86em", color:"var(--t2)" }}>Gastos pagados</span>
-              <span style={{ fontWeight:700, color:"var(--red)" }}>-{$(totalExpenses)}</span>
+              <span style={{ fontSize:".84em", color:"var(--t3)" }}>Cuentas corrientes cobradas</span>
+              <span style={{ fontWeight:600, color:"var(--green)" }}>{$(accountIncome)}</span>
             </div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom:"1px solid var(--border)" }}>
-              <span style={{ fontSize:".86em", color:"var(--t2)" }}>Gastos pendientes</span>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"2px solid var(--border)" }}>
+              <span style={{ fontSize:".86em", color:"var(--t2)", fontWeight:700 }}>Total cobrado</span>
+              <span style={{ fontWeight:800, color:"var(--green)" }}>{$(totalIncome)}</span>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
+              <span style={{ fontSize:".84em", color:"var(--t3)" }}>Gastos pagados</span>
+              <span style={{ fontWeight:600, color:"var(--red)" }}>-{$(totalExpenses)}</span>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
+              <span style={{ fontSize:".84em", color:"var(--t3)" }}>Gastos pendientes</span>
               <span style={{ fontWeight:600, color:"var(--amber)" }}>-{$(pendingExpenses)}</span>
             </div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 12px", background:netResult>=0?"var(--greenl)":"var(--redl)", borderRadius:8, border:`1px solid ${netResult>=0?"var(--greenlb)":"var(--redlb)"}` }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
+              <span style={{ fontSize:".84em", color:"var(--t3)" }}>Deuda en cuentas corrientes</span>
+              <span style={{ fontWeight:600, color:outstandingDebt>0?"var(--amber)":"var(--t3)" }}>{$(outstandingDebt)}</span>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 12px", marginTop:8, background:netResult>=0?"var(--greenl)":"var(--redl)", borderRadius:8, border:`1px solid ${netResult>=0?"var(--greenlb)":"var(--redlb)"}` }}>
               <span style={{ fontWeight:700, fontSize:".9em" }}>Resultado neto</span>
               <span style={{ fontWeight:800, fontSize:"1.1em", color:netResult>=0?"var(--green)":"var(--red)" }}>
                 {netResult<0?"-":""}{$(Math.abs(netResult))}
@@ -1869,8 +1982,42 @@ function ReportsPage({ sales, products, expenses }) {
 }
 
 // ─── SETTINGS PAGE ────────────────────────────────────────────────────────────
-function SettingsPage({ categories, setCategories, showToast }) {
+function SettingsPage({ categories, setCategories, expenseCategories, setExpenseCategories, showToast }) {
   const [newCat, setNewCat] = useState("");
+  const [newExpCat, setNewExpCat] = useState("");
+
+  const addCat = async () => {
+    if (!newCat || categories.includes(newCat)) return;
+    const { error } = await supabase.from("categories").insert({ name: newCat });
+    if (error) { showToast("Error al agregar: " + error.message, "error"); return; }
+    setCategories(p => [...p, newCat]);
+    setNewCat("");
+    showToast("Categoría agregada");
+  };
+
+  const delCat = async (c) => {
+    const { error } = await supabase.from("categories").delete().eq("name", c);
+    if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
+    setCategories(p => p.filter(x => x !== c));
+    showToast("Categoría eliminada");
+  };
+
+  const addExpCat = async () => {
+    if (!newExpCat || expenseCategories.includes(newExpCat)) return;
+    const { error } = await supabase.from("expense_categories").insert({ name: newExpCat });
+    if (error) { showToast("Error al agregar: " + error.message, "error"); return; }
+    setExpenseCategories(p => [...p, newExpCat]);
+    setNewExpCat("");
+    showToast("Categoría de gasto agregada");
+  };
+
+  const delExpCat = async (c) => {
+    if (expenseCategories.length <= 1) { showToast("Debe quedar al menos una categoría", "error"); return; }
+    const { error } = await supabase.from("expense_categories").delete().eq("name", c);
+    if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
+    setExpenseCategories(p => p.filter(x => x !== c));
+    showToast("Categoría eliminada");
+  };
 
   return (
     <div className="page">
@@ -1878,14 +2025,14 @@ function SettingsPage({ categories, setCategories, showToast }) {
         <div><div className="page-title">Configuración</div></div>
       </div>
 
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
         <div className="card">
           <div className="section-title">Categorías de productos</div>
           {categories.map(c=>(
             <div key={c} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
               <span style={{ fontSize:".88em" }}>{c}</span>
               {categories.length>1 && (
-                <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>{supabase.from("categories").delete().eq("name",c).then(()=>{});setCategories(p=>p.filter(x=>x!==c));showToast("Categoría eliminada");}}>
+                <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>delCat(c)}>
                   <Ico n="x" s={12} c="var(--red)"/>
                 </button>
               )}
@@ -1893,27 +2040,47 @@ function SettingsPage({ categories, setCategories, showToast }) {
           ))}
           <div style={{ display:"flex", gap:8, marginTop:12 }}>
             <input value={newCat} onChange={e=>setNewCat(e.target.value)} placeholder="Nueva categoría..."
-              onKeyDown={e=>{if(e.key==="Enter"&&newCat){supabase.from("categories").insert({name:newCat}).then(()=>{});setCategories(p=>[...p,newCat]);setNewCat("");showToast("Categoría agregada");}}}/>
-            <button className="btn btn-primary btn-sm" disabled={!newCat||categories.includes(newCat)}
-              onClick={()=>{supabase.from("categories").insert({name:newCat}).then(()=>{});setCategories(p=>[...p,newCat]);setNewCat("");showToast("Categoría agregada");}}>
+              onKeyDown={e=>{ if(e.key==="Enter") addCat(); }}/>
+            <button className="btn btn-primary btn-sm" disabled={!newCat||categories.includes(newCat)} onClick={addCat}>
               <Ico n="plus" s={13}/>
             </button>
           </div>
         </div>
 
         <div className="card">
-          <div className="section-title">Usuarios del sistema</div>
-          {[{name:"Administrador",role:"admin",pass:"admin123"},{name:"Vendedor",role:"vendor",pass:"1234"}].map(u=>(
-            <div key={u.role} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
-              <div>
-                <div style={{ fontWeight:600, fontSize:".88em" }}>{u.name}</div>
-                <div style={{ fontSize:".74em", color:"var(--t3)" }}>Contraseña: {u.pass}</div>
-              </div>
-              <span className="tag" style={{ textTransform:"capitalize" }}>{u.role}</span>
+          <div className="section-title">Categorías de gastos</div>
+          {expenseCategories.map(c=>(
+            <div key={c} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
+              <span style={{ fontSize:".88em" }}>{c}</span>
+              {expenseCategories.length>1 && (
+                <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>delExpCat(c)}>
+                  <Ico n="x" s={12} c="var(--red)"/>
+                </button>
+              )}
             </div>
           ))}
-          <p style={{ fontSize:".78em", color:"var(--t3)", marginTop:10 }}>Para cambiar contraseñas, editá el archivo src/shared.jsx</p>
+          <div style={{ display:"flex", gap:8, marginTop:12 }}>
+            <input value={newExpCat} onChange={e=>setNewExpCat(e.target.value)} placeholder="Nueva categoría..."
+              onKeyDown={e=>{ if(e.key==="Enter") addExpCat(); }}/>
+            <button className="btn btn-primary btn-sm" disabled={!newExpCat||expenseCategories.includes(newExpCat)} onClick={addExpCat}>
+              <Ico n="plus" s={13}/>
+            </button>
+          </div>
         </div>
+      </div>
+
+      <div className="card" style={{ maxWidth:420 }}>
+        <div className="section-title">Usuarios del sistema</div>
+        {[{name:"Administrador",role:"admin",pass:"admin123"},{name:"Vendedor",role:"vendor",pass:"1234"}].map(u=>(
+          <div key={u.role} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
+            <div>
+              <div style={{ fontWeight:600, fontSize:".88em" }}>{u.name}</div>
+              <div style={{ fontSize:".74em", color:"var(--t3)" }}>Contraseña: {u.pass}</div>
+            </div>
+            <span className="tag" style={{ textTransform:"capitalize" }}>{u.role}</span>
+          </div>
+        ))}
+        <p style={{ fontSize:".78em", color:"var(--t3)", marginTop:10 }}>Para cambiar contraseñas, editá el archivo src/shared.jsx</p>
       </div>
     </div>
   );
