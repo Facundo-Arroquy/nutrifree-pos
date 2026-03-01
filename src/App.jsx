@@ -22,7 +22,7 @@ export default function App() {
   const [products, setProducts] = useState(SEED_PRODUCTS);
   const [customers, setCustomers] = useState(SEED_CUSTOMERS);
   const [sales, setSales] = useState(SEED_SALES);
-  const [recipes, setRecipes] = useState(SEED_RECIPES);
+  const [recipes, setRecipes] = useState([]);
   const [categories, setCategories] = useState(SEED_CATEGORIES);
   const [expenses, setExpenses] = useState([]);
   const [ingredients, setIngredients] = useState([]);
@@ -60,8 +60,6 @@ export default function App() {
       if (ingrs && ingrs.length > 0) setIngredients(ingrs.map(dbToIngredient));
       if (recs && recs.length > 0) {
         setRecipes(recs.map(dbToRecipe));
-      } else {
-        supabase.from("recipes").insert(SEED_RECIPES.map(recipeToDb)).then(() => {});
       }
     };
     load();
@@ -874,26 +872,50 @@ function ProductionPage({ products, setProducts, recipes, setIngredients, showTo
   const applyProduction = (id) => {
     const q = Number(qty[id]);
     if (!q || q<=0) { showToast("Ingresá una cantidad válida", "error"); return; }
+
     setProducts(p => p.map(x => {
       if (x.id !== id) return x;
       const newStock = x.stock + q;
       supabase.from("products").update({ stock: newStock }).eq("id", id).then(() => {});
       return {...x, stock: newStock};
     }));
-    // Reducir stock de ingredientes según la receta
+
     const recipe = recipes.find(r => r.productId === id);
-    if (recipe && recipe.yield > 0) {
-      const factor = q / recipe.yield;
-      setIngredients(prev => prev.map(ing => {
-        const ri = recipe.ingredients.find(r => r.ingredientId === ing.id);
+    console.log("[Producción] productId:", id);
+    console.log("[Producción] receta encontrada:", recipe);
+    console.log("[Producción] todas las recetas:", recipes.map(r => ({ id: r.id, productId: r.productId })));
+
+    if (!recipe) {
+      setQty(p=>({...p,[id]:""}));
+      showToast(`+${q} unidades · sin receta asociada`, "error");
+      return;
+    }
+    if (!Array.isArray(recipe.ingredients) || recipe.ingredients.length === 0) {
+      setQty(p=>({...p,[id]:""}));
+      showToast(`+${q} unidades · la receta no tiene ingredientes`, "error");
+      return;
+    }
+
+    const factor = q / (recipe.yield > 0 ? recipe.yield : 1);
+    setIngredients(prev => {
+      let matched = 0;
+      const next = prev.map(ing => {
+        const ri = recipe.ingredients.find(r =>
+          (r.ingredientId && r.ingredientId === ing.id) ||
+          (!r.ingredientId && r.name?.toLowerCase() === ing.name?.toLowerCase())
+        );
         if (!ri) return ing;
+        matched++;
         const newStock = ing.stock - ri.qty * factor;
         supabase.from("ingredients").update({ stock: newStock }).eq("id", ing.id).then(() => {});
         return {...ing, stock: newStock};
-      }));
-    }
+      });
+      console.log("[Producción] ingredientes descontados:", matched);
+      return next;
+    });
+
     setQty(p=>({...p,[id]:""}));
-    showToast(`+${q} unidades registradas`);
+    showToast(`+${q} unidades registradas · ingredientes descontados`);
   };
 
   return (
@@ -949,7 +971,13 @@ function RecipesPage({ recipes, setRecipes, products, ingredients, showToast }) 
   const [newStep, setNewStep] = useState("");
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
 
-  const totalCost = (ingrs) => ingrs.reduce((a,b)=>a+Number(b.cost),0);
+  const ingredientCost = (i) => {
+    const ing = i.ingredientId
+      ? ingredients.find(x => x.id === i.ingredientId)
+      : ingredients.find(x => x.name?.toLowerCase() === i.name?.toLowerCase());
+    return ing ? i.qty * ing.unitCost : Number(i.cost) || 0;
+  };
+  const totalCost = (ingrs) => ingrs.reduce((a, b) => a + ingredientCost(b), 0);
   const costPerUnit = (r) => r.yield>0 ? totalCost(r.ingredients)/r.yield : 0;
 
   const exportRecipePDF = (r) => {
@@ -981,7 +1009,7 @@ td{padding:7px 10px;border-bottom:1px solid #f3f4f6;font-size:13px}.total-row td
 </div>
 <h2>Ingredientes</h2>
 <table><thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Costo</th></tr></thead><tbody>
-${r.ingredients.map(i=>`<tr><td>${i.name}</td><td>${i.qty}</td><td>${i.unit}</td><td>${fmt(i.cost)}</td></tr>`).join("")}
+${r.ingredients.map(i=>`<tr><td>${i.name}</td><td>${i.qty}</td><td>${i.unit}</td><td>${fmt(ingredientCost(i))}</td></tr>`).join("")}
 <tr class="total-row"><td colspan="3">TOTAL</td><td>${fmt(cost)}</td></tr>
 </tbody></table>
 <h2>Costos</h2>
@@ -1015,14 +1043,16 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
   const addStep = () => { if (!newStep) return; setForm(p=>({...p,steps:[...p.steps,newStep]})); setNewStep(""); };
   const removeStep = i => setForm(p=>({...p,steps:p.steps.filter((_,idx)=>idx!==i)}));
 
-  const save = () => {
+  const save = async () => {
     if (!form.productId) { showToast("Seleccioná un producto", "error"); return; }
     if (modal==="new") {
-      const newRecipe = {...form, id:uid()};
-      supabase.from("recipes").insert(recipeToDb(newRecipe)).then(() => {});
+      const newRecipe = {...form, id: crypto.randomUUID()};
+      const { error } = await supabase.from("recipes").insert(recipeToDb(newRecipe));
+      if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
       setRecipes(p=>[...p, newRecipe]);
     } else {
-      supabase.from("recipes").update(recipeToDb({...form, id:modal.id})).eq("id", modal.id).then(() => {});
+      const { error } = await supabase.from("recipes").update(recipeToDb({...form, id:modal.id})).eq("id", modal.id);
+      if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
       setRecipes(p=>p.map(r=>r.id===modal.id?{...r,...form}:r));
     }
     setModal(null);
@@ -1089,7 +1119,7 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
               <thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Costo</th></tr></thead>
               <tbody>
                 {viewModal.ingredients.map((i,idx)=>(
-                  <tr key={idx}><td>{i.name}</td><td>{i.qty}</td><td>{i.unit}</td><td>{$(i.cost)}</td></tr>
+                  <tr key={idx}><td>{i.name}</td><td>{i.qty}</td><td>{i.unit}</td><td>{$(ingredientCost(i))}</td></tr>
                 ))}
                 <tr style={{ background:"var(--greenl)" }}>
                   <td colSpan={3} style={{ fontWeight:700 }}>TOTAL</td>
@@ -1188,15 +1218,17 @@ function IngredientsPage({ ingredients, setIngredients, showToast }) {
   const openNew  = () => { setForm(emptyForm); setModal("new"); };
   const openEdit = i  => { setForm({...i}); setModal(i); };
 
-  const save = () => {
+  const save = async () => {
     if (!form.name) { showToast("El nombre es obligatorio", "error"); return; }
     const data = { ...form, stock:Number(form.stock)||0, stockMin:Number(form.stockMin)||0, unitCost:Number(form.unitCost)||0 };
     if (modal==="new") {
-      const newIngr = { ...data, id:uid() };
-      supabase.from("ingredients").insert(ingredientToDb(newIngr)).then(()=>{});
+      const newIngr = { ...data, id: crypto.randomUUID() };
+      const { error } = await supabase.from("ingredients").insert(ingredientToDb(newIngr));
+      if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
       setIngredients(p=>[...p, newIngr]);
     } else {
-      supabase.from("ingredients").update(ingredientToDb(data)).eq("id", modal.id).then(()=>{});
+      const { error } = await supabase.from("ingredients").update(ingredientToDb(data)).eq("id", modal.id);
+      if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
       setIngredients(p=>p.map(i=>i.id===modal.id?{...i,...data}:i));
     }
     setModal(null);
