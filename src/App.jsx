@@ -108,7 +108,7 @@ export default function App() {
         {/* SIDEBAR */}
         <aside className="sidebar">
           <div className="sb-logo">
-            <h1>🥗 Nutrifree</h1>
+            <h1><img src="/logo.jpg" alt="Nutrifree" style={{ height:36, verticalAlign:"middle", marginRight:8 }}/>Nutrifree</h1>
             <p>Sistema de gestión</p>
           </div>
           <nav className="sb-nav">
@@ -1916,7 +1916,15 @@ function ReportsPage({ sales, products, expenses, expenseCategories, accountPaym
   // ── Products ─────────────────────────────────────────────────────────────────
   const productCount = {};
   pSales.forEach(s => s.items.forEach(i => {
-    productCount[i.name] = (productCount[i.name]||0)+i.qty;
+    if (i.kitItems?.length) {
+      i.kitItems.forEach(comp => {
+        const compProd = products.find(p => p.id === comp.productId);
+        const compName = compProd ? compProd.name : comp.productId;
+        productCount[compName] = (productCount[compName]||0) + comp.qty * i.qty;
+      });
+    } else {
+      productCount[i.name] = (productCount[i.name]||0)+i.qty;
+    }
   }));
   const topProducts = Object.entries(productCount).sort((a,b)=>b[1]-a[1]).slice(0,8);
   const maxQty = topProducts[0]?.[1]||1;
