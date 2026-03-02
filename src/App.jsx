@@ -2099,7 +2099,7 @@ function SettingsPage({ categories, setCategories, expenseCategories, setExpense
 
       <div className="card" style={{ maxWidth:420 }}>
         <div className="section-title">Usuarios del sistema</div>
-        {[{name:"Administrador",role:"admin",pass:"admin123"},{name:"Vendedor",role:"vendor",pass:"1234"}].map(u=>(
+        {[{name:"Administrador",role:"admin",pass:"noImporta"},{name:"Vendedor",role:"vendor",pass:"000comida"}].map(u=>(
           <div key={u.role} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
             <div>
               <div style={{ fontWeight:600, fontSize:".88em" }}>{u.name}</div>
