@@ -177,6 +177,7 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("Todos");
   const [payModal, setPayModal] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState("closed");
   const [custModal, setCustModal] = useState(false);
   const [payMethod, setPayMethod] = useState("cash");
   const [orderNotes, setOrderNotes] = useState("");
@@ -405,11 +406,11 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
           <div className="tot-row total"><span>TOTAL</span><span style={{color:"var(--green)"}}>{$(total)}</span></div>
           <div style={{ display:"flex", gap:8, marginTop:14 }}>
             <button className="btn btn-secondary" style={{ flex:1 }} disabled={cart.length===0}
-              onClick={() => completeSale("open")}>
+              onClick={() => { setPendingStatus("open"); setPayModal(true); }}>
               <Ico n="clock" s={14}/>Pedido abierto
             </button>
             <button className="btn btn-primary" style={{ flex:1 }} disabled={cart.length===0}
-              onClick={()=>setPayModal(true)}>
+              onClick={() => { setPendingStatus("closed"); setPayModal(true); }}>
               <Ico n="cash" s={14}/>Cobrar
             </button>
           </div>
@@ -449,7 +450,7 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
 
       {/* PAYMENT MODAL */}
       {payModal && (
-        <Modal title="Completar venta" onClose={()=>setPayModal(false)}>
+        <Modal title={pendingStatus==="open" ? "Guardar pedido abierto" : "Completar venta"} onClose={()=>setPayModal(false)}>
           {discountAmt > 0 && (
             <div className="tot-row" style={{ marginBottom:4 }}>
               <span style={{ color:"var(--t3)" }}>Subtotal</span>
@@ -490,8 +491,8 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
           </div>
           <div className="modal-footer" style={{ paddingTop:0, borderTop:"none", marginTop:0, gap:10 }}>
             <button className="btn btn-secondary" onClick={()=>setPayModal(false)}>Cancelar</button>
-            <button className="btn btn-primary btn-lg" onClick={()=>completeSale("closed")}>
-              <Ico n="check" s={16}/>Confirmar venta
+            <button className="btn btn-primary btn-lg" onClick={()=>completeSale(pendingStatus)}>
+              <Ico n="check" s={16}/>{pendingStatus==="open" ? "Guardar pedido" : "Confirmar venta"}
             </button>
           </div>
         </Modal>
@@ -1373,6 +1374,7 @@ function IngredientsPage({ ingredients, setIngredients, showToast }) {
   const [form, setForm] = useState(emptyForm);
   const [filterCat, setFilterCat] = useState("Todos");
   const [stockEdit, setStockEdit] = useState({});
+  const [priceEdit, setPriceEdit] = useState({});
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
 
   const filtered = ingredients
@@ -1409,6 +1411,16 @@ function IngredientsPage({ ingredients, setIngredients, showToast }) {
       setIngredients(p=>p.filter(i=>i.id!==id));
       showToast("Eliminado");
     }
+  };
+
+  const applyPrice = async (id) => {
+    const val = Number(priceEdit[id]);
+    if (isNaN(val) || val < 0) return;
+    const { error } = await supabase.from("ingredients").update({ unit_cost: val }).eq("id", id);
+    if (error) { showToast("Error al actualizar precio: " + error.message, "error"); return; }
+    setIngredients(p=>p.map(i=>i.id===id?{...i,unitCost:val}:i));
+    setPriceEdit(p=>({...p,[id]:undefined}));
+    showToast("Precio actualizado");
   };
 
   const applyStock = async (id) => {
@@ -1460,7 +1472,23 @@ function IngredientsPage({ ingredients, setIngredients, showToast }) {
                     {low && <span style={{ fontSize:".72em", color:"var(--red)", marginLeft:6 }}>⚠ bajo</span>}
                   </td>
                   <td style={{ color:"var(--t3)" }}>{i.stockMin} {i.unit}</td>
-                  <td style={{ fontWeight:600 }}>{$(i.unitCost)}</td>
+                  <td onClick={e=>e.stopPropagation()}>
+                    {priceEdit[i.id] !== undefined ? (
+                      <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+                        <input type="number" min="0" step="0.01" style={{ width:80 }} autoFocus
+                          value={priceEdit[i.id]}
+                          onChange={e=>setPriceEdit(p=>({...p,[i.id]:e.target.value}))}
+                          onKeyDown={e=>{ if(e.key==="Enter") applyPrice(i.id); if(e.key==="Escape") setPriceEdit(p=>({...p,[i.id]:undefined})); }}/>
+                        <button className="btn btn-primary btn-sm" onClick={()=>applyPrice(i.id)}><Ico n="check" s={12}/></button>
+                        <button className="btn btn-ghost btn-sm" onClick={()=>setPriceEdit(p=>({...p,[i.id]:undefined}))}><Ico n="x" s={12}/></button>
+                      </div>
+                    ) : (
+                      <span style={{ fontWeight:600, cursor:"pointer", borderBottom:"1px dashed var(--t4)" }}
+                        onClick={()=>setPriceEdit(p=>({...p,[i.id]:i.unitCost}))}>
+                        {$(i.unitCost)}
+                      </span>
+                    )}
+                  </td>
                   <td style={{ color:"var(--t3)", fontSize:".86em" }}>{i.supplier||"—"}</td>
                   <td onClick={e=>e.stopPropagation()} style={{ display:"flex", gap:6, alignItems:"center" }}>
                     <input type="number" style={{ width:80 }} placeholder="Cant." value={stockEdit[i.id]||""}
