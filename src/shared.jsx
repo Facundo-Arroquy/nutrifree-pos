@@ -300,8 +300,8 @@ function Modal({ title, onClose, children, lg=false }) {
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 const USERS = [
-  { id:"admin", name:"Administrador", role:"admin", pass:"admin123" },
-  { id:"vendor", name:"Vendedor", role:"vendor", pass:"1234" },
+  { id:"admin", name:"Administrador", role:"admin", pass:"toto000" },
+  { id:"vendor", name:"Vendedor", role:"vendor", pass:"000comida" },
 ];
 
 function LoginPage({ onLogin }) {
@@ -336,9 +336,6 @@ function LoginPage({ onLogin }) {
           {err && <span style={{ fontSize:".78em", color:"var(--red)" }}>{err}</span>}
         </div>
         <button className="btn btn-primary btn-lg btn-block" onClick={login}>Ingresar</button>
-        <div style={{ marginTop:14, fontSize:".75em", color:"var(--t4)", textAlign:"center" }}>
-          Admin: admin123 · Vendedor: 1234
-        </div>
       </div>
     </div>
   );
