@@ -14,6 +14,7 @@ export const dbToProduct = r => ({
   priceRetail: r.price_retail, priceWholesale: r.price_wholesale,
   unit: r.unit, stock: r.stock, active: r.active,
   photo: r.photo, description: r.description,
+  kitItems: r.kit_items || [],
 });
 
 export const productToDb = p => ({
@@ -21,6 +22,7 @@ export const productToDb = p => ({
   price_retail: p.priceRetail, price_wholesale: p.priceWholesale,
   unit: p.unit, stock: p.stock, active: p.active,
   photo: p.photo, description: p.description,
+  kit_items: p.kitItems || [],
 });
 
 export const dbToCustomer = r => ({

@@ -191,16 +191,29 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
     (!search || p.name.toLowerCase().includes(search.toLowerCase()))
   );
 
+  const getKitMaxStock = (prod) => {
+    if (!prod.kitItems?.length) return prod.stock;
+    let max = Infinity;
+    for (const comp of prod.kitItems) {
+      const compProd = products.find(p => p.id === comp.productId);
+      if (!compProd) return 0;
+      max = Math.min(max, Math.floor(compProd.stock / comp.qty));
+    }
+    return isFinite(max) ? max : 0;
+  };
+
   const addToCart = (prod) => {
-    if (prod.stock <= 0) { showToast("Sin stock disponible", "error"); return; }
+    const isKit = prod.kitItems?.length > 0;
+    const effectiveStock = getKitMaxStock(prod);
+    if (effectiveStock <= 0) { showToast("Sin stock disponible", "error"); return; }
     setCart(prev => {
       const ex = prev.find(i => i.productId === prod.id);
       if (ex) {
-        if (ex.qty >= prod.stock) { showToast("Stock insuficiente", "error"); return prev; }
+        if (ex.qty >= effectiveStock) { showToast("Stock insuficiente", "error"); return prev; }
         return prev.map(i => i.productId===prod.id ? {...i, qty:i.qty+1, subtotal:(i.qty+1)*i.price} : i);
       }
       const price = priceList==="retail" ? prod.priceRetail : prod.priceWholesale;
-      return [...prev, { productId:prod.id, name:prod.name, qty:1, price, originalPrice:price, priceOverridden:false, subtotal:price }];
+      return [...prev, { productId:prod.id, name:prod.name, qty:1, price, originalPrice:price, priceOverridden:false, subtotal:price, isKit, kitItems: prod.kitItems || [] }];
     });
   };
 
@@ -250,12 +263,31 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
       discountValue: Number(discountValue) || 0,
       discountAmount: discountAmt,
     };
-    // deduct stock
-    const stockUpdates = cart.map(ci => {
-      const p = products.find(x => x.id === ci.productId);
-      if (!p) return null;
-      return { id: p.id, newStock: Math.max(0, p.stock - ci.qty) };
-    }).filter(Boolean);
+    // deduct stock — productos normales (no kits)
+    const stockUpdates = cart
+      .filter(ci => !ci.isKit)
+      .map(ci => {
+        const p = products.find(x => x.id === ci.productId);
+        if (!p) return null;
+        return { id: p.id, newStock: Math.max(0, p.stock - ci.qty) };
+      }).filter(Boolean);
+    // deduct stock — componentes de kits
+    const kitStockMap = {};
+    for (const ci of cart.filter(c => c.isKit)) {
+      for (const comp of (ci.kitItems || [])) {
+        kitStockMap[comp.productId] = (kitStockMap[comp.productId] || 0) + comp.qty * ci.qty;
+      }
+    }
+    for (const [compId, totalQty] of Object.entries(kitStockMap)) {
+      const p = products.find(x => x.id === compId);
+      if (!p) continue;
+      const existing = stockUpdates.find(u => u.id === compId);
+      if (existing) {
+        existing.newStock = Math.max(0, existing.newStock - totalQty);
+      } else {
+        stockUpdates.push({ id: compId, newStock: Math.max(0, p.stock - totalQty) });
+      }
+    }
     for (const { id, newStock } of stockUpdates) {
       const { error } = await supabase.from("products").update({ stock: newStock }).eq("id", id);
       if (error) console.error("Error al descontar stock:", error.message);
@@ -310,12 +342,13 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
         <div className="prod-grid">
           {filtered.map(p => {
             const price = priceList==="retail" ? p.priceRetail : p.priceWholesale;
+            const effStock = getKitMaxStock(p);
             return (
-              <div key={p.id} className={`prod-card${p.stock<=0?" inactive":""}`} onClick={()=>addToCart(p)}>
+              <div key={p.id} className={`prod-card${effStock<=0?" inactive":""}`} onClick={()=>addToCart(p)}>
                 <div className="prod-card-name">{p.name}</div>
-                <div className="prod-card-cat">{p.category}</div>
+                <div className="prod-card-cat">{p.kitItems?.length > 0 ? "Kit" : p.category}</div>
                 <div className="prod-card-price">{$(price)}</div>
-                <div className="prod-card-stock">Stock: {p.stock}</div>
+                <div className="prod-card-stock">Stock: {effStock}</div>
               </div>
             );
           })}
@@ -902,8 +935,10 @@ function ProductsPage({ products, setProducts, categories, showToast }) {
   const [modal, setModal] = useState(null);
   const [filterCat, setFilterCat] = useState("Todos");
   const [search, setSearch] = useState("");
-  const emptyForm = { name:"", category:"Viandas", priceRetail:0, priceWholesale:0, unit:"unit", stock:0, active:true, description:"" };
+  const emptyForm = { name:"", category:"Viandas", priceRetail:0, priceWholesale:0, unit:"unit", stock:0, active:true, description:"", isKit:false, kitItems:[] };
   const [form, setForm] = useState(emptyForm);
+  const [kitProductId, setKitProductId] = useState("");
+  const [kitQty, setKitQty] = useState(1);
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
 
   const cats = ["Todos", ...categories];
@@ -912,8 +947,8 @@ function ProductsPage({ products, setProducts, categories, showToast }) {
     (!search||p.name.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const openNew = () => { setForm(emptyForm); setModal("new"); };
-  const openEdit = p => { setForm({...p}); setModal(p); };
+  const openNew = () => { setForm(emptyForm); setKitProductId(""); setKitQty(1); setModal("new"); };
+  const openEdit = p => { setForm({...p, isKit: p.kitItems?.length > 0, kitItems: p.kitItems || []}); setKitProductId(""); setKitQty(1); setModal(p); };
 
   const save = async () => {
     if (!form.name) { showToast("El nombre es obligatorio", "error"); return; }
@@ -971,7 +1006,13 @@ function ProductsPage({ products, setProducts, categories, showToast }) {
           <tbody>
             {filtered.map(p => (
               <tr key={p.id} className="tr-click" onClick={()=>openEdit(p)}>
-                <td><div style={{ fontWeight:600 }}>{p.name}</div>{p.description&&<div style={{ fontSize:".74em", color:"var(--t3)" }}>{p.description}</div>}</td>
+                <td>
+                  <div style={{ fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
+                    {p.name}
+                    {p.kitItems?.length > 0 && <span className="badge badge-blue" style={{ fontSize:".7em" }}>Kit</span>}
+                  </div>
+                  {p.description&&<div style={{ fontSize:".74em", color:"var(--t3)" }}>{p.description}</div>}
+                </td>
                 <td><span className="tag">{p.category}</span></td>
                 <td style={{ fontWeight:600, color:"var(--green)" }}>{$(p.priceRetail)}</td>
                 <td style={{ color:"var(--t2)" }}>{$(p.priceWholesale)}</td>
@@ -1018,6 +1059,50 @@ function ProductsPage({ products, setProducts, categories, showToast }) {
               </select>
             </div>
             <div className="form-group full"><label className="lbl">Descripción</label><textarea value={form.description} onChange={e=>set("description",e.target.value)}/></div>
+            <div className="form-group full">
+              <label className="lbl" style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <input type="checkbox" checked={form.isKit} onChange={e=>set("isKit",e.target.checked)} style={{ width:16, height:16 }}/>
+                ¿Es un kit? (compuesto por otros productos)
+              </label>
+            </div>
+            {form.isKit && (
+              <div className="form-group full">
+                <label className="lbl">Componentes del kit</label>
+                <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+                  <select value={kitProductId} onChange={e=>setKitProductId(e.target.value)} style={{ flex:1 }}>
+                    <option value="">— Seleccionar producto —</option>
+                    {products.filter(p => !p.kitItems?.length && p.id !== (modal !== "new" ? modal.id : null)).map(p =>
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    )}
+                  </select>
+                  <input type="number" value={kitQty} onChange={e=>setKitQty(Number(e.target.value))} min={1} style={{ width:70 }} placeholder="Cant."/>
+                  <button className="btn btn-secondary btn-sm" onClick={() => {
+                    if (!kitProductId) return;
+                    const already = form.kitItems.find(k => k.productId === kitProductId);
+                    if (already) { set("kitItems", form.kitItems.map(k => k.productId===kitProductId ? {...k, qty: kitQty} : k)); }
+                    else { set("kitItems", [...form.kitItems, { productId: kitProductId, qty: kitQty }]); }
+                    setKitProductId(""); setKitQty(1);
+                  }}>Agregar</button>
+                </div>
+                {form.kitItems.length > 0 && (
+                  <div style={{ border:"1px solid var(--border)", borderRadius:6, overflow:"hidden" }}>
+                    {form.kitItems.map((k,i) => {
+                      const prod = products.find(p => p.id === k.productId);
+                      return (
+                        <div key={k.productId} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"6px 10px", background: i%2===0?"var(--bg2)":"var(--bg1)", fontSize:".88em" }}>
+                          <span>{prod?.name || k.productId}</span>
+                          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                            <span style={{ color:"var(--t2)" }}>×{k.qty}</span>
+                            <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>set("kitItems", form.kitItems.filter((_,j)=>j!==i))}><Ico n="trash" s={12} c="var(--red)"/></button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {form.kitItems.length === 0 && <div style={{ color:"var(--t3)", fontSize:".84em" }}>Agregá al menos un producto componente.</div>}
+              </div>
+            )}
           </div>
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={()=>setModal(null)}>Cancelar</button>
