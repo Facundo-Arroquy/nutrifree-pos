@@ -1926,8 +1926,18 @@ function ReportsPage({ sales, products, expenses, expenseCategories, accountPaym
       productCount[i.name] = (productCount[i.name]||0)+i.qty;
     }
   }));
-  const topProducts = Object.entries(productCount).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const allProductsSold = Object.entries(productCount).sort((a,b)=>b[1]-a[1]);
+  const topProducts = allProductsSold.slice(0,8);
   const maxQty = topProducts[0]?.[1]||1;
+
+  const exportProductsCsv = () => {
+    const rows = [["Producto","Unidades vendidas"], ...allProductsSold];
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv" }));
+    a.download = `productos-vendidos-${period}.csv`;
+    a.click();
+  };
 
   const stockAlert = products.filter(p=>p.active&&p.stock<=5).sort((a,b)=>a.stock-b.stock);
 
@@ -1972,7 +1982,10 @@ function ReportsPage({ sales, products, expenses, expenseCategories, accountPaym
 
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
         <div className="card">
-          <div className="section-title">Productos más vendidos</div>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+            <div className="section-title" style={{ marginBottom:0 }}>Productos más vendidos</div>
+            {allProductsSold.length>0 && <button className="btn btn-secondary btn-sm" onClick={exportProductsCsv}>↓ CSV</button>}
+          </div>
           {topProducts.length===0 ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin datos</div> :
             topProducts.map(([name,qty])=>(
               <div key={name} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
