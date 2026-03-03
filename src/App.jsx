@@ -14,6 +14,8 @@ import {
   dbToExpense, expenseToDb,
   dbToIngredient, ingredientToDb,
   dbToAccountPayment, accountPaymentToDb,
+  dbToStockMovement, stockMovementToDb,
+  dbToRecipeIngredient, recipeIngredientToDb,
 } from "./supabase.js";
 
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
@@ -29,11 +31,12 @@ export default function App() {
   const [expenses, setExpenses] = useState([]);
   const [ingredients, setIngredients] = useState([]);
   const [accountPayments, setAccountPayments] = useState([]);
+  const [stockMovements, setStockMovements] = useState([]);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }] = await Promise.all([
+      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }] = await Promise.all([
         supabase.from("categories").select("*"),
         supabase.from("expense_categories").select("*").order("name"),
         supabase.from("products").select("*"),
@@ -43,6 +46,8 @@ export default function App() {
         supabase.from("expenses").select("*").order("created_at", { ascending: false }),
         supabase.from("ingredients").select("*").order("name"),
         supabase.from("account_payments").select("*").order("created_at", { ascending: false }),
+        supabase.from("stock_movements").select("*").order("created_at", { ascending: false }),
+        supabase.from("recipe_ingredients").select("*"),
       ]);
       if (accPaysErr) console.error("[account_payments] Error al cargar:", accPaysErr);
       // If DB is empty for a table, seed it with default data
@@ -68,9 +73,16 @@ export default function App() {
       if (exps && exps.length > 0) setExpenses(exps.map(dbToExpense));
       if (ingrs && ingrs.length > 0) setIngredients(ingrs.map(dbToIngredient));
       if (recs && recs.length > 0) {
-        setRecipes(recs.map(dbToRecipe));
+        const ingredientsCatalog = ingrs || [];
+        setRecipes(recs.map(r => ({
+          ...dbToRecipe(r),
+          ingredients: (recIngrs || [])
+            .filter(ri => ri.recipe_id === r.id)
+            .map(ri => dbToRecipeIngredient(ri, ingredientsCatalog)),
+        })));
       }
       if (accPays && accPays.length > 0) setAccountPayments(accPays.map(dbToAccountPayment));
+      if (stockMovs && stockMovs.length > 0) setStockMovements(stockMovs.map(dbToStockMovement));
     };
     load();
   }, []);
@@ -99,7 +111,7 @@ export default function App() {
   const mainNav = nav.filter(n => n.section === "main");
   const adminNav = nav.filter(n => n.section === "admin");
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, showToast, setPage };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, showToast, setPage };
 
   return (
     <>
@@ -535,7 +547,7 @@ function POSPage({ products, setProducts, customers, setCustomers, sales, setSal
 }
 
 // ─── ORDERS PAGE ──────────────────────────────────────────────────────────────
-function OrdersPage({ sales, setSales, products, setProducts, customers, setCustomers, accountPayments, setAccountPayments, showToast }) {
+function OrdersPage({ sales, setSales, products, setProducts, customers, setCustomers, accountPayments, setAccountPayments, setStockMovements, showToast }) {
   const [filter, setFilter] = useState("all");
   const [filterPay, setFilterPay] = useState("all");
   const [selected, setSelected] = useState(null);
@@ -583,13 +595,27 @@ function OrdersPage({ sales, setSales, products, setProducts, customers, setCust
   };
 
   const cancelOrder = async (sale) => {
-    // restore stock
-    for (const p of sale.items) {
-      const prod = products.find(x => x.id === p.productId);
+    // restore stock — build map of productId → qty to restore
+    const restoreMap = {};
+    for (const item of sale.items) {
+      if (item.kitItems?.length) {
+        // kit: restore each component
+        for (const comp of item.kitItems) {
+          restoreMap[comp.productId] = (restoreMap[comp.productId] || 0) + comp.qty * item.qty;
+        }
+      } else {
+        restoreMap[item.productId] = (restoreMap[item.productId] || 0) + item.qty;
+      }
+    }
+    for (const [productId, qty] of Object.entries(restoreMap)) {
+      const prod = products.find(x => x.id === productId);
       if (!prod) continue;
-      const newStock = prod.stock + p.qty;
-      await supabase.from("products").update({ stock: newStock }).eq("id", p.productId);
-      setProducts(prev => prev.map(x => x.id===p.productId ? {...x, stock: newStock} : x));
+      const newStock = prod.stock + qty;
+      await supabase.from("products").update({ stock: newStock }).eq("id", productId);
+      setProducts(prev => prev.map(x => x.id===productId ? {...x, stock: newStock} : x));
+      const movement = { id: crypto.randomUUID(), productId, productName: prod.name, qty, type: "cancelación", notes: `Pedido ${sale.id}` };
+      const { error: movErr } = await supabase.from("stock_movements").insert(stockMovementToDb(movement));
+      if (!movErr) setStockMovements(prev => [movement, ...prev]);
     }
     // reverse charge if was closed with account
     if (sale.status === "closed" && sale.paymentMethod === "account" && sale.customerId) {
@@ -1115,7 +1141,7 @@ function ProductsPage({ products, setProducts, categories, showToast }) {
 }
 
 // ─── PRODUCTION PAGE ──────────────────────────────────────────────────────────
-function ProductionPage({ products, setProducts, recipes, setIngredients, showToast }) {
+function ProductionPage({ products, setProducts, recipes, setIngredients, setStockMovements, showToast }) {
   const [qty, setQty] = useState({});
 
   const setQ = (id,v) => setQty(p=>({...p,[id]:v}));
@@ -1130,6 +1156,10 @@ function ProductionPage({ products, setProducts, recipes, setIngredients, showTo
     const { error: prodErr } = await supabase.from("products").update({ stock: newProductStock }).eq("id", id);
     if (prodErr) { showToast("Error al actualizar stock: " + prodErr.message, "error"); return; }
     setProducts(p => p.map(x => x.id===id ? {...x, stock: newProductStock} : x));
+
+    const movement = { id: crypto.randomUUID(), productId: id, productName: product.name, qty: q, type: "production", notes: "" };
+    const { error: movErr } = await supabase.from("stock_movements").insert(stockMovementToDb(movement));
+    if (!movErr) setStockMovements(prev => [movement, ...prev]);
 
     const recipe = recipes.find(r => r.productId === id);
     if (!recipe) {
@@ -1297,15 +1327,29 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
 
   const save = async () => {
     if (!form.productId) { showToast("Seleccioná un producto", "error"); return; }
-    if (modal==="new") {
-      const newRecipe = {...form, id: crypto.randomUUID()};
-      const { error } = await supabase.from("recipes").insert(recipeToDb(newRecipe));
+    const recipeId = modal === "new" ? crypto.randomUUID() : modal.id;
+    const recipeData = {...form, id: recipeId};
+
+    if (modal === "new") {
+      const { error } = await supabase.from("recipes").insert(recipeToDb(recipeData));
       if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
-      setRecipes(p=>[...p, newRecipe]);
     } else {
-      const { error } = await supabase.from("recipes").update(recipeToDb({...form, id:modal.id})).eq("id", modal.id);
+      const { error } = await supabase.from("recipes").update(recipeToDb(recipeData)).eq("id", recipeId);
       if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
-      setRecipes(p=>p.map(r=>r.id===modal.id?{...r,...form}:r));
+      await supabase.from("recipe_ingredients").delete().eq("recipe_id", recipeId);
+    }
+
+    if (form.ingredients.length > 0) {
+      const rows = form.ingredients.map(i => recipeIngredientToDb({...i, id: crypto.randomUUID()}, recipeId));
+      const { error: riErr } = await supabase.from("recipe_ingredients").insert(rows);
+      if (riErr) { showToast("Error al guardar ingredientes: " + riErr.message, "error"); return; }
+    }
+
+    const savedRecipe = {...recipeData, ingredients: form.ingredients};
+    if (modal === "new") {
+      setRecipes(p => [...p, savedRecipe]);
+    } else {
+      setRecipes(p => p.map(r => r.id === recipeId ? savedRecipe : r));
     }
     setModal(null);
     showToast("Receta guardada");
@@ -1625,7 +1669,7 @@ function IngredientsPage({ ingredients, setIngredients, showToast }) {
 // ─── EXPENSES PAGE ────────────────────────────────────────────────────────────
 const EXPENSE_UNITS = ["unidades", "kg", "g", "litros", "porciones"];
 
-function ExpensesPage({ expenses, setExpenses, expenseCategories, recipes, setRecipes, showToast }) {
+function ExpensesPage({ expenses, setExpenses, expenseCategories, ingredients, recipes, setRecipes, showToast }) {
   const defaultCat = expenseCategories[0] || "Ingredientes";
   const emptyForm = { date:todayStr(), supplier:"", concept:"", quantity:1, unit:"unidades", unitPrice:0, total:0, paymentMethod:"", paymentStatus:"pending", category:defaultCat, notes:"" };
   const [modal, setModal] = useState(null);
@@ -1656,21 +1700,26 @@ function ExpensesPage({ expenses, setExpenses, expenseCategories, recipes, setRe
   const syncIngredientCosts = async (concept, unitPrice) => {
     if (!unitPrice || !concept) return 0;
     const lc = concept.toLowerCase().trim();
-    const updates = [];
+    const matchingIngIds = new Set(
+      ingredients.filter(i => i.name.toLowerCase().includes(lc)).map(i => i.id)
+    );
+    if (matchingIngIds.size === 0) return 0;
+    let updatedRecipes = 0;
     setRecipes(prev => prev.map(r => {
-      const hasMatch = r.ingredients.some(i => i.name.toLowerCase().includes(lc));
+      const hasMatch = r.ingredients.some(i => matchingIngIds.has(i.ingredientId));
       if (!hasMatch) return r;
-      const newIngredients = r.ingredients.map(i =>
-        i.name.toLowerCase().includes(lc) ? {...i, cost: Number(unitPrice)} : i
-      );
-      updates.push({ id: r.id, ingredients: newIngredients });
-      return {...r, ingredients: newIngredients};
+      updatedRecipes++;
+      return {...r, ingredients: r.ingredients.map(i =>
+        matchingIngIds.has(i.ingredientId) ? {...i, cost: Number(unitPrice)} : i
+      )};
     }));
-    for (const { id, ingredients } of updates) {
-      const { error } = await supabase.from("recipes").update({ ingredients }).eq("id", id);
-      if (error) console.error("Error al sincronizar receta:", error.message);
+    for (const ingId of matchingIngIds) {
+      const { error } = await supabase.from("recipe_ingredients")
+        .update({ cost: Number(unitPrice) })
+        .eq("ingredient_id", ingId);
+      if (error) console.error("Error al sincronizar costo:", error.message);
     }
-    return updates.length;
+    return updatedRecipes;
   };
 
   const save = async () => {
@@ -1864,7 +1913,7 @@ const parseLocalDate = d => {
   return new Date(d);
 };
 
-function ReportsPage({ sales, products, expenses, expenseCategories, accountPayments }) {
+function ReportsPage({ sales, products, expenses, expenseCategories, accountPayments, stockMovements }) {
   const [period, setPeriod] = useState("today");
 
   const now = new Date();
@@ -1931,11 +1980,32 @@ function ReportsPage({ sales, products, expenses, expenseCategories, accountPaym
   const maxQty = topProducts[0]?.[1]||1;
 
   const exportProductsCsv = () => {
-    const rows = [["Producto","Unidades vendidas"], ...allProductsSold];
+    const rows = [["Fecha","Producto","Tipo","Unidades"]];
+    // ventas
+    pSales.forEach(s => {
+      const date = new Date(s.createdAt).toLocaleString("es-AR");
+      s.items.forEach(i => {
+        if (i.kitItems?.length) {
+          i.kitItems.forEach(comp => {
+            const compName = products.find(p => p.id === comp.productId)?.name || comp.productId;
+            rows.push([date, compName, "Venta (kit)", comp.qty * i.qty]);
+          });
+        } else {
+          rows.push([date, i.name, "Venta", i.qty]);
+        }
+      });
+    });
+    // movimientos de stock
+    const pMovements = (stockMovements||[]).filter(m => new Date(m.createdAt) >= cutoff);
+    pMovements.forEach(m => {
+      rows.push([new Date(m.createdAt).toLocaleString("es-AR"), m.productName, "Producción", m.qty]);
+    });
+    // ordenar por fecha
+    rows.sort((a,b) => a[0] === "Fecha" ? -1 : new Date(b[0]) - new Date(a[0]));
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv" }));
-    a.download = `productos-vendidos-${period}.csv`;
+    a.download = `movimientos-productos-${period}.csv`;
     a.click();
   };
 

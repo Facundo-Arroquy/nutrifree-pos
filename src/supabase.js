@@ -60,13 +60,27 @@ export const saleToDb = s => ({
 export const dbToRecipe = r => ({
   id: r.id, productId: r.product_id, prepTime: r.prep_time,
   cookTime: r.cook_time, yield: r.yield, notes: r.notes,
-  ingredients: r.ingredients, steps: r.steps,
+  ingredients: [], steps: r.steps,
 });
 
 export const recipeToDb = r => ({
   id: r.id, product_id: r.productId, prep_time: r.prepTime,
   cook_time: r.cookTime, yield: r.yield, notes: r.notes,
-  ingredients: r.ingredients, steps: r.steps,
+  steps: r.steps,
+});
+
+export const dbToRecipeIngredient = (ri, ingredientsCatalog = []) => {
+  const ing = ingredientsCatalog.find(i => i.id === ri.ingredient_id);
+  return {
+    id: ri.id, recipeId: ri.recipe_id, ingredientId: ri.ingredient_id,
+    name: ing?.name || "", qty: ri.qty,
+    unit: ri.unit || ing?.unit || "", cost: ri.cost || 0,
+  };
+};
+
+export const recipeIngredientToDb = (ri, recipeId) => ({
+  id: ri.id, recipe_id: recipeId, ingredient_id: ri.ingredientId,
+  qty: ri.qty, unit: ri.unit, cost: ri.cost || 0,
 });
 
 export const dbToExpense = r => ({
@@ -106,4 +120,14 @@ export const accountPaymentToDb = p => ({
   id: p.id, customer_id: p.customerId, sale_id: p.saleId,
   amount: p.amount, type: p.type, payment_method: p.paymentMethod,
   date: p.date, notes: p.notes,
+});
+
+export const dbToStockMovement = r => ({
+  id: r.id, productId: r.product_id, productName: r.product_name,
+  qty: r.qty, type: r.type, notes: r.notes, createdAt: r.created_at,
+});
+
+export const stockMovementToDb = m => ({
+  id: m.id, product_id: m.productId, product_name: m.productName,
+  qty: m.qty, type: m.type, notes: m.notes,
 });

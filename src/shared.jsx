@@ -319,7 +319,7 @@ function LoginPage({ onLogin }) {
     <div style={{ minHeight:"100vh", background:"var(--bg)", display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
       <div style={{ background:"var(--s0)", borderRadius:20, padding:36, width:"100%", maxWidth:380, boxShadow:"var(--shadow-lg)", border:"1px solid var(--border)" }}>
         <div style={{ textAlign:"center", marginBottom:28 }}>
-          <div style={{ fontSize:"3em", marginBottom:8 }}>🥗</div>
+          <div style={{ marginBottom:8 }}><img src="/logo.jpg" alt="Nutrifree" style={{ height:72, borderRadius:8 }}/></div>
           <div style={{ fontWeight:800, fontSize:"1.5em", color:"var(--green)", letterSpacing:"-.02em" }}>Nutrifree POS</div>
           <div style={{ fontSize:".8em", color:"var(--t3)", marginTop:3 }}>Sistema de gestión</div>
         </div>
