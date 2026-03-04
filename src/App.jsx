@@ -16,6 +16,9 @@ import {
   dbToAccountPayment, accountPaymentToDb,
   dbToStockMovement, stockMovementToDb,
   dbToRecipeIngredient, recipeIngredientToDb,
+  dbToSupplier, supplierToDb,
+  dbToSupplierPayment, supplierPaymentToDb,
+  dbToCashShift, cashShiftToDb,
 } from "./supabase.js";
 
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
@@ -32,11 +35,14 @@ export default function App() {
   const [ingredients, setIngredients] = useState([]);
   const [accountPayments, setAccountPayments] = useState([]);
   const [stockMovements, setStockMovements] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [supplierPayments, setSupplierPayments] = useState([]);
+  const [cashShifts, setCashShifts] = useState([]);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }] = await Promise.all([
+      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }] = await Promise.all([
         supabase.from("categories").select("*"),
         supabase.from("expense_categories").select("*").order("name"),
         supabase.from("products").select("*"),
@@ -48,6 +54,9 @@ export default function App() {
         supabase.from("account_payments").select("*").order("created_at", { ascending: false }),
         supabase.from("stock_movements").select("*").order("created_at", { ascending: false }),
         supabase.from("recipe_ingredients").select("*"),
+        supabase.from("suppliers").select("*").order("name"),
+        supabase.from("supplier_payments").select("*").order("created_at", { ascending: false }),
+        supabase.from("cash_shifts").select("*").order("created_at", { ascending: false }),
       ]);
       if (accPaysErr) console.error("[account_payments] Error al cargar:", accPaysErr);
       // If DB is empty for a table, seed it with default data
@@ -83,6 +92,9 @@ export default function App() {
       }
       if (accPays && accPays.length > 0) setAccountPayments(accPays.map(dbToAccountPayment));
       if (stockMovs && stockMovs.length > 0) setStockMovements(stockMovs.map(dbToStockMovement));
+      if (supps && supps.length > 0) setSuppliers(supps.map(dbToSupplier));
+      if (suppPays && suppPays.length > 0) setSupplierPayments(suppPays.map(dbToSupplierPayment));
+      if (shifts && shifts.length > 0) setCashShifts(shifts.map(dbToCashShift));
     };
     load();
   }, []);
@@ -99,19 +111,21 @@ export default function App() {
   const nav = [
     { id:"pos", label:"Caja / POS", icon:"pos", roles:["admin","vendor"], section:"main" },
     { id:"orders", label:"Pedidos", icon:"orders", roles:["admin","vendor"], section:"main" },
+    { id:"cash", label:"Cierre de Caja", icon:"cash", roles:["admin","vendor"], section:"main" },
     { id:"customers", label:"Clientes", icon:"customers", roles:["admin","vendor"], section:"main" },
     { id:"products", label:"Productos", icon:"products", roles:["admin","vendor"], section:"main" },
     { id:"production", label:"Producción", icon:"production", roles:["admin","vendor"], section:"admin" },
     { id:"recipes", label:"Recetas", icon:"recipes", roles:["admin","vendor"], section:"admin" },
     { id:"ingredients", label:"Ingredientes", icon:"ingredients", roles:["admin","vendor"], section:"admin" },
     { id:"expenses", label:"Gastos", icon:"expenses", roles:["admin","vendor"], section:"admin" },
+    { id:"suppliers", label:"Proveedores", icon:"suppliers", roles:["admin","vendor"], section:"admin" },
     { id:"reports", label:"Reportes", icon:"reports", roles:["admin"], section:"admin" },
     { id:"settings", label:"Configuración", icon:"settings", roles:["admin","vendor"], section:"admin" },
   ].filter(n => n.roles.includes(user.role));
   const mainNav = nav.filter(n => n.section === "main");
   const adminNav = nav.filter(n => n.section === "admin");
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, showToast, setPage };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, showToast, setPage };
 
   return (
     <>
@@ -160,12 +174,14 @@ export default function App() {
           <div style={{ flex:1, overflow:"hidden" }}>
             {page==="pos" && <POSPage {...props}/>}
             {page==="orders" && <OrdersPage {...props}/>}
+            {page==="cash" && <CashShiftPage {...props}/>}
             {page==="customers" && <CustomersPage {...props}/>}
             {page==="products" && <ProductsPage {...props}/>}
             {page==="production" && <ProductionPage {...props}/>}
             {page==="recipes" && <RecipesPage {...props}/>}
             {page==="ingredients" && <IngredientsPage {...props}/>}
             {page==="expenses" && <ExpensesPage {...props}/>}
+            {page==="suppliers" && <SuppliersPage {...props}/>}
             {page==="reports" && <ReportsPage {...props}/>}
             {page==="settings" && <SettingsPage {...props}/>}
           </div>
@@ -831,11 +847,9 @@ function CustomersPage({ customers, setCustomers, sales, accountPayments, setAcc
                   <td>{(() => { const b = custBal(c.id); return <span className={b>0?"balance-pos":b<0?"balance-neg":"balance-zero"}>{$(b)}</span>; })()}</td>
                   <td style={{ color:"var(--t3)", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.notes||"—"}</td>
                   <td>
-                    {custBal(c.id) < 0 && (
-                      <button className="btn btn-amber btn-sm" onClick={e=>{e.stopPropagation();setPayModal(c);setPayForm({amount:"",paymentMethod:"cash",notes:""});}}>
-                        Registrar Pago
-                      </button>
-                    )}
+                    <button className="btn btn-amber btn-sm" onClick={e=>{e.stopPropagation();setPayModal(c);setPayForm({amount:"",paymentMethod:"cash",notes:""});}}>
+                      Registrar Pago
+                    </button>
                   </td>
                   <td>
                     <button className="btn btn-ghost btn-icon btn-sm" onClick={e=>{e.stopPropagation();del(c.id);}}><Ico n="trash" s={13} c="var(--red)"/></button>
@@ -1669,9 +1683,10 @@ function IngredientsPage({ ingredients, setIngredients, showToast }) {
 // ─── EXPENSES PAGE ────────────────────────────────────────────────────────────
 const EXPENSE_UNITS = ["unidades", "kg", "g", "litros", "porciones"];
 
-function ExpensesPage({ expenses, setExpenses, expenseCategories, ingredients, recipes, setRecipes, showToast }) {
+function ExpensesPage({ expenses, setExpenses, expenseCategories, ingredients, setIngredients, recipes, setRecipes, suppliers, supplierPayments, setSupplierPayments, showToast }) {
   const defaultCat = expenseCategories[0] || "Ingredientes";
-  const emptyForm = { date:todayStr(), supplier:"", concept:"", quantity:1, unit:"unidades", unitPrice:0, total:0, paymentMethod:"", paymentStatus:"pending", category:defaultCat, notes:"" };
+  const emptyLine = () => ({ ingredientId: "", qty: 1, unit: "", unitPrice: 0, subtotal: 0 });
+  const emptyForm = { date:todayStr(), supplier:"", supplierId:null, concept:"", quantity:1, unit:"unidades", unitPrice:0, total:0, paymentMethod:"", paymentStatus:"pending", category:defaultCat, notes:"", ingredientLines:[emptyLine()] };
   const [modal, setModal] = useState(null);
   const [payModal, setPayModal] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -1681,7 +1696,30 @@ function ExpensesPage({ expenses, setExpenses, expenseCategories, ingredients, r
   const set = (k, v) => setForm(p => {
     const np = {...p, [k]:v};
     if (k==="quantity" || k==="unitPrice") np.total = Number(np.quantity||0) * Number(np.unitPrice||0);
+    if (k==="category" && v==="Ingredientes" && (!np.ingredientLines || np.ingredientLines.length===0)) {
+      np.ingredientLines = [emptyLine()];
+    }
     return np;
+  });
+
+  const addLine = () => setForm(p => ({ ...p, ingredientLines: [...(p.ingredientLines||[]), emptyLine()] }));
+  const removeLine = idx => setForm(p => {
+    const lines = (p.ingredientLines||[]).filter((_,i) => i!==idx);
+    return { ...p, ingredientLines: lines, total: lines.reduce((a,b)=>a+b.subtotal,0) };
+  });
+  const updateLine = (idx, key, value) => setForm(p => {
+    const lines = (p.ingredientLines||[]).map((l, i) => {
+      if (i!==idx) return l;
+      const upd = { ...l, [key]: value };
+      if (key==="ingredientId") {
+        const ing = ingredients.find(x => x.id===value);
+        upd.unit = ing ? ing.unit : "";
+        upd.unitPrice = ing ? (ing.unitCost||0) : 0;
+      }
+      upd.subtotal = Number(upd.qty||0) * Number(upd.unitPrice||0);
+      return upd;
+    });
+    return { ...p, ingredientLines: lines, total: lines.reduce((a,b)=>a+b.subtotal,0) };
   });
 
   const cats = ["Todos", ...expenseCategories];
@@ -1694,7 +1732,7 @@ function ExpensesPage({ expenses, setExpenses, expenseCategories, ingredients, r
   const totalPending = expenses.filter(e=>e.paymentStatus==="pending").reduce((a,b)=>a+b.total,0);
 
   const openNew  = () => { setForm(emptyForm); setModal("new"); };
-  const openEdit = e  => { setForm({...e}); setModal(e); };
+  const openEdit = e  => { setForm({...e, ingredientLines:[emptyLine()]}); setModal(e); };
 
   // When saving an ingredient expense, update matching ingredient costs in recipes
   const syncIngredientCosts = async (concept, unitPrice) => {
@@ -1723,6 +1761,58 @@ function ExpensesPage({ expenses, setExpenses, expenseCategories, ingredients, r
   };
 
   const save = async () => {
+    // ── Gastos de Ingredientes: múltiples líneas ──────────────────────────────
+    if (form.category==="Ingredientes") {
+      const validLines = (form.ingredientLines||[]).filter(l => l.ingredientId);
+      if (validLines.length===0) { showToast("Agregá al menos un ingrediente", "error"); return; }
+      const concept = validLines.map(l => ingredients.find(i=>i.id===l.ingredientId)?.name||"").filter(Boolean).join(", ");
+      const total   = validLines.reduce((a,b)=>a+b.subtotal, 0);
+      const data = { ...form, concept, quantity: validLines.reduce((a,b)=>a+Number(b.qty||0),0), unitPrice:0, total, paymentMethod:form.paymentMethod||null };
+      if (modal==="new") {
+        const newExp = {...data, id:uid()};
+        const { error } = await supabase.from("expenses").insert(expenseToDb(newExp));
+        if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
+        setExpenses(p => [newExp, ...p]);
+        if (newExp.supplierId && newExp.paymentStatus==="pending") {
+          const charge = { id:crypto.randomUUID(), supplierId:newExp.supplierId, expenseId:newExp.id, amount:newExp.total, type:"charge", paymentMethod:null, date:newExp.date, notes:newExp.concept };
+          await supabase.from("supplier_payments").insert(supplierPaymentToDb(charge));
+          setSupplierPayments(prev => [...prev, charge]);
+        }
+      } else {
+        const { error } = await supabase.from("expenses").update(expenseToDb(data)).eq("id", modal.id);
+        if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
+        setExpenses(p => p.map(e => e.id===modal.id ? {...e,...data} : e));
+      }
+      // Actualizar unit_cost + stock de cada ingrediente y sincronizar recetas
+      for (const line of validLines) {
+        const price = Number(line.unitPrice);
+        const qty   = Number(line.qty || 0);
+        const currentStock = ingredients.find(i => i.id===line.ingredientId)?.stock || 0;
+        const newStock = currentStock + qty;
+        const updates = { stock: newStock };
+        if (price) updates.unit_cost = price;
+        await supabase.from("ingredients").update(updates).eq("id", line.ingredientId);
+        setIngredients(prev => prev.map(i => i.id===line.ingredientId ? {...i, unitCost: price||i.unitCost, stock: newStock} : i));
+        if (price) await supabase.from("recipe_ingredients").update({ cost: price }).eq("ingredient_id", line.ingredientId);
+      }
+      // Actualizar estado local de recetas (batch)
+      setRecipes(prev => prev.map(r => {
+        let changed = false;
+        const newIngrs = r.ingredients.map(ri => {
+          const line = validLines.find(l => l.ingredientId===ri.ingredientId && Number(l.unitPrice));
+          if (!line) return ri;
+          changed = true;
+          return { ...ri, cost: Number(line.unitPrice) };
+        });
+        return changed ? {...r, ingredients:newIngrs} : r;
+      }));
+      const updatedCount = recipes.filter(r => r.ingredients.some(ri => validLines.find(l => l.ingredientId===ri.ingredientId && Number(l.unitPrice)))).length;
+      showToast(updatedCount>0 ? `Gasto guardado · Costo actualizado en ${updatedCount} receta${updatedCount!==1?"s":""}` : "Gasto guardado");
+      setModal(null);
+      return;
+    }
+
+    // ── Resto de categorías ───────────────────────────────────────────────────
     if (!form.concept) { showToast("El concepto es obligatorio", "error"); return; }
     const data = {
       ...form,
@@ -1736,6 +1826,11 @@ function ExpensesPage({ expenses, setExpenses, expenseCategories, ingredients, r
       const { error } = await supabase.from("expenses").insert(expenseToDb(newExp));
       if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
       setExpenses(p => [newExp, ...p]);
+      if (newExp.supplierId && newExp.paymentStatus==="pending") {
+        const charge = { id:crypto.randomUUID(), supplierId:newExp.supplierId, expenseId:newExp.id, amount:newExp.total, type:"charge", paymentMethod:null, date:newExp.date, notes:newExp.concept };
+        await supabase.from("supplier_payments").insert(supplierPaymentToDb(charge));
+        setSupplierPayments(prev => [...prev, charge]);
+      }
     } else {
       const { error } = await supabase.from("expenses").update(expenseToDb(data)).eq("id", modal.id);
       if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
@@ -1764,6 +1859,11 @@ function ExpensesPage({ expenses, setExpenses, expenseCategories, ingredients, r
     const { error } = await supabase.from("expenses").update({ payment_method: paymentMethod, payment_status:"paid" }).eq("id", expense.id);
     if (error) { showToast("Error al cerrar gasto: " + error.message, "error"); return; }
     setExpenses(p => p.map(e => e.id===expense.id ? {...e, paymentMethod, paymentStatus:"paid"} : e));
+    if (expense.supplierId) {
+      const payment = { id:crypto.randomUUID(), supplierId:expense.supplierId, expenseId:expense.id, amount:expense.total, type:"payment", paymentMethod, date:todayStr(), notes:"Pago de gasto" };
+      await supabase.from("supplier_payments").insert(supplierPaymentToDb(payment));
+      setSupplierPayments(prev => [...prev, payment]);
+    }
     setPayModal(null);
     showToast("Gasto cerrado ✓");
   };
@@ -1831,19 +1931,29 @@ function ExpensesPage({ expenses, setExpenses, expenseCategories, ingredients, r
         <Modal title={modal==="new"?"Nuevo gasto":form.concept} onClose={()=>setModal(null)} lg>
           <div className="form-grid">
             <div className="form-group"><label className="lbl">Fecha</label><input type="date" value={form.date} onChange={e=>set("date",e.target.value)}/></div>
-            <div className="form-group"><label className="lbl">Proveedor</label><input value={form.supplier} onChange={e=>set("supplier",e.target.value)} placeholder="Nombre del proveedor"/></div>
-            <div className="form-group full"><label className="lbl">Concepto / Producto *</label><input value={form.concept} onChange={e=>set("concept",e.target.value)} autoFocus placeholder="¿Qué se compró?"/></div>
-            <div className="form-group">
-              <label className="lbl">Cantidad</label>
-              <div style={{ display:"flex", gap:6 }}>
-                <input type="number" min="0" style={{ flex:1 }} value={form.quantity} onChange={e=>set("quantity",e.target.value)}/>
-                <select style={{ width:110 }} value={form.unit} onChange={e=>set("unit",e.target.value)}>
-                  {EXPENSE_UNITS.map(u=><option key={u} value={u}>{u}</option>)}
-                </select>
-              </div>
+            <div className="form-group"><label className="lbl">Proveedor</label>
+              <select value={form.supplierId||""} onChange={e=>{
+                const sup = suppliers.find(s=>s.id===e.target.value);
+                setForm(p=>({...p, supplierId:e.target.value||null, supplier:sup?.name||""}));
+              }}>
+                <option value="">— Sin proveedor —</option>
+                {suppliers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
             </div>
-            <div className="form-group"><label className="lbl">Precio unitario</label><input type="number" min="0" value={form.unitPrice} onChange={e=>set("unitPrice",e.target.value)}/></div>
-            <div className="form-group"><label className="lbl">Total</label><input type="number" min="0" value={form.total} onChange={e=>set("total",e.target.value)} style={{ fontWeight:700 }}/></div>
+            {form.category!=="Ingredientes" && <>
+              <div className="form-group full"><label className="lbl">Concepto / Producto *</label><input value={form.concept} onChange={e=>set("concept",e.target.value)} autoFocus placeholder="¿Qué se compró?"/></div>
+              <div className="form-group">
+                <label className="lbl">Cantidad</label>
+                <div style={{ display:"flex", gap:6 }}>
+                  <input type="number" min="0" style={{ flex:1 }} value={form.quantity} onChange={e=>set("quantity",e.target.value)}/>
+                  <select style={{ width:110 }} value={form.unit} onChange={e=>set("unit",e.target.value)}>
+                    {EXPENSE_UNITS.map(u=><option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="form-group"><label className="lbl">Precio unitario</label><input type="number" min="0" value={form.unitPrice} onChange={e=>set("unitPrice",e.target.value)}/></div>
+              <div className="form-group"><label className="lbl">Total</label><input type="number" min="0" value={form.total} onChange={e=>set("total",e.target.value)} style={{ fontWeight:700 }}/></div>
+            </>}
             <div className="form-group"><label className="lbl">Categoría</label>
               <select value={form.category} onChange={e=>set("category",e.target.value)}>
                 {expenseCategories.map(c=><option key={c} value={c}>{c}</option>)}
@@ -1863,7 +1973,49 @@ function ExpensesPage({ expenses, setExpenses, expenseCategories, ingredients, r
             </div>
             <div className="form-group full"><label className="lbl">Notas</label><textarea value={form.notes||""} onChange={e=>set("notes",e.target.value)} placeholder="Observaciones opcionales..."/></div>
           </div>
-          {form.category==="Ingredientes" && form.unitPrice>0 && (
+
+          {form.category==="Ingredientes" && (
+            <div style={{ marginTop:16 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                <div className="section-title" style={{ margin:0 }}>Ingredientes comprados</div>
+                <button className="btn btn-sm btn-secondary" onClick={addLine}><Ico n="plus" s={13}/>Agregar ingrediente</button>
+              </div>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Precio unit.</th><th>Subtotal</th><th></th></tr></thead>
+                  <tbody>
+                    {(form.ingredientLines||[]).map((line, idx) => (
+                      <tr key={idx}>
+                        <td>
+                          <select value={line.ingredientId} onChange={e=>updateLine(idx,"ingredientId",e.target.value)} style={{ minWidth:150 }}>
+                            <option value="">— Elegir —</option>
+                            {ingredients.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}
+                          </select>
+                        </td>
+                        <td><input type="number" min="0" step="0.01" value={line.qty} onChange={e=>updateLine(idx,"qty",e.target.value)} style={{ width:75 }}/></td>
+                        <td style={{ color:"var(--t3)", fontSize:".85em" }}>{line.unit||"—"}</td>
+                        <td><input type="number" min="0" step="0.01" value={line.unitPrice} onChange={e=>updateLine(idx,"unitPrice",e.target.value)} style={{ width:90 }}/></td>
+                        <td style={{ fontWeight:700, color:"var(--red)" }}>{$(line.subtotal)}</td>
+                        <td>
+                          {(form.ingredientLines||[]).length>1 && (
+                            <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>removeLine(idx)}><Ico n="trash" s={13} c="var(--red)"/></button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ textAlign:"right", fontWeight:800, fontSize:"1.1em", color:"var(--red)", marginTop:8 }}>
+                Total: {$(form.total)}
+              </div>
+              <div style={{ background:"var(--bluel)", border:"1px solid var(--blueb)", borderRadius:8, padding:"8px 12px", marginTop:8, fontSize:".82em", color:"var(--blue)" }}>
+                <Ico n="refresh" s={13}/> Al guardar se actualizará el costo unitario de cada ingrediente en las recetas.
+              </div>
+            </div>
+          )}
+
+          {form.category!=="Ingredientes" && form.unitPrice>0 && (
             <div style={{ background:"var(--bluel)", border:"1px solid var(--blueb)", borderRadius:8, padding:"8px 12px", marginTop:12, fontSize:".82em", color:"var(--blue)" }}>
               <Ico n="refresh" s={13}/> Al guardar, se actualizará el costo de "<strong>{form.concept}</strong>" en las recetas donde aparezca ese ingrediente.
             </div>
@@ -1902,6 +2054,202 @@ function CloseExpenseModal({ expense, onClose, onConfirm }) {
         <button className="btn btn-primary" onClick={()=>onConfirm(expense, payMethod)}><Ico n="check" s={14}/>Confirmar pago</button>
       </div>
     </Modal>
+  );
+}
+
+// ─── SUPPLIERS PAGE ───────────────────────────────────────────────────────────
+function SuppliersPage({ suppliers, setSuppliers, supplierPayments, setSupplierPayments, showToast }) {
+  const emptyForm = { name:"", phone:"", email:"", address:"", notes:"" };
+  const [modal, setModal] = useState(null); // null | "new" | supplier obj
+  const [accountModal, setAccountModal] = useState(null); // supplier obj
+  const [payModal, setPayModal] = useState(null); // supplier obj
+  const [form, setForm] = useState(emptyForm);
+  const [payForm, setPayForm] = useState({ amount:"", paymentMethod:"cash", notes:"" });
+
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const supplierBal = (id) =>
+    supplierPayments.filter(p => p.supplierId === id)
+      .reduce((sum, p) => p.type === "payment" ? sum + p.amount : sum - p.amount, 0);
+
+  const totalDebt = suppliers.reduce((sum, s) => {
+    const bal = supplierBal(s.id);
+    return bal < 0 ? sum + Math.abs(bal) : sum;
+  }, 0);
+
+  const openNew = () => { setForm(emptyForm); setModal("new"); };
+  const openEdit = (s) => { setForm({ name:s.name, phone:s.phone||"", email:s.email||"", address:s.address||"", notes:s.notes||"" }); setModal(s); };
+
+  const save = async () => {
+    if (!form.name.trim()) { showToast("El nombre es obligatorio", "error"); return; }
+    if (modal === "new") {
+      const newSup = { ...form, id: crypto.randomUUID() };
+      const { error } = await supabase.from("suppliers").insert(supplierToDb(newSup));
+      if (error) { showToast("Error: " + error.message, "error"); return; }
+      setSuppliers(p => [...p, newSup].sort((a,b) => a.name.localeCompare(b.name)));
+    } else {
+      const updated = { ...modal, ...form };
+      const { error } = await supabase.from("suppliers").update(supplierToDb(updated)).eq("id", modal.id);
+      if (error) { showToast("Error: " + error.message, "error"); return; }
+      setSuppliers(p => p.map(s => s.id === modal.id ? updated : s));
+    }
+    showToast(modal === "new" ? "Proveedor creado" : "Proveedor actualizado");
+    setModal(null);
+  };
+
+  const del = async (id) => {
+    if (!confirm("¿Eliminar proveedor?")) return;
+    const { error } = await supabase.from("suppliers").delete().eq("id", id);
+    if (error) { showToast("Error: " + error.message, "error"); return; }
+    setSuppliers(p => p.filter(s => s.id !== id));
+    showToast("Eliminado");
+  };
+
+  const registerPayment = async () => {
+    const amount = Number(payForm.amount);
+    if (!amount || amount <= 0) { showToast("Ingresá un monto válido", "error"); return; }
+    const payment = { id: crypto.randomUUID(), supplierId: payModal.id, expenseId: null, amount, type: "payment", paymentMethod: payForm.paymentMethod, date: todayStr(), notes: payForm.notes || "Pago manual" };
+    const { error } = await supabase.from("supplier_payments").insert(supplierPaymentToDb(payment));
+    if (error) { showToast("Error: " + error.message, "error"); return; }
+    setSupplierPayments(prev => [...prev, payment]);
+    setPayForm({ amount:"", paymentMethod:"cash", notes:"" });
+    setPayModal(null);
+    showToast("Pago registrado ✓");
+  };
+
+  const PAY_OPTS = [["cash","Efectivo"],["transfer","Transferencia"],["card","Tarjeta"],["check","Cheque"]];
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <div><div className="page-title">Proveedores</div><div className="page-sub">{suppliers.length} registrados</div></div>
+        <button className="btn btn-primary" onClick={openNew}><Ico n="plus" s={14}/>Nuevo proveedor</button>
+      </div>
+
+      <div className="stats-row" style={{ gridTemplateColumns:"repeat(2,1fr)" }}>
+        <div className="stat"><div className="stat-num">{suppliers.length}</div><div className="stat-label">Proveedores</div><div className="stat-icon">🏭</div></div>
+        <div className="stat stat-amber"><div className="stat-num">{$(totalDebt)}</div><div className="stat-label">Deuda pendiente total</div><div className="stat-icon">💳</div></div>
+      </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Nombre</th><th>Teléfono</th><th>Email</th><th>Saldo</th><th></th></tr></thead>
+          <tbody>
+            {suppliers.map(s => {
+              const bal = supplierBal(s.id);
+              return (
+                <tr key={s.id} className="tr-click" onClick={()=>openEdit(s)}>
+                  <td style={{ fontWeight:700 }}>{s.name}</td>
+                  <td style={{ color:"var(--t3)", fontSize:".85em" }}>{s.phone||"—"}</td>
+                  <td style={{ color:"var(--t3)", fontSize:".85em" }}>{s.email||"—"}</td>
+                  <td>
+                    {bal === 0
+                      ? <span className="badge badge-green">Al día</span>
+                      : bal < 0
+                        ? <span className="badge badge-amber" style={{ fontWeight:700 }}>Debemos {$(Math.abs(bal))}</span>
+                        : <span className="badge" style={{ background:"var(--bluel)", color:"var(--blue)", fontWeight:700 }}>A favor {$(bal)}</span>
+                    }
+                  </td>
+                  <td onClick={ev=>ev.stopPropagation()} style={{ display:"flex", gap:4 }}>
+                    <button className="btn btn-sm btn-secondary" onClick={()=>{ setAccountModal(s); }}>Ver cuenta</button>
+                    <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>del(s.id)}><Ico n="trash" s={13} c="var(--red)"/></button>
+                  </td>
+                </tr>
+              );
+            })}
+            {suppliers.length===0 && <tr><td colSpan={5}><div className="empty"><div className="empty-icon">🏭</div><h3>Sin proveedores</h3><p>Creá el primer proveedor</p></div></td></tr>}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modal CRUD */}
+      {modal && (
+        <Modal title={modal==="new"?"Nuevo proveedor":form.name} onClose={()=>setModal(null)}>
+          <div className="form-grid">
+            <div className="form-group full"><label className="lbl">Nombre *</label><input value={form.name} onChange={e=>set("name",e.target.value)} autoFocus placeholder="Nombre del proveedor"/></div>
+            <div className="form-group"><label className="lbl">Teléfono</label><input value={form.phone} onChange={e=>set("phone",e.target.value)} placeholder="+54 9..."/></div>
+            <div className="form-group"><label className="lbl">Email</label><input type="email" value={form.email} onChange={e=>set("email",e.target.value)} placeholder="correo@..."/></div>
+            <div className="form-group full"><label className="lbl">Dirección</label><input value={form.address} onChange={e=>set("address",e.target.value)} placeholder="Dirección..."/></div>
+            <div className="form-group full"><label className="lbl">Notas</label><textarea value={form.notes} onChange={e=>set("notes",e.target.value)} placeholder="Observaciones..."/></div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={()=>setModal(null)}>Cancelar</button>
+            <button className="btn btn-primary" onClick={save}><Ico n="check" s={13}/>Guardar</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal cuenta corriente */}
+      {accountModal && (() => {
+        const sup = accountModal;
+        const movements = supplierPayments.filter(p => p.supplierId === sup.id).sort((a,b) => new Date(b.createdAt||b.date) - new Date(a.createdAt||a.date));
+        const bal = supplierBal(sup.id);
+        return (
+          <Modal title={`Cuenta corriente — ${sup.name}`} onClose={()=>setAccountModal(null)} lg>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+              <div>
+                <div style={{ fontSize:".82em", color:"var(--t3)", marginBottom:2 }}>Saldo actual</div>
+                <div style={{ fontWeight:800, fontSize:"1.4em", color: bal < 0 ? "var(--amber)" : bal > 0 ? "var(--green)" : "var(--t2)" }}>
+                  {bal < 0 ? `Debemos ${$(Math.abs(bal))}` : bal > 0 ? `A favor ${$(bal)}` : "Al día"}
+                </div>
+              </div>
+              <button className="btn btn-primary" onClick={()=>{ setPayModal(sup); setAccountModal(null); }}>
+                <Ico n="plus" s={13}/>Registrar pago
+              </button>
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Fecha</th><th>Tipo</th><th>Monto</th><th>Método</th><th>Notas</th></tr></thead>
+                <tbody>
+                  {movements.map(m => (
+                    <tr key={m.id}>
+                      <td style={{ fontSize:".82em", color:"var(--t3)", whiteSpace:"nowrap" }}>{fmtDate(m.date)}</td>
+                      <td>
+                        {m.type==="charge"
+                          ? <span className="badge badge-amber">Cargo</span>
+                          : <span className="badge badge-green">Pago</span>}
+                      </td>
+                      <td style={{ fontWeight:700, color: m.type==="charge" ? "var(--red)" : "var(--green)" }}>
+                        {m.type==="charge" ? "-" : "+"}{$(m.amount)}
+                      </td>
+                      <td style={{ fontSize:".82em", color:"var(--t3)" }}>{m.paymentMethod ? PAY_LABELS[m.paymentMethod]||m.paymentMethod : "—"}</td>
+                      <td style={{ fontSize:".82em", color:"var(--t3)" }}>{m.notes||"—"}</td>
+                    </tr>
+                  ))}
+                  {movements.length===0 && <tr><td colSpan={5} style={{ textAlign:"center", color:"var(--t4)", padding:"20px 0" }}>Sin movimientos</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={()=>setAccountModal(null)}>Cerrar</button>
+            </div>
+          </Modal>
+        );
+      })()}
+
+      {/* Modal registrar pago manual */}
+      {payModal && (
+        <Modal title={`Registrar pago — ${payModal.name}`} onClose={()=>{ setPayModal(null); setAccountModal(payModal); }}>
+          <div className="form-grid">
+            <div className="form-group full"><label className="lbl">Monto *</label><input type="number" min="0" step="0.01" autoFocus value={payForm.amount} onChange={e=>setPayForm(p=>({...p,amount:e.target.value}))} placeholder="0.00"/></div>
+            <div className="form-group full"><label className="lbl">Método de pago</label>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                {PAY_OPTS.map(([k,v]) => (
+                  <button key={k} className={`btn ${payForm.paymentMethod===k?"btn-primary":"btn-secondary"}`} onClick={()=>setPayForm(p=>({...p,paymentMethod:k}))}>
+                    {payForm.paymentMethod===k && <Ico n="check" s={13}/>}{v}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="form-group full"><label className="lbl">Notas</label><input value={payForm.notes} onChange={e=>setPayForm(p=>({...p,notes:e.target.value}))} placeholder="Observaciones..."/></div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={()=>{ setPayModal(null); setAccountModal(payModal); }}>Cancelar</button>
+            <button className="btn btn-primary" onClick={registerPayment}><Ico n="check" s={13}/>Registrar pago</button>
+          </div>
+        </Modal>
+      )}
+    </div>
   );
 }
 
@@ -2286,6 +2634,388 @@ function SettingsPage({ categories, setCategories, expenseCategories, setExpense
         ))}
         <p style={{ fontSize:".78em", color:"var(--t3)", marginTop:10 }}>Para cambiar contraseñas, editá el archivo src/shared.jsx</p>
       </div>
+    </div>
+  );
+}
+
+// ─── CASH SHIFT PAGE ──────────────────────────────────────────────────────────
+function CashShiftPage({ sales, expenses, accountPayments, user, cashShifts, setCashShifts, showToast }) {
+  const [openModal, setOpenModal] = useState(false);
+  const [closeModal, setCloseModal] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [openForm, setOpenForm] = useState({ initialCash: "" });
+  const [closeForm, setCloseForm] = useState({ countedCash: "", notes: "" });
+
+  const openShift = cashShifts.find(s => s.status === "open") || null;
+  const shiftStart = openShift ? new Date(openShift.openedAt) : null;
+
+  // Ventas del turno (cerradas/entregadas)
+  const shiftSales = openShift
+    ? sales.filter(s => new Date(s.createdAt) >= shiftStart && ["closed","delivered"].includes(s.status))
+    : [];
+  const sCash     = shiftSales.filter(s => s.paymentMethod === "cash").reduce((sum,s) => sum + s.total, 0);
+  const sTransfer = shiftSales.filter(s => s.paymentMethod === "transfer").reduce((sum,s) => sum + s.total, 0);
+  const sCard     = shiftSales.filter(s => s.paymentMethod === "card").reduce((sum,s) => sum + s.total, 0);
+  const sAccount  = shiftSales.filter(s => s.paymentMethod === "account").reduce((sum,s) => sum + s.total, 0);
+
+  // Cobros de cuenta corriente durante el turno (pagos reales de deuda)
+  const shiftAccPayments = openShift
+    ? accountPayments.filter(p => p.type === "payment" && p.createdAt && new Date(p.createdAt) >= shiftStart)
+    : [];
+  const apCash     = shiftAccPayments.filter(p => p.paymentMethod === "cash").reduce((sum,p) => sum + p.amount, 0);
+  const apTransfer = shiftAccPayments.filter(p => p.paymentMethod === "transfer").reduce((sum,p) => sum + p.amount, 0);
+  const apCard     = shiftAccPayments.filter(p => p.paymentMethod === "card").reduce((sum,p) => sum + p.amount, 0);
+
+  // Todos los gastos registrados durante el turno (independientemente del método)
+  const shiftExpenses = openShift
+    ? expenses.filter(e => e.createdAt && new Date(e.createdAt) >= shiftStart)
+    : [];
+  // Solo los pagados en efectivo reducen el cajón
+  const eCash     = shiftExpenses.filter(e => e.paymentMethod === "cash").reduce((sum,e) => sum + (e.total || 0), 0);
+  const eTransfer = shiftExpenses.filter(e => e.paymentMethod === "transfer").reduce((sum,e) => sum + (e.total || 0), 0);
+
+  // Efectivo esperado = inicial + ventas ef. + cobros ef. − egresos ef.
+  const expectedCash = openShift ? openShift.initialCash + sCash + apCash - eCash : 0;
+
+  const countedCash = Number(closeForm.countedCash) || 0;
+  const diff = countedCash - expectedCash;
+
+  const doOpenShift = async () => {
+    const initial = Number(openForm.initialCash) || 0;
+    const shift = {
+      id: crypto.randomUUID(), openedBy: user.name,
+      openedAt: new Date().toISOString(), closedAt: null,
+      status: "open", initialCash: initial,
+      salesCash: 0, salesTransfer: 0, salesCard: 0, salesAccount: 0,
+      expensesCash: 0, expectedCash: initial, countedCash: 0, difference: 0, notes: null,
+    };
+    const { error } = await supabase.from("cash_shifts").insert(cashShiftToDb(shift));
+    if (error) { showToast("Error: " + error.message, "error"); return; }
+    setCashShifts(prev => [shift, ...prev]);
+    setOpenModal(false);
+    setOpenForm({ initialCash: "" });
+    showToast("Turno abierto ✓");
+  };
+
+  const doCloseShift = async () => {
+    if (closeForm.countedCash === "") { showToast("Ingresá el efectivo contado", "error"); return; }
+    const counted = Number(closeForm.countedCash);
+    const updated = {
+      ...openShift, closedAt: new Date().toISOString(), status: "closed",
+      salesCash: sCash + apCash,
+      salesTransfer: sTransfer + apTransfer,
+      salesCard: sCard + apCard,
+      salesAccount: sAccount,
+      expensesCash: eCash, expectedCash, countedCash: counted,
+      difference: counted - expectedCash, notes: closeForm.notes || null,
+    };
+    const { error } = await supabase.from("cash_shifts").update(cashShiftToDb(updated)).eq("id", openShift.id);
+    if (error) { showToast("Error: " + error.message, "error"); return; }
+    setCashShifts(prev => prev.map(s => s.id === openShift.id ? updated : s));
+    setCloseModal(false);
+    setCloseForm({ countedCash: "", notes: "" });
+    showToast("Turno cerrado ✓");
+  };
+
+  const closedShifts = cashShifts.filter(s => s.status === "closed");
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <div>
+          <div className="page-title">Cierre de Caja</div>
+          <div className="page-sub">{openShift ? "Turno en curso" : "Sin turno abierto"}</div>
+        </div>
+        {openShift
+          ? <button className="btn btn-danger" onClick={() => setCloseModal(true)}><Ico n="x" s={14}/>Cerrar turno</button>
+          : <button className="btn btn-primary" onClick={() => setOpenModal(true)}><Ico n="plus" s={14}/>Abrir turno</button>
+        }
+      </div>
+
+      {!openShift && (
+        <div className="empty" style={{ marginBottom: 24 }}>
+          <div className="empty-icon">💵</div>
+          <h3>No hay turno abierto</h3>
+          <p>Abrí un turno para comenzar a registrar la caja</p>
+          <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => setOpenModal(true)}><Ico n="plus" s={14}/>Abrir turno</button>
+        </div>
+      )}
+
+      {openShift && (
+        <>
+          {/* Banner apertura */}
+          <div style={{ background:"var(--greenl)", border:"1px solid var(--greenlb)", borderRadius:"var(--rl)", padding:"14px 20px", marginBottom:22, display:"flex", alignItems:"center", gap:16 }}>
+            <Ico n="clock" s={20} c="var(--green)"/>
+            <div>
+              <div style={{ fontWeight:700, color:"var(--green)" }}>Turno abierto desde {fmtDT(openShift.openedAt)}</div>
+              <div style={{ fontSize:".82em", color:"var(--t3)", marginTop:2 }}>Responsable: <b>{openShift.openedBy}</b> · Efectivo inicial: <b>{$(openShift.initialCash)}</b></div>
+            </div>
+          </div>
+
+          {/* Dos paneles: EFECTIVO | DIGITAL */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:22 }}>
+
+            {/* Panel EFECTIVO */}
+            <div style={{ background:"var(--s0)", border:"2px solid var(--greenlb)", borderRadius:"var(--rl)", padding:20 }}>
+              <div style={{ fontSize:".68em", fontWeight:800, textTransform:"uppercase", letterSpacing:".8px", color:"var(--green)", marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
+                💵 Efectivo (Caja)
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ color:"var(--t3)", fontSize:".85em" }}>Inicial</span>
+                  <span style={{ fontWeight:600 }}>{$(openShift.initialCash)}</span>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ color:"var(--t3)", fontSize:".85em" }}>+ Ventas en efectivo</span>
+                  <span style={{ fontWeight:700, color:"var(--green)" }}>{$(sCash)}</span>
+                </div>
+                {apCash > 0 && (
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <span style={{ color:"var(--t3)", fontSize:".85em" }}>+ Cobros de cuenta (ef.)</span>
+                    <span style={{ fontWeight:700, color:"var(--green)" }}>{$(apCash)}</span>
+                  </div>
+                )}
+                {eCash > 0 && (
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <span style={{ color:"var(--t3)", fontSize:".85em" }}>− Egresos en efectivo</span>
+                    <span style={{ fontWeight:700, color:"var(--red)" }}>{$(eCash)}</span>
+                  </div>
+                )}
+                <div style={{ height:1, background:"var(--greenlb)", margin:"4px 0" }}/>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"var(--amberl)", border:"1px solid var(--amberlb)", borderRadius:8, padding:"10px 14px" }}>
+                  <span style={{ fontWeight:700, color:"var(--amber)", fontSize:".9em" }}>Efectivo esperado</span>
+                  <span style={{ fontWeight:800, fontSize:"1.35em", color:"var(--amber)" }}>{$(expectedCash)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Panel DIGITAL */}
+            <div style={{ background:"var(--s0)", border:"2px solid var(--blueb)", borderRadius:"var(--rl)", padding:20 }}>
+              <div style={{ fontSize:".68em", fontWeight:800, textTransform:"uppercase", letterSpacing:".8px", color:"var(--blue)", marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>
+                📲 Digital (Banco)
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ color:"var(--t3)", fontSize:".85em" }}>Transferencias recibidas</span>
+                  <span style={{ fontWeight:700, color:"var(--blue)" }}>{$(sTransfer + apTransfer)}</span>
+                </div>
+                {apTransfer > 0 && (
+                  <div style={{ fontSize:".75em", color:"var(--t4)", textAlign:"right", marginTop:-6 }}>
+                    Ventas {$(sTransfer)} + Cobros {$(apTransfer)}
+                  </div>
+                )}
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ color:"var(--t3)", fontSize:".85em" }}>Tarjeta</span>
+                  <span style={{ fontWeight:700, color:"var(--blue)" }}>{$(sCard + apCard)}</span>
+                </div>
+                {eTransfer > 0 && (
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <span style={{ color:"var(--t3)", fontSize:".85em" }}>− Egresos por transferencia</span>
+                    <span style={{ fontWeight:700, color:"var(--red)" }}>{$(eTransfer)}</span>
+                  </div>
+                )}
+                {sAccount > 0 && (
+                  <>
+                    <div style={{ height:1, background:"var(--blueb)", margin:"4px 0" }}/>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <span style={{ color:"var(--t3)", fontSize:".85em" }}>Cta. corriente (pendiente cobro)</span>
+                      <span style={{ fontWeight:700, color:"var(--amber)" }}>{$(sAccount)}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+          </div>
+
+          {/* Tabla ventas del turno */}
+          {shiftSales.length > 0 && (
+            <div style={{ marginBottom:22 }}>
+              <div className="section-title">Ventas del turno</div>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>Hora</th><th>Cliente</th><th>Método</th><th>Total</th></tr></thead>
+                  <tbody>
+                    {shiftSales.slice(0,15).map(s => (
+                      <tr key={s.id}>
+                        <td style={{ color:"var(--t3)", fontSize:".82em", whiteSpace:"nowrap" }}>{fmtTime(s.createdAt)}</td>
+                        <td>{s.customerName || "Anónimo"}</td>
+                        <td><span className={`badge ${s.paymentMethod==="cash"?"badge-green":s.paymentMethod==="transfer"?"badge-blue":s.paymentMethod==="account"?"badge-amber":"badge-gray"}`}>{PAY_LABELS[s.paymentMethod] || s.paymentMethod}</span></td>
+                        <td style={{ fontWeight:700 }}>{$(s.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {shiftSales.length > 15 && <div style={{ textAlign:"center", color:"var(--t3)", fontSize:".8em", marginTop:8 }}>+ {shiftSales.length - 15} ventas más en el turno</div>}
+            </div>
+          )}
+
+          {/* Tabla cobros de cuenta corriente */}
+          {shiftAccPayments.length > 0 && (
+            <div style={{ marginBottom:22 }}>
+              <div className="section-title">Cobros de cuenta corriente</div>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>Hora</th><th>Notas</th><th>Método real</th><th>Monto</th></tr></thead>
+                  <tbody>
+                    {shiftAccPayments.map(p => (
+                      <tr key={p.id}>
+                        <td style={{ color:"var(--t3)", fontSize:".82em", whiteSpace:"nowrap" }}>{fmtTime(p.createdAt)}</td>
+                        <td style={{ color:"var(--t3)", fontSize:".85em" }}>{p.notes || "—"}</td>
+                        <td><span className={`badge ${p.paymentMethod==="cash"?"badge-green":"badge-blue"}`}>{PAY_LABELS[p.paymentMethod] || p.paymentMethod}</span></td>
+                        <td style={{ fontWeight:700, color:"var(--green)" }}>{$(p.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Tabla gastos del turno */}
+          {shiftExpenses.length > 0 && (
+            <div style={{ marginBottom:22 }}>
+              <div className="section-title">Gastos del turno</div>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>Concepto</th><th>Categoría</th><th>Método</th><th>Total</th></tr></thead>
+                  <tbody>
+                    {shiftExpenses.map(e => (
+                      <tr key={e.id}>
+                        <td>{e.concept || "—"}</td>
+                        <td style={{ color:"var(--t3)", fontSize:".82em" }}>{e.category}</td>
+                        <td><span className={`badge ${e.paymentMethod==="cash"?"badge-green":e.paymentMethod==="transfer"?"badge-blue":"badge-gray"}`}>{PAY_LABELS[e.paymentMethod] || e.paymentMethod || "—"}</span></td>
+                        <td style={{ fontWeight:700, color:"var(--red)" }}>{$(e.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Historial turnos cerrados */}
+      {closedShifts.length > 0 && (
+        <div>
+          <button className="btn btn-ghost" style={{ marginBottom:10, fontSize:".85em" }} onClick={() => setHistoryOpen(p => !p)}>
+            <Ico n="chevron" s={14}/>{historyOpen ? "Ocultar" : "Ver"} historial ({closedShifts.length} turnos)
+          </button>
+          {historyOpen && (
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Apertura</th><th>Responsable</th><th>Inicial</th><th>Ef. recibido</th><th>Egresos ef.</th><th>Esperado</th><th>Contado</th><th>Diferencia</th></tr></thead>
+                <tbody>
+                  {closedShifts.map(s => (
+                    <tr key={s.id}>
+                      <td style={{ fontSize:".82em", color:"var(--t3)", whiteSpace:"nowrap" }}>{fmtDT(s.openedAt)}</td>
+                      <td>{s.openedBy}</td>
+                      <td>{$(s.initialCash)}</td>
+                      <td>{$(s.salesCash)}</td>
+                      <td style={{ color:"var(--red)" }}>{$(s.expensesCash)}</td>
+                      <td>{$(s.expectedCash)}</td>
+                      <td>{$(s.countedCash)}</td>
+                      <td>
+                        {s.difference === 0
+                          ? <span className="badge badge-green">Exacto</span>
+                          : s.difference < 0
+                            ? <span className="badge badge-red">Faltante {$(Math.abs(s.difference))}</span>
+                            : <span className="badge badge-blue">Sobrante {$(s.difference)}</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Modal Abrir turno */}
+      {openModal && (
+        <Modal title="Abrir turno" onClose={() => setOpenModal(false)}>
+          <div className="form-grid">
+            <div className="form-group"><label className="lbl">Fecha / Hora</label><input value={new Date().toLocaleString("es-AR")} readOnly style={{ color:"var(--t3)" }}/></div>
+            <div className="form-group"><label className="lbl">Responsable</label><input value={user.name} readOnly style={{ color:"var(--t3)" }}/></div>
+            <div className="form-group full"><label className="lbl">Efectivo inicial *</label><input type="number" min="0" step="0.01" autoFocus placeholder="0.00" value={openForm.initialCash} onChange={e => setOpenForm(p => ({ ...p, initialCash: e.target.value }))}/></div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={() => setOpenModal(false)}>Cancelar</button>
+            <button className="btn btn-primary" onClick={doOpenShift}><Ico n="check" s={13}/>Abrir turno</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal Cerrar turno */}
+      {closeModal && openShift && (
+        <Modal title="Cerrar turno" onClose={() => setCloseModal(false)} lg>
+          {/* Resumen en dos columnas */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:20 }}>
+
+            {/* Columna EFECTIVO */}
+            <div style={{ background:"var(--greenl)", border:"1px solid var(--greenlb)", borderRadius:"var(--r)", padding:16 }}>
+              <div style={{ fontSize:".68em", fontWeight:800, textTransform:"uppercase", letterSpacing:".7px", color:"var(--green)", marginBottom:12 }}>💵 Efectivo (Caja)</div>
+              {[
+                ["Inicial", $(openShift.initialCash), "var(--t2)"],
+                [`+ Ventas en efectivo`, $(sCash), "var(--green)"],
+                ...(apCash > 0 ? [[`+ Cobros de cuenta`, $(apCash), "var(--green)"]] : []),
+                ...(eCash > 0 ? [[`− Egresos`, $(eCash), "var(--red)"]] : []),
+              ].map(([label, val, color]) => (
+                <div key={label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                  <span style={{ fontSize:".82em", color:"var(--t3)" }}>{label}</span>
+                  <span style={{ fontWeight:700, color }}>{val}</span>
+                </div>
+              ))}
+              <div style={{ height:1, background:"var(--greenlb)", margin:"8px 0" }}/>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <span style={{ fontSize:".85em", fontWeight:700, color:"var(--amber)" }}>Esperado en caja</span>
+                <span style={{ fontWeight:800, fontSize:"1.2em", color:"var(--amber)" }}>{$(expectedCash)}</span>
+              </div>
+            </div>
+
+            {/* Columna DIGITAL */}
+            <div style={{ background:"var(--bluel)", border:"1px solid var(--blueb)", borderRadius:"var(--r)", padding:16 }}>
+              <div style={{ fontSize:".68em", fontWeight:800, textTransform:"uppercase", letterSpacing:".7px", color:"var(--blue)", marginBottom:12 }}>📲 Digital (Banco)</div>
+              {[
+                ["Transferencias", $(sTransfer + apTransfer), "var(--blue)"],
+                ["Tarjeta", $(sCard + apCard), "var(--blue)"],
+                ...(eTransfer > 0 ? [[`− Egresos transf.`, $(eTransfer), "var(--red)"]] : []),
+                ...(sAccount > 0 ? [["Cta. cte. pendiente", $(sAccount), "var(--amber)"]] : []),
+              ].map(([label, val, color]) => (
+                <div key={label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                  <span style={{ fontSize:".82em", color:"var(--t3)" }}>{label}</span>
+                  <span style={{ fontWeight:700, color }}>{val}</span>
+                </div>
+              ))}
+            </div>
+
+          </div>
+          <div className="form-grid">
+            <div className="form-group full">
+              <label className="lbl">Efectivo contado *</label>
+              <input type="number" min="0" step="0.01" autoFocus placeholder="0.00" value={closeForm.countedCash} onChange={e => setCloseForm(p => ({ ...p, countedCash: e.target.value }))}/>
+            </div>
+            {closeForm.countedCash !== "" && (
+              <div className="form-group full">
+                <div style={{ background: diff===0?"var(--greenl)":diff<0?"var(--redl)":"var(--bluel)", border:`1px solid ${diff===0?"var(--greenlb)":diff<0?"var(--redlb)":"var(--blueb)"}`, borderRadius:"var(--r)", padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                  <span style={{ fontWeight:600, color: diff===0?"var(--green)":diff<0?"var(--red)":"var(--blue)", fontSize:".9em" }}>{diff===0?"Exacto":diff<0?"Faltante":"Sobrante"}</span>
+                  <span style={{ fontWeight:800, fontSize:"1.3em", color: diff===0?"var(--green)":diff<0?"var(--red)":"var(--blue)" }}>{diff===0?"✓":$(Math.abs(diff))}</span>
+                </div>
+              </div>
+            )}
+            <div className="form-group full">
+              <label className="lbl">Notas (opcional)</label>
+              <textarea placeholder="Observaciones..." value={closeForm.notes} onChange={e => setCloseForm(p => ({ ...p, notes: e.target.value }))}/>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={() => setCloseModal(false)}>Cancelar</button>
+            <button className="btn btn-danger" onClick={doCloseShift}><Ico n="check" s={13}/>Confirmar cierre</button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

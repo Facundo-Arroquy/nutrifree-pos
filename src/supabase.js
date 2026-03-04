@@ -88,7 +88,7 @@ export const dbToExpense = r => ({
   quantity: r.quantity, unit: r.unit, unitPrice: r.unit_price,
   total: r.total, paymentMethod: r.payment_method,
   paymentStatus: r.payment_status, category: r.category, notes: r.notes,
-  createdAt: r.created_at,
+  createdAt: r.created_at, supplierId: r.supplier_id || null,
 });
 
 export const expenseToDb = e => ({
@@ -96,6 +96,29 @@ export const expenseToDb = e => ({
   quantity: e.quantity, unit: e.unit, unit_price: e.unitPrice,
   total: e.total, payment_method: e.paymentMethod,
   payment_status: e.paymentStatus, category: e.category, notes: e.notes,
+  supplier_id: e.supplierId || null,
+});
+
+export const dbToSupplier = r => ({
+  id: r.id, name: r.name, phone: r.phone, email: r.email,
+  address: r.address, notes: r.notes, createdAt: r.created_at,
+});
+
+export const supplierToDb = s => ({
+  id: s.id, name: s.name, phone: s.phone, email: s.email,
+  address: s.address, notes: s.notes,
+});
+
+export const dbToSupplierPayment = r => ({
+  id: r.id, supplierId: r.supplier_id, expenseId: r.expense_id,
+  amount: r.amount, type: r.type, paymentMethod: r.payment_method,
+  date: r.date, notes: r.notes, createdAt: r.created_at,
+});
+
+export const supplierPaymentToDb = p => ({
+  id: p.id, supplier_id: p.supplierId, expense_id: p.expenseId,
+  amount: p.amount, type: p.type, payment_method: p.paymentMethod,
+  date: p.date, notes: p.notes,
 });
 
 export const dbToIngredient = r => ({
@@ -130,4 +153,23 @@ export const dbToStockMovement = r => ({
 export const stockMovementToDb = m => ({
   id: m.id, product_id: m.productId, product_name: m.productName,
   qty: m.qty, type: m.type, notes: m.notes,
+});
+
+export const dbToCashShift = r => ({
+  id: r.id, openedBy: r.opened_by, openedAt: r.opened_at,
+  closedAt: r.closed_at, status: r.status, initialCash: r.initial_cash,
+  salesCash: r.sales_cash, salesTransfer: r.sales_transfer,
+  salesCard: r.sales_card, salesAccount: r.sales_account,
+  expensesCash: r.expenses_cash, expectedCash: r.expected_cash,
+  countedCash: r.counted_cash, difference: r.difference,
+  notes: r.notes, createdAt: r.created_at,
+});
+
+export const cashShiftToDb = s => ({
+  id: s.id, opened_by: s.openedBy, opened_at: s.openedAt,
+  closed_at: s.closedAt, status: s.status, initial_cash: s.initialCash,
+  sales_cash: s.salesCash, sales_transfer: s.salesTransfer,
+  sales_card: s.salesCard, sales_account: s.salesAccount,
+  expenses_cash: s.expensesCash, expected_cash: s.expectedCash,
+  counted_cash: s.countedCash, difference: s.difference, notes: s.notes,
 });
