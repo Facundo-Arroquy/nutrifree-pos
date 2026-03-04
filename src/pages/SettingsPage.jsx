@@ -2,9 +2,23 @@ import { useState } from "react";
 import { Ico } from "../shared.jsx";
 import { supabase } from "../supabase.js";
 
-export default function SettingsPage({ categories, setCategories, expenseCategories, setExpenseCategories, showToast }) {
+export default function SettingsPage({ categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd }) {
   const [newCat, setNewCat] = useState("");
   const [newExpCat, setNewExpCat] = useState("");
+  const [rStart, setRStart] = useState(reminderStart);
+  const [rEnd,   setREnd]   = useState(reminderEnd);
+
+  const saveReminderRange = () => {
+    if (!rStart || !rEnd || rStart >= rEnd) {
+      showToast("El horario de inicio debe ser anterior al de fin", "error");
+      return;
+    }
+    localStorage.setItem("reminderStart", rStart);
+    localStorage.setItem("reminderEnd",   rEnd);
+    setReminderStart(rStart);
+    setReminderEnd(rEnd);
+    showToast("Horario de recordatorio guardado ✓");
+  };
 
   const addCat = async () => {
     if (!newCat || categories.includes(newCat)) return;
@@ -87,6 +101,29 @@ export default function SettingsPage({ categories, setCategories, expenseCategor
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="card" style={{ maxWidth:420, marginBottom:16 }}>
+        <div className="section-title">Sistema</div>
+        <div style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
+          Horario en que aparece el recordatorio de entregas al iniciar sesión.
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16, flexWrap:"wrap" }}>
+          <div className="form-group" style={{ flex:1, minWidth:120 }}>
+            <label className="lbl">Desde</label>
+            <input type="time" value={rStart} onChange={e => setRStart(e.target.value)}/>
+          </div>
+          <div className="form-group" style={{ flex:1, minWidth:120 }}>
+            <label className="lbl">Hasta</label>
+            <input type="time" value={rEnd} onChange={e => setREnd(e.target.value)}/>
+          </div>
+          <button className="btn btn-primary btn-sm" style={{ alignSelf:"flex-end", marginBottom:1 }} onClick={saveReminderRange}>
+            <Ico n="check" s={13}/> Guardar
+          </button>
+        </div>
+        <p style={{ fontSize:".76em", color:"var(--t4)" }}>
+          Valor actual: <strong>{reminderStart}</strong> – <strong>{reminderEnd}</strong>
+        </p>
       </div>
 
       <div className="card" style={{ maxWidth:420 }}>

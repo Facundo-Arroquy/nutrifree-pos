@@ -45,6 +45,7 @@ export const dbToSale = r => ({
   discountType: r.discount_type || "pct",
   discountValue: r.discount_value || 0,
   discountAmount: r.discount_amount || 0,
+  deliveryDate: r.delivery_date || null,
 });
 
 export const saleToDb = s => ({
@@ -55,6 +56,7 @@ export const saleToDb = s => ({
   discount_type: s.discountType || "pct",
   discount_value: s.discountValue || 0,
   discount_amount: s.discountAmount || 0,
+  delivery_date: s.deliveryDate || null,
 });
 
 export const dbToRecipe = r => ({

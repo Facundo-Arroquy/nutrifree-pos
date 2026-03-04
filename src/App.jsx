@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import {
   CSS, Ico, Toast, LoginPage,
-  SEED_PRODUCTS, SEED_CUSTOMERS, SEED_SALES, SEED_CATEGORIES
+  SEED_PRODUCTS, SEED_CUSTOMERS, SEED_SALES, SEED_CATEGORIES,
+  $, STATUS_LABELS, STATUS_COLORS, todayStr,
 } from "./shared.jsx";
 import {
   supabase,
@@ -51,6 +52,9 @@ export default function App() {
   const [supplierPayments, setSupplierPayments] = useState([]);
   const [cashShifts, setCashShifts] = useState([]);
   const [toast, setToast] = useState(null);
+  const [deliveryAlerts, setDeliveryAlerts] = useState([]);
+  const [reminderStart, setReminderStart] = useState(() => localStorage.getItem("reminderStart") || "10:00");
+  const [reminderEnd,   setReminderEnd]   = useState(() => localStorage.getItem("reminderEnd")   || "11:00");
 
   useEffect(() => {
     const load = async () => {
@@ -115,7 +119,22 @@ export default function App() {
   if (!user) return (
     <>
       <style>{CSS}</style>
-      <LoginPage onLogin={u => { setUser(u); setPage("dashboard"); }} />
+      <LoginPage onLogin={u => {
+        setUser(u);
+        setPage("dashboard");
+        const now = new Date();
+        const cur = now.getHours() * 60 + now.getMinutes();
+        const [sh, sm] = reminderStart.split(":").map(Number);
+        const [eh, em] = reminderEnd.split(":").map(Number);
+        if (cur >= sh * 60 + sm && cur < eh * 60 + em) {
+          const today = todayStr();
+          const alerts = sales.filter(s =>
+            ["open","pending","confirmed","ready"].includes(s.status) &&
+            s.deliveryDate === today
+          );
+          if (alerts.length > 0) setDeliveryAlerts(alerts);
+        }
+      }} />
     </>
   );
 
@@ -142,7 +161,7 @@ export default function App() {
     { label: null,        key: "bottom" },
   ];
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, showToast, setPage };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd };
 
   return (
     <>
@@ -214,6 +233,41 @@ export default function App() {
           </div>
         </div>
       </div>
+      {deliveryAlerts.length > 0 && (
+        <div className="modal-bg">
+          <div className="modal" style={{ maxWidth:520 }}>
+            <div className="modal-header">
+              <div className="modal-title" style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span>⏰</span> Entregas pendientes hoy
+              </div>
+              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setDeliveryAlerts([])}><Ico n="x" s={18}/></button>
+            </div>
+            <p style={{ fontSize:".84em", color:"var(--t3)", marginBottom:16 }}>
+              Los siguientes pedidos abiertos tienen fecha de entrega para hoy:
+            </p>
+            <div className="table-wrap" style={{ marginBottom:20 }}>
+              <table>
+                <thead><tr><th>Cliente</th><th>Total</th><th>Estado</th></tr></thead>
+                <tbody>
+                  {deliveryAlerts.map(s => (
+                    <tr key={s.id}>
+                      <td style={{ fontWeight:500 }}>{s.customerName || "Anónimo"}</td>
+                      <td style={{ fontWeight:700 }}>{$(s.total)}</td>
+                      <td><span className={`badge ${STATUS_COLORS[s.status]}`}>{STATUS_LABELS[s.status]}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setDeliveryAlerts([])}>Cerrar</button>
+              <button className="btn btn-primary" onClick={() => { setDeliveryAlerts([]); setPage("orders"); }}>
+                <Ico n="orders" s={14}/> Ver pedidos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)}/>}
     </>
   );

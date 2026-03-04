@@ -21,6 +21,8 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   const [discountType, setDiscountType] = useState("pct"); // "pct" | "fixed"
   const [discountValue, setDiscountValue] = useState("");
   const [editingPrice, setEditingPrice] = useState(null);
+  const [deliveryModal, setDeliveryModal] = useState(null); // { id, customerName }
+  const [deliveryDate, setDeliveryDate] = useState("");
 
   const categories = ["Todos", ...new Set(products.map(p => p.category))];
   const filtered = products.filter(p => p.active &&
@@ -147,6 +149,18 @@ export default function POSPage({ products, setProducts, customers, setCustomers
     setPayModal(false);
     clearCart();
     showToast(status==="closed" ? "Venta registrada ✓" : "Pedido guardado ✓");
+    if (status === "open") {
+      setDeliveryDate("");
+      setDeliveryModal({ id: sale.id, customerName: sale.customerName || "Anónimo" });
+    }
+  };
+
+  const saveDeliveryDate = async () => {
+    if (!deliveryDate || !deliveryModal) { setDeliveryModal(null); return; }
+    await supabase.from("sales").update({ delivery_date: deliveryDate }).eq("id", deliveryModal.id);
+    setSales(prev => prev.map(s => s.id === deliveryModal.id ? { ...s, deliveryDate } : s));
+    setDeliveryModal(null);
+    showToast("Fecha de entrega guardada ✓");
   };
 
   // recalc prices when list changes (skip manually overridden items)
@@ -316,6 +330,36 @@ export default function POSPage({ products, setProducts, customers, setCustomers
             </button>
           ))}
         </Modal>
+      )}
+
+      {/* DELIVERY DATE MODAL */}
+      {deliveryModal && (
+        <div className="modal-bg" onClick={() => setDeliveryModal(null)}>
+          <div className="modal" style={{ maxWidth:380 }} onClick={e => e.stopPropagation()}>
+            <div style={{ textAlign:"center", paddingTop:8 }}>
+              <div style={{ fontSize:"1.8em", marginBottom:10 }}>📦</div>
+              <div style={{ fontWeight:700, fontSize:".98em", color:"var(--t1)", marginBottom:5 }}>
+                ¿Tiene fecha de entrega?
+              </div>
+              <div style={{ fontSize:".82em", color:"var(--t3)", marginBottom:22 }}>
+                Pedido de <strong>{deliveryModal.customerName}</strong>
+              </div>
+              <div className="form-group" style={{ textAlign:"left", marginBottom:22 }}>
+                <label className="lbl">Fecha máxima de entrega</label>
+                <input type="date" value={deliveryDate} min={todayStr()}
+                  onChange={e => setDeliveryDate(e.target.value)} autoFocus/>
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <button className="btn btn-secondary" style={{ flex:1 }} onClick={() => setDeliveryModal(null)}>
+                  Sin fecha
+                </button>
+                <button className="btn btn-primary" style={{ flex:1 }} onClick={saveDeliveryDate} disabled={!deliveryDate}>
+                  Guardar fecha
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* PAYMENT MODAL */}
