@@ -1,8 +1,60 @@
 import { useState, useMemo } from "react";
 import { Ico, $, fmtDate, fmtTime, STATUS_LABELS, STATUS_COLORS, PAY_LABELS } from "../shared.jsx";
 
+// ─── Bar chart (CSS-based, no library) ────────────────────────────────────────
+function TrendChart({ points }) {
+  if (!points.length) return <div style={{ color:"var(--t3)", fontSize:".84em", padding:"20px 0" }}>Sin datos para el período</div>;
+  const maxV = Math.max(...points.map(p => Math.max(p.sales, p.expenses)), 1);
+  return (
+    <div>
+      <div style={{ display:"flex", alignItems:"flex-end", gap:2, height:110, padding:"0 2px" }}>
+        {points.map((p, i) => (
+          <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:1, height:"100%" }}>
+            <div style={{ flex:1, width:"100%", display:"flex", alignItems:"flex-end", gap:1 }}>
+              <div style={{ flex:1, background:"var(--green)", height:`${(p.sales/maxV)*100}%`, borderRadius:"2px 2px 0 0", minHeight:p.sales>0?2:0, opacity:.85, transition:"height .3s ease" }}/>
+              <div style={{ flex:1, background:"var(--red)", height:`${(p.expenses/maxV)*100}%`, borderRadius:"2px 2px 0 0", minHeight:p.expenses>0?2:0, opacity:.7, transition:"height .3s ease" }}/>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display:"flex", gap:2, padding:"0 2px", marginTop:4 }}>
+        {points.map((p, i) => (
+          <div key={i} style={{ flex:1, textAlign:"center", fontSize:8, color:"var(--t4)", overflow:"hidden", lineHeight:1.2 }}>{p.label}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-export default function ReportsPage({ sales, products, expenses, expenseCategories, accountPayments, stockMovements }) {
+// ─── Trend indicator ───────────────────────────────────────────────────────────
+function TrendBadge({ pct, label }) {
+  if (pct === null) return null;
+  const up = pct >= 0;
+  const abs = Math.abs(pct).toFixed(1);
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:2, alignItems:"center" }}>
+      <div style={{ fontSize:".74em", color:"var(--t4)" }}>{label}</div>
+      <div style={{ fontWeight:700, fontSize:".88em", color:up?"var(--green)":"var(--red)", display:"flex", alignItems:"center", gap:3 }}>
+        {up ? "▲" : "▼"} {abs}%
+      </div>
+    </div>
+  );
+}
+
+// ─── Margin bar ────────────────────────────────────────────────────────────────
+function MarginBar({ pct }) {
+  const color = pct >= 50 ? "var(--green)" : pct >= 25 ? "var(--amber)" : "var(--red)";
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+      <div style={{ flex:1, height:6, background:"var(--s2)", borderRadius:3, overflow:"hidden" }}>
+        <div style={{ width:`${Math.max(0,Math.min(100,pct))}%`, height:"100%", background:color, borderRadius:3 }}/>
+      </div>
+      <span style={{ fontSize:".76em", fontWeight:700, color, minWidth:34, textAlign:"right" }}>{pct.toFixed(1)}%</span>
+    </div>
+  );
+}
+
+export default function ReportsPage({ sales, products, recipes, expenses, expenseCategories, accountPayments, stockMovements }) {
   const presets = useMemo(() => {
     const now = new Date();
     const t = now.toISOString().slice(0,10);
@@ -112,8 +164,95 @@ export default function ReportsPage({ sales, products, expenses, expenseCategori
 
   const stockAlert = products.filter(p=>p.active&&p.stock<=5).sort((a,b)=>a.stock-b.stock);
 
-  // ── Expenses in period ───────────────────────────────────────────────────────
+  // ── Expenses in period (must be before useMemos that reference it) ────────────
   const pExpenses = (expenses||[]).filter(e => e.date >= from && e.date <= to);
+
+  // ── Top 5 rentabilidad ───────────────────────────────────────────────────────
+  const top5Profitable = useMemo(() => {
+    return products
+      .filter(p => p.active)
+      .map(p => {
+        const recipe = (recipes||[]).find(r => r.productId === p.id);
+        if (!recipe) return null;
+        const recipeTotalCost = (recipe.ingredients||[]).reduce((s, i) => s + (i.cost || 0), 0);
+        const costPerUnit = recipeTotalCost / Math.max(recipe.yield || 1, 1);
+
+        let unitsSold = 0, totalRevenue = 0;
+        closedSales.forEach(s => s.items.forEach(i => {
+          if (i.productId === p.id) { unitsSold += i.qty; totalRevenue += i.subtotal; }
+        }));
+        if (unitsSold === 0) return null;
+
+        const totalCost   = costPerUnit * unitsSold;
+        const totalProfit = totalRevenue - totalCost;
+        const margin      = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+        return { id:p.id, name:p.name, category:p.category, unitsSold, totalRevenue, totalCost, totalProfit, margin, costPerUnit };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.totalProfit - a.totalProfit)
+      .slice(0, 5);
+  }, [products, recipes, closedSales]);
+
+  // ── Tendencia ────────────────────────────────────────────────────────────────
+  const [trendMode, setTrendMode] = useState("daily");
+
+  const trendPoints = useMemo(() => {
+    const dayMap = {};
+    closedSales.forEach(s => {
+      const d = s.createdAt?.slice(0, 10);
+      if (!d) return;
+      if (!dayMap[d]) dayMap[d] = { sales:0, expenses:0 };
+      dayMap[d].sales += s.total;
+    });
+    pExpenses.filter(e => e.paymentStatus === "paid").forEach(e => {
+      if (!e.date) return;
+      if (!dayMap[e.date]) dayMap[e.date] = { sales:0, expenses:0 };
+      dayMap[e.date].expenses += e.total;
+    });
+    const days = Object.entries(dayMap).sort(([a],[b]) => a.localeCompare(b));
+
+    if (trendMode === "daily") {
+      return days.map(([date, v]) => ({ label:date.slice(5), sales:v.sales, expenses:v.expenses, net:v.sales-v.expenses }));
+    }
+    if (trendMode === "weekly") {
+      const wk = {};
+      days.forEach(([date, v]) => {
+        const d = new Date(date + "T12:00:00");
+        const ws = new Date(d); ws.setDate(d.getDate() - d.getDay());
+        const k = ws.toISOString().slice(0,10);
+        if (!wk[k]) wk[k] = { sales:0, expenses:0 };
+        wk[k].sales += v.sales; wk[k].expenses += v.expenses;
+      });
+      return Object.entries(wk).sort(([a],[b])=>a.localeCompare(b))
+        .map(([d, v]) => ({ label:d.slice(5), sales:v.sales, expenses:v.expenses, net:v.sales-v.expenses }));
+    }
+    // monthly
+    const mo = {};
+    days.forEach(([date, v]) => {
+      const k = date.slice(0,7);
+      if (!mo[k]) mo[k] = { sales:0, expenses:0 };
+      mo[k].sales += v.sales; mo[k].expenses += v.expenses;
+    });
+    const MON = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+    return Object.entries(mo).sort(([a],[b])=>a.localeCompare(b))
+      .map(([mon, v]) => ({ label:MON[Number(mon.slice(5))-1], sales:v.sales, expenses:v.expenses, net:v.sales-v.expenses }));
+  }, [closedSales, pExpenses, trendMode]);
+
+  const trendIndicator = useMemo(() => {
+    if (trendPoints.length < 2) return null;
+    const half = Math.floor(trendPoints.length / 2);
+    const prev = trendPoints.slice(0, half), curr = trendPoints.slice(half);
+    const ps = prev.reduce((s,p)=>s+p.sales,0), cs = curr.reduce((s,p)=>s+p.sales,0);
+    const pe = prev.reduce((s,p)=>s+p.expenses,0), ce = curr.reduce((s,p)=>s+p.expenses,0);
+    const pn = ps - pe, cn = cs - ce;
+    return {
+      salesChg: ps>0 ? (cs-ps)/ps*100 : null,
+      expChg:   pe>0 ? (ce-pe)/pe*100 : null,
+      netChg:   Math.abs(pn)>0 ? (cn-pn)/Math.abs(pn)*100 : null,
+    };
+  }, [trendPoints]);
+
+  // ── Expenses derived values ───────────────────────────────────────────────────
   const totalExpenses   = pExpenses.filter(e=>e.paymentStatus==="paid").reduce((a,b)=>a+b.total,0);
   const pendingExpenses = pExpenses.filter(e=>e.paymentStatus==="pending").reduce((a,b)=>a+b.total,0);
   const netResult       = totalIncome - totalExpenses;
@@ -271,6 +410,135 @@ export default function ReportsPage({ sales, products, expenses, expenseCategori
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ── TOP 5 RENTABILIDAD ─────────────────────────────────────────────── */}
+      <div className="card" style={{ marginBottom:16 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+          <div>
+            <div className="section-title" style={{ marginBottom:2 }}>Top 5 — Productos más rentables</div>
+            <div style={{ fontSize:".75em", color:"var(--t4)" }}>Rentabilidad = precio de venta − costo de receta · período seleccionado</div>
+          </div>
+        </div>
+        {top5Profitable.length === 0 ? (
+          <div style={{ color:"var(--t3)", fontSize:".84em", padding:"12px 0" }}>
+            Sin datos — asegurate de que los productos tengan recetas con ingredientes y hayan sido vendidos en el período.
+          </div>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Producto</th>
+                  <th style={{ textAlign:"right" }}>Uds. vendidas</th>
+                  <th style={{ textAlign:"right" }}>Ingresos</th>
+                  <th style={{ textAlign:"right" }}>Costo total</th>
+                  <th style={{ textAlign:"right" }}>Ganancia</th>
+                  <th style={{ minWidth:140 }}>Margen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {top5Profitable.map((p, i) => (
+                  <tr key={p.id}>
+                    <td>
+                      <div style={{ width:22, height:22, borderRadius:6, background:i===0?"var(--green)":i===1?"var(--amber)":i===2?"var(--blue)":"var(--s2)", color:i<3?"white":"var(--t3)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:".75em" }}>
+                        {i+1}
+                      </div>
+                    </td>
+                    <td>
+                      <div style={{ fontWeight:600, fontSize:".88em" }}>{p.name}</div>
+                      <div style={{ fontSize:".74em", color:"var(--t4)" }}>{p.category}</div>
+                    </td>
+                    <td style={{ textAlign:"right", fontWeight:600 }}>{p.unitsSold}</td>
+                    <td style={{ textAlign:"right", color:"var(--green)", fontWeight:600 }}>{$(p.totalRevenue)}</td>
+                    <td style={{ textAlign:"right", color:"var(--red)", fontWeight:600 }}>{$(p.totalCost)}</td>
+                    <td style={{ textAlign:"right", fontWeight:700, fontSize:".95em", color:p.totalProfit>=0?"var(--green)":"var(--red)" }}>
+                      {p.totalProfit<0?"-":""}{$(Math.abs(p.totalProfit))}
+                    </td>
+                    <td><MarginBar pct={p.margin}/></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ── TENDENCIA DE RENDIMIENTO ───────────────────────────────────────── */}
+      <div className="card" style={{ marginBottom:16 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:10 }}>
+          <div>
+            <div className="section-title" style={{ marginBottom:2 }}>Tendencia de rendimiento</div>
+            <div style={{ fontSize:".75em", color:"var(--t4)" }}>Ventas <span style={{ color:"var(--green)", fontWeight:700 }}>■</span> vs Gastos <span style={{ color:"var(--red)", fontWeight:700 }}>■</span> · comparativa primera/segunda mitad del período</div>
+          </div>
+          <div style={{ display:"flex", gap:6 }}>
+            {[["daily","Diario"],["weekly","Semanal"],["monthly","Mensual"]].map(([k,l]) => (
+              <button key={k} className={`btn btn-sm ${trendMode===k?"btn-primary":"btn-secondary"}`} onClick={()=>setTrendMode(k)}>{l}</button>
+            ))}
+          </div>
+        </div>
+
+        {trendIndicator && (
+          <div style={{ display:"flex", gap:16, marginBottom:14, padding:"10px 14px", background:"var(--s2)", borderRadius:10 }}>
+            <div style={{ fontSize:".74em", color:"var(--t4)", alignSelf:"center" }}>Variación 1ª→2ª mitad:</div>
+            <TrendBadge pct={trendIndicator.salesChg} label="Ventas"/>
+            <TrendBadge pct={trendIndicator.expChg ? -trendIndicator.expChg : null} label="Gastos"/>
+            <TrendBadge pct={trendIndicator.netChg} label="Ganancia neta"/>
+            <div style={{ marginLeft:"auto", display:"flex", gap:16, alignItems:"center" }}>
+              {trendPoints.length > 0 && (() => {
+                const totS = trendPoints.reduce((s,p)=>s+p.sales,0);
+                const totE = trendPoints.reduce((s,p)=>s+p.expenses,0);
+                const totN = totS - totE;
+                return (
+                  <>
+                    <div style={{ textAlign:"center" }}><div style={{ fontSize:".7em", color:"var(--t4)" }}>Total ventas</div><div style={{ fontWeight:700, color:"var(--green)", fontSize:".9em" }}>{$(totS)}</div></div>
+                    <div style={{ textAlign:"center" }}><div style={{ fontSize:".7em", color:"var(--t4)" }}>Total gastos</div><div style={{ fontWeight:700, color:"var(--red)", fontSize:".9em" }}>{$(totE)}</div></div>
+                    <div style={{ textAlign:"center" }}><div style={{ fontSize:".7em", color:"var(--t4)" }}>Ganancia neta</div><div style={{ fontWeight:700, color:totN>=0?"var(--green)":"var(--red)", fontSize:".9em" }}>{totN<0?"-":""}{$(Math.abs(totN))}</div></div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
+        <TrendChart points={trendPoints}/>
+
+        {trendPoints.length > 0 && (
+          <div style={{ marginTop:14 }}>
+            <div className="section-title" style={{ marginBottom:8 }}>Desglose por período</div>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Período</th>
+                    <th style={{ textAlign:"right" }}>Ventas</th>
+                    <th style={{ textAlign:"right" }}>Gastos</th>
+                    <th style={{ textAlign:"right" }}>Ganancia neta</th>
+                    <th style={{ minWidth:100 }}>Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trendPoints.map((p, i) => (
+                    <tr key={i}>
+                      <td style={{ fontWeight:500, fontSize:".86em" }}>{p.label}</td>
+                      <td style={{ textAlign:"right", color:"var(--green)", fontWeight:600 }}>{$(p.sales)}</td>
+                      <td style={{ textAlign:"right", color:"var(--red)", fontWeight:600 }}>{$(p.expenses)}</td>
+                      <td style={{ textAlign:"right", fontWeight:700, color:p.net>=0?"var(--green)":"var(--red)" }}>
+                        {p.net<0?"-":""}{$(Math.abs(p.net))}
+                      </td>
+                      <td>
+                        <span className={`badge ${p.net>=0?"badge-green":"badge-red"}`}>
+                          {p.net>=0?"Superávit":"Déficit"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="card">
