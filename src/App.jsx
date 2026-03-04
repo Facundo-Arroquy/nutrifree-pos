@@ -171,13 +171,12 @@ export default function App() {
             })}
           </nav>
           <div className="sb-footer">
-            <div className="user-chip">
-              <div className="user-av">{user.name[0]}</div>
+            <div style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", borderRadius:10, background:"var(--s2)" }}>
+              <div className="user-av" style={{ flexShrink:0 }}>{user.name[0]}</div>
               <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:".82em", fontWeight:600, color:"var(--t1)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{user.name}</div>
-                <div style={{ fontSize:".7em", color:"var(--t3)", textTransform:"capitalize" }}>{user.role}</div>
+                <div style={{ fontSize:".79em", fontWeight:600, color:"var(--t2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{user.name}</div>
+                <div style={{ fontSize:".68em", color:"var(--t4)", textTransform:"capitalize" }}>{user.role}</div>
               </div>
-              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setUser(null)} title="Salir"><Ico n="logout" s={14}/></button>
             </div>
           </div>
         </aside>
@@ -185,8 +184,18 @@ export default function App() {
         {/* CONTENT */}
         <div className="content">
           <div className="topbar">
-            <span className="topbar-title">{nav.find(n=>n.id===page)?.label || ""}</span>
-            <span className="topbar-date">{new Date().toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</span>
+            <div className="topbar-brand">
+              <img src="/logo.jpg" alt="Nutrifree" style={{ height:22, borderRadius:5 }}/>
+              <span>Nutrifree Manager</span>
+            </div>
+            <div className="topbar-right">
+              <span className="topbar-date">{new Date().toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"})}</span>
+              <div className="topbar-userchip">
+                <div className="user-av" style={{ width:22, height:22, fontSize:".65em", flexShrink:0 }}>{user.name[0]}</div>
+                <span className="topbar-user-name">{user.name}</span>
+              </div>
+              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setUser(null)} title="Salir"><Ico n="logout" s={13}/></button>
+            </div>
           </div>
           <div style={{ flex:1, overflow:"hidden" }}>
             {page==="dashboard" && <DashboardPage {...props}/>}
