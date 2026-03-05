@@ -4,6 +4,7 @@ import {
   SEED_PRODUCTS, SEED_CUSTOMERS, SEED_SALES, SEED_CATEGORIES,
   $, STATUS_LABELS, STATUS_COLORS, todayStr,
 } from "./shared.jsx";
+import { initDemoDb, resetDemoDb } from "./demoData.js";
 import {
   supabase,
   dbToProduct, productToDb,
@@ -120,6 +121,12 @@ export default function App() {
     <>
       <style>{CSS}</style>
       <LoginPage onLogin={u => {
+        if (u.isDemo) {
+          localStorage.setItem("nutrifree_mode", "demo");
+          initDemoDb(false);
+        } else {
+          localStorage.removeItem("nutrifree_mode");
+        }
         setUser(u);
         setPage("dashboard");
         const now = new Date();
@@ -161,7 +168,12 @@ export default function App() {
     { label: null,        key: "bottom" },
   ];
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd };
+  const resetDemo = () => {
+    resetDemoDb();
+    window.location.reload();
+  };
+
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo };
 
   return (
     <>
@@ -202,6 +214,12 @@ export default function App() {
 
         {/* CONTENT */}
         <div className="content">
+          {user.isDemo && (
+            <div className="demo-banner">
+              🧪 Entorno Demo — Los datos no afectan la base de datos real
+              <button className="demo-banner-btn" onClick={resetDemo}>↺ Restaurar datos</button>
+            </div>
+          )}
           <div className="topbar">
             <div className="topbar-brand">
               <img src="/logo.jpg" alt="Nutrifree" style={{ height:22, borderRadius:5 }}/>
@@ -213,7 +231,7 @@ export default function App() {
                 <div className="user-av" style={{ width:22, height:22, fontSize:".65em", flexShrink:0 }}>{user.name[0]}</div>
                 <span className="topbar-user-name">{user.name}</span>
               </div>
-              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setUser(null)} title="Salir"><Ico n="logout" s={13}/></button>
+              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => { localStorage.removeItem("nutrifree_mode"); setUser(null); }} title="Salir"><Ico n="logout" s={13}/></button>
             </div>
           </div>
           <div style={{ flex:1, overflow:"hidden" }}>

@@ -243,6 +243,11 @@ tbody tr:hover td{background:var(--s1)}
 .toast.info{background:var(--blue)}
 @keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 
+/* DEMO BANNER */
+.demo-banner{background:linear-gradient(90deg,#d97706,#f59e0b);color:white;text-align:center;padding:8px 16px;font-size:.78em;font-weight:600;letter-spacing:.03em;display:flex;align-items:center;justify-content:center;gap:10px;flex-shrink:0}
+.demo-banner-btn{background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.4);color:white;border-radius:6px;padding:3px 10px;font-size:.82em;font-weight:600;cursor:pointer;transition:background .13s}
+.demo-banner-btn:hover{background:rgba(255,255,255,.35)}
+
 /* MISC */
 .divider{height:1px;background:var(--border);margin:16px 0}
 .empty{text-align:center;padding:52px 20px;color:var(--t3)}
@@ -318,8 +323,9 @@ function Modal({ title, onClose, children, lg=false }) {
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 const USERS = [
-  { id:"admin", name:"Administrador", role:"admin", pass:"toto000" },
-  { id:"vendor", name:"Vendedor", role:"vendor", pass:"000comida" },
+  { id:"admin",  name:"Administrador", role:"admin",  pass:"toto000",   isDemo:false },
+  { id:"vendor", name:"Vendedor",      role:"vendor", pass:"000comida", isDemo:false },
+  { id:"demo",   name:"Usuario Demo",  role:"admin",  pass:"demo1234",  isDemo:true  },
 ];
 
 function LoginPage({ onLogin }) {
@@ -346,6 +352,7 @@ function LoginPage({ onLogin }) {
           <select value={user} onChange={e => setUser(e.target.value)}>
             <option value="admin">Administrador</option>
             <option value="vendor">Vendedor</option>
+            <option value="demo">🧪 Demo</option>
           </select>
         </div>
         <div className="form-group" style={{ marginBottom:22 }}>

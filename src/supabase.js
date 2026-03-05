@@ -1,11 +1,20 @@
 import { createClient } from "@supabase/supabase-js";
+import { demoClient } from "./demoSupabase.js";
 
 // ─── STEP 4: Paste your values from Supabase > Project Settings > API ──────
 const SUPABASE_URL  = "https://lasiauvrppslxumksggz.supabase.co";
 const SUPABASE_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxhc2lhdXZycHBzbHh1bWtzZ2d6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIzMDk1MTEsImV4cCI6MjA4Nzg4NTUxMX0.-HYGsPvzMzff3DDppOrwBllgM05kUuMM38l1jGbI1to";
 // ────────────────────────────────────────────────────────────────────────────
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const _prod = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Smart client: routes to demo (localStorage) or production (Supabase) at call time
+export const supabase = {
+  from: (table) => {
+    const isDemo = typeof localStorage !== "undefined" && localStorage.getItem("nutrifree_mode") === "demo";
+    return isDemo ? demoClient.from(table) : _prod.from(table);
+  },
+};
 
 // ─── MAPPERS: DB (snake_case) ↔ App (camelCase) ───────────────────────────
 

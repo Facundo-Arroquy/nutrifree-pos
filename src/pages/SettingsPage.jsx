@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Ico } from "../shared.jsx";
 import { supabase } from "../supabase.js";
 
-export default function SettingsPage({ categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd }) {
+export default function SettingsPage({ user, categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo }) {
   const [newCat, setNewCat] = useState("");
   const [newExpCat, setNewExpCat] = useState("");
   const [rStart, setRStart] = useState(reminderStart);
@@ -125,6 +125,19 @@ export default function SettingsPage({ categories, setCategories, expenseCategor
           Valor actual: <strong>{reminderStart}</strong> – <strong>{reminderEnd}</strong>
         </p>
       </div>
+
+      {user?.isDemo && (
+        <div className="card" style={{ maxWidth:420, marginBottom:16, borderColor:"var(--amberlb)" }}>
+          <div className="section-title">🧪 Entorno Demo</div>
+          <p style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
+            Restaura todos los datos de demostración a su estado inicial. Las ventas, pedidos, gastos y
+            movimientos registrados en demo se eliminarán y se reemplazarán por los datos de muestra originales.
+          </p>
+          <button className="btn btn-amber btn-sm" onClick={resetDemo}>
+            ↺ Restaurar datos de demo
+          </button>
+        </div>
+      )}
 
       <div className="card" style={{ maxWidth:420 }}>
         <div className="section-title">Usuarios del sistema</div>
