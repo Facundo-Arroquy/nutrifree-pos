@@ -39,11 +39,11 @@ import CashShiftPage from "./pages/CashShiftPage.jsx";
 export default function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("dashboard");
-  const [products, setProducts] = useState(SEED_PRODUCTS);
-  const [customers, setCustomers] = useState(SEED_CUSTOMERS);
-  const [sales, setSales] = useState(SEED_SALES);
+  const [products, setProducts] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [sales, setSales] = useState([]);
   const [recipes, setRecipes] = useState([]);
-  const [categories, setCategories] = useState(SEED_CATEGORIES);
+  const [categories, setCategories] = useState([]);
   const [expenseCategories, setExpenseCategories] = useState(["Ingredientes","Servicios","Envases","Limpieza","Otros"]);
   const [expenses, setExpenses] = useState([]);
   const [ingredients, setIngredients] = useState([]);
@@ -59,6 +59,8 @@ export default function App() {
 
   useEffect(() => {
     const load = async () => {
+      // Ensure no stale demo flag affects production data load
+      localStorage.removeItem("nutrifree_mode");
       const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }] = await Promise.all([
         supabase.from("categories").select("*"),
         supabase.from("expense_categories").select("*").order("name"),
@@ -76,24 +78,10 @@ export default function App() {
         supabase.from("cash_shifts").select("*").order("created_at", { ascending: false }),
       ]);
       if (accPaysErr) console.error("[account_payments] Error al cargar:", accPaysErr);
-      if (cats && cats.length > 0) {
-        setCategories(cats.map(c => c.name));
-      } else {
-        supabase.from("categories").insert(SEED_CATEGORIES.map(name => ({ name }))).then(() => {});
-      }
-      if (expCats && expCats.length > 0) {
-        setExpenseCategories(expCats.map(c => c.name));
-      }
-      if (prods && prods.length > 0) {
-        setProducts(prods.map(dbToProduct));
-      } else {
-        supabase.from("products").insert(SEED_PRODUCTS.map(productToDb)).then(() => {});
-      }
-      if (custs && custs.length > 0) {
-        setCustomers(custs.map(dbToCustomer));
-      } else {
-        supabase.from("customers").insert(SEED_CUSTOMERS.map(customerToDb)).then(() => {});
-      }
+      if (cats && cats.length > 0) setCategories(cats.map(c => c.name));
+      if (expCats && expCats.length > 0) setExpenseCategories(expCats.map(c => c.name));
+      if (prods && prods.length > 0) setProducts(prods.map(dbToProduct));
+      if (custs && custs.length > 0) setCustomers(custs.map(dbToCustomer));
       if (sls && sls.length > 0) setSales(sls.map(dbToSale));
       if (exps && exps.length > 0) setExpenses(exps.map(dbToExpense));
       if (ingrs && ingrs.length > 0) setIngredients(ingrs.map(dbToIngredient));
@@ -122,8 +110,38 @@ export default function App() {
       <style>{CSS}</style>
       <LoginPage onLogin={u => {
         if (u.isDemo) {
-          localStorage.setItem("nutrifree_mode", "demo");
           initDemoDb(false);
+          localStorage.setItem("nutrifree_mode", "demo");
+          // Load demo state into React from localStorage
+          const get = (k) => { try { return JSON.parse(localStorage.getItem("nutrifree_demo_" + k) || "[]"); } catch { return []; } };
+          const dProds  = get("products");   const dCusts = get("customers");
+          const dSls    = get("sales");       const dCats  = get("categories");
+          const dExpCats= get("expense_categories"); const dExps = get("expenses");
+          const dIngrs  = get("ingredients"); const dRecs  = get("recipes");
+          const dRecIngrs = get("recipe_ingredients");
+          const dAccPays  = get("account_payments");
+          const dStockMovs= get("stock_movements");
+          const dSupps    = get("suppliers");
+          const dSuppPays = get("supplier_payments");
+          const dShifts   = get("cash_shifts");
+          setProducts(dProds.map(dbToProduct));
+          setCustomers(dCusts.map(dbToCustomer));
+          setSales(dSls.map(dbToSale));
+          setCategories(dCats.map(c => c.name));
+          setExpenseCategories(dExpCats.map(c => c.name));
+          setExpenses(dExps.map(dbToExpense));
+          setIngredients(dIngrs.map(dbToIngredient));
+          setRecipes(dRecs.map(r => ({
+            ...dbToRecipe(r),
+            ingredients: dRecIngrs
+              .filter(ri => ri.recipe_id === r.id)
+              .map(ri => dbToRecipeIngredient(ri, dIngrs)),
+          })));
+          setAccountPayments(dAccPays.map(dbToAccountPayment));
+          setStockMovements(dStockMovs.map(dbToStockMovement));
+          setSuppliers(dSupps.map(dbToSupplier));
+          setSupplierPayments(dSuppPays.map(dbToSupplierPayment));
+          setCashShifts(dShifts.map(dbToCashShift));
         } else {
           localStorage.removeItem("nutrifree_mode");
         }
