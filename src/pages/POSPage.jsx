@@ -1,3 +1,15 @@
+/**
+ * POSPage — Punto de venta (caja).
+ *
+ * Flujo: seleccionar cliente (opcional) → agregar productos al carrito →
+ * aplicar descuento → cobrar (estado + método de pago) → confirmar.
+ *
+ * Al guardar un pedido abierto, ofrece registrar una fecha de entrega.
+ * Los pedidos "account" generan automáticamente un cargo en cuenta corriente.
+ *
+ * Props: products, setProducts, customers, setCustomers, sales, setSales,
+ *        accountPayments, setAccountPayments, showToast
+ */
 import { useState, useEffect } from "react";
 import { Ico, Modal, $, PAY_ORDER_LABELS, uid, todayStr } from "../shared.jsx";
 import { supabase, saleToDb, accountPaymentToDb } from "../supabase.js";

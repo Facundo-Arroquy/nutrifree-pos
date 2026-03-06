@@ -1,3 +1,12 @@
+/**
+ * ProductsPage — Catálogo de productos.
+ *
+ * CRUD completo con soporte para productos simples y kits (compuesto por otros
+ * productos). Los kits expanden sus componentes al procesar ventas.
+ * Filtros por categoría y búsqueda por nombre.
+ *
+ * Props: products, setProducts, categories, showToast
+ */
 import { useState } from "react";
 import { Ico, Modal, $, uid } from "../shared.jsx";
 import { supabase, productToDb } from "../supabase.js";

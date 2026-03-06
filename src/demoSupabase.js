@@ -1,3 +1,12 @@
+/**
+ * demoSupabase.js — Mock de Supabase para el modo demo
+ *
+ * Implementa la misma interfaz que el cliente real de Supabase usando
+ * localStorage como almacenamiento. Soporta: select, insert, update,
+ * delete, upsert, eq (filtros) y order. Es thenable (await-able).
+ *
+ * Las claves en localStorage siguen el patrón: "nutrifree_demo_<tabla>"
+ */
 // ─── Demo Supabase mock — localStorage-backed, same interface as real client ──
 const KEY = "nutrifree_demo_";
 
@@ -7,6 +16,10 @@ const getRows = (table) => {
 };
 const setRows = (table, rows) => localStorage.setItem(KEY + table, JSON.stringify(rows));
 
+/**
+ * Constructor de queries encadenables sobre localStorage.
+ * Soporta el patrón fluido: demoClient.from("table").select().eq("col",val).order("col")
+ */
 class DemoQueryBuilder {
   constructor(table) {
     this._table  = table;
@@ -23,7 +36,9 @@ class DemoQueryBuilder {
   delete()        { this._op = "delete"; return this; }
   upsert(data)    { this._op = "upsert"; this._data = Array.isArray(data) ? data : [data]; return this; }
 
+  /** Agrega un filtro de igualdad (se pueden encadenar múltiples). */
   eq(col, val)             { this._filters.push({ col, val }); return this; }
+  /** Ordena el resultado por columna. Por defecto ascendente. */
   order(col, opts = {})    { this._orderCol = col; this._orderAsc = opts.ascending !== false; return this; }
 
   _applyFilters(rows) {

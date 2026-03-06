@@ -1,3 +1,16 @@
+/**
+ * demoData.js — Datos de seed para el modo demo
+ *
+ * DEMO_SEED contiene datos ficticios para todas las tablas, cubriendo ~70 días
+ * de operación para demostrar correctamente los módulos de reportes, tendencias,
+ * cierre de caja, proveedores y cuenta corriente.
+ *
+ * initDemoDb(force?)  — Escribe las tablas en localStorage si no existen.
+ * resetDemoDb()       — Sobreescribe todas las tablas con los datos originales.
+ *
+ * Las claves en localStorage siguen el patrón: "nutrifree_demo_<tabla>"
+ * Ninguna función en este archivo toca Supabase.
+ */
 // ─── DEMO DATA — seed data for the demo environment ──────────────────────────
 const KEY = "nutrifree_demo_";
 

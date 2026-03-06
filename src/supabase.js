@@ -1,3 +1,12 @@
+/**
+ * supabase.js — Cliente Supabase y mappers DB↔App
+ *
+ * Exporta:
+ *  - `supabase`: proxy inteligente que redirige a demoClient (localStorage) o al
+ *    cliente real de Supabase según el flag `nutrifree_mode` en localStorage.
+ *  - Mappers `dbTo*`: convierten filas DB (snake_case) a objetos React (camelCase).
+ *  - Mappers `*ToDb`: convierten objetos React (camelCase) a filas DB (snake_case).
+ */
 import { createClient } from "@supabase/supabase-js";
 import { demoClient } from "./demoSupabase.js";
 
@@ -17,6 +26,7 @@ export const supabase = {
 };
 
 // ─── MAPPERS: DB (snake_case) ↔ App (camelCase) ───────────────────────────
+// Cada entidad tiene un par dbTo*(row) → objeto App y *ToDb(obj) → fila DB.
 
 export const dbToProduct = r => ({
   id: r.id, name: r.name, category: r.category,

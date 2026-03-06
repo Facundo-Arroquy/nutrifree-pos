@@ -1,3 +1,17 @@
+/**
+ * CashShiftPage — Gestión de turnos de caja.
+ *
+ * Estados posibles:
+ *  - Sin turno: botón para abrir turno (registra responsable y efectivo inicial)
+ *  - Turno abierto: dashboard en tiempo real con ventas, cobros de CC y egresos
+ *    del período. Calcula efectivo esperado = inicial + efectivo + cobros CC − egresos.
+ *  - Cerrar turno: ingreso del efectivo contado → diferencia calculada en vivo.
+ *
+ * Al cerrar, persiste todos los totales en cash_shifts con status="closed".
+ * El historial muestra todos los turnos cerrados previos.
+ *
+ * Props: sales, expenses, accountPayments, user, cashShifts, setCashShifts, showToast
+ */
 import { useState } from "react";
 import { Ico, Modal, $, fmtDT, fmtTime, PAY_LABELS } from "../shared.jsx";
 import { supabase, cashShiftToDb } from "../supabase.js";

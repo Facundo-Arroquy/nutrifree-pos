@@ -1,3 +1,13 @@
+/**
+ * SuppliersPage — CRUD de proveedores y cuenta corriente.
+ *
+ * El saldo de cada proveedor se calcula como la suma de supplier_payments:
+ * charges (deudas generadas por gastos) menos payments (pagos realizados).
+ * Valor negativo = deuda pendiente con el proveedor.
+ * Permite registrar pagos manuales independientes de un gasto.
+ *
+ * Props: suppliers, setSuppliers, supplierPayments, setSupplierPayments, showToast
+ */
 import { useState } from "react";
 import { Ico, Modal, $, fmtDate, todayStr, PAY_LABELS } from "../shared.jsx";
 import { supabase, supplierToDb, supplierPaymentToDb } from "../supabase.js";

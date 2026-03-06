@@ -1,3 +1,14 @@
+/**
+ * ProductionPage — Registro de producción de productos.
+ *
+ * Al aplicar producción de N unidades de un producto:
+ *  1. Incrementa products.stock en N
+ *  2. Registra un movimiento en stock_movements (type: "production")
+ *  3. Si el producto tiene receta, descuenta stock de cada ingrediente
+ *     proporcionalmente (qty_ingrediente × N / recipe.yield)
+ *
+ * Props: products, setProducts, recipes, setIngredients, setStockMovements, showToast
+ */
 import { useState } from "react";
 import { Ico } from "../shared.jsx";
 import { supabase, stockMovementToDb } from "../supabase.js";

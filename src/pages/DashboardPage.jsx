@@ -1,3 +1,11 @@
+/**
+ * DashboardPage — Resumen de negocio con filtro por rango de fechas.
+ *
+ * Muestra: totales de ventas, cantidad de pedidos, desglose por método de pago,
+ * tabla de ventas del período y acceso rápido al POS y Pedidos.
+ *
+ * Props: sales, products, cashShifts, setPage
+ */
 import { useState } from "react";
 import { $, fmtDT, fmtTime, todayStr, PAY_LABELS } from "../shared.jsx";
 

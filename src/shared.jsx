@@ -1,6 +1,18 @@
+/**
+ * shared.jsx — Módulo compartido de la aplicación
+ *
+ * Exporta:
+ *  - Datos seed de fallback (SEED_*)
+ *  - Utilidades de formato: $, fmtDate, fmtTime, fmtDT, todayStr, uid, clamp
+ *  - Constantes de UI: STATUS_LABELS/COLORS, PAY_LABELS, PAY_ORDER_LABELS
+ *  - Estilos globales: CSS (string inyectado con <style>)
+ *  - Componentes base: Ico, Modal, Toast, LoginPage
+ *  - Lista de usuarios del sistema: USERS
+ */
 import { useState, useEffect, useRef, useMemo } from "react";
 
 // ─── SEED DATA ────────────────────────────────────────────────────────────────
+// Datos de fallback usados solo si la DB está vacía (no se insertan automáticamente)
 const SEED_CATEGORIES = ["Viandas", "Panadería", "Postres", "Bebidas", "Otros"];
 
 const SEED_PRODUCTS = [
@@ -52,16 +64,25 @@ const SEED_SALES = [
 ];
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
+/** Genera un ID corto aleatorio (7 caracteres base-36). */
 const uid = () => Math.random().toString(36).slice(2, 9);
+/** Formatea un número como moneda argentina: $(1234, 2) → "$1.234,00" */
 const $ = (n, d=0) => `$${Number(n||0).toLocaleString("es-AR",{minimumFractionDigits:d,maximumFractionDigits:d})}`;
+/** Formatea una fecha ISO o Date como "dd/mm/aaaa". */
 const fmtDate = d => new Date(d).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"});
+/** Formatea una fecha ISO o Date como "hh:mm". */
 const fmtTime = d => new Date(d).toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"});
+/** Formatea una fecha ISO o Date como "dd/mm/aaaa hh:mm". */
 const fmtDT = d => `${fmtDate(d)} ${fmtTime(d)}`;
+/** Devuelve la fecha de hoy como string "YYYY-MM-DD". */
 const todayStr = () => new Date().toISOString().slice(0,10);
+/** Limita un valor entre un mínimo y un máximo. */
 const clamp = (v,mn,mx) => Math.min(Math.max(v,mn),mx);
 
+// Etiquetas y clases CSS para los estados de los pedidos
 const STATUS_LABELS = { open:"Abierto", pending:"Pend. pago", ready:"Listo", delivered:"Entregado", cancelled:"Cancelado", closed:"Cerrado" };
 const STATUS_COLORS = { open:"badge-blue", pending:"badge-amber", ready:"badge-green", delivered:"badge-gray", cancelled:"badge-red", closed:"badge-gray" };
+// Etiquetas para métodos de pago (PAY_ORDER_LABELS excluye tarjeta, que no aplica en pedidos)
 const PAY_LABELS = { cash:"Efectivo", transfer:"Transferencia", card:"Tarjeta", account:"Cuenta corriente" };
 const PAY_ORDER_LABELS = { cash:"Efectivo", transfer:"Transferencia", account:"Cuenta corriente" };
 

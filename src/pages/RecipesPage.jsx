@@ -1,3 +1,13 @@
+/**
+ * RecipesPage — Gestión de recetas de producción.
+ *
+ * Cada receta se vincula a un producto y contiene ingredientes (del catálogo),
+ * pasos de preparación, tiempos y rendimiento. El costo de cada ingrediente
+ * se calcula automáticamente como qty × ingredient.unitCost.
+ * Permite exportar la receta como PDF imprimible.
+ *
+ * Props: recipes, setRecipes, products, ingredients, showToast
+ */
 import { useState } from "react";
 import { Ico, Modal, $ } from "../shared.jsx";
 import { supabase, recipeToDb, recipeIngredientToDb } from "../supabase.js";

@@ -1,3 +1,16 @@
+/**
+ * ReportsPage — Análisis y reportes (solo admin).
+ *
+ * Módulos disponibles (filtrados por rango de fechas):
+ *  - Resumen: totales de ventas, gastos, ganancia neta y margen
+ *  - Top productos más vendidos (por unidades, con barra de progreso)
+ *  - Distribución de ventas por método de pago
+ *  - Top 5 más rentables: margen calculado como (precioRetail − costoReceta) / precio
+ *  - Tendencias: gráfico de barras diario/semanal/mensual (ventas vs gastos)
+ *    con TrendBadge comparando la primera mitad del período contra la segunda
+ *
+ * Props: sales, expenses, recipes, products, stockMovements
+ */
 import { useState, useMemo } from "react";
 import { Ico, $, fmtDate, fmtTime, STATUS_LABELS, STATUS_COLORS, PAY_LABELS } from "../shared.jsx";
 

@@ -1,3 +1,12 @@
+/**
+ * CustomersPage — CRUD de clientes y cuenta corriente.
+ *
+ * Lista clientes con su saldo calculado en tiempo real a partir de
+ * account_payments (charges - payments). Permite registrar pagos manuales
+ * contra la deuda de un cliente y ver el historial de movimientos.
+ *
+ * Props: customers, setCustomers, sales, accountPayments, setAccountPayments, showToast
+ */
 import { useState } from "react";
 import { Ico, Modal, $, fmtDate, uid, PAY_LABELS, todayStr } from "../shared.jsx";
 import { supabase, customerToDb, accountPaymentToDb } from "../supabase.js";

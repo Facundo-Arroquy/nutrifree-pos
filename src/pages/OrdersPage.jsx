@@ -1,3 +1,13 @@
+/**
+ * OrdersPage — Gestión de pedidos.
+ *
+ * Filtra por estado y método de pago. Permite cambiar estado, cambiar método
+ * de pago, cerrar pedidos y cancelar (devuelve stock automáticamente).
+ * Cerrar un pedido "account" registra el cargo en cuenta corriente del cliente.
+ *
+ * Props: sales, setSales, products, setProducts, customers, setCustomers,
+ *        accountPayments, setAccountPayments, setStockMovements, showToast
+ */
 import { useState } from "react";
 import { Ico, Modal, $, fmtDT, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, PAY_ORDER_LABELS, todayStr } from "../shared.jsx";
 import { supabase, accountPaymentToDb, stockMovementToDb } from "../supabase.js";

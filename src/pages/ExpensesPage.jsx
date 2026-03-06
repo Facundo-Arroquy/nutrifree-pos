@@ -1,3 +1,17 @@
+/**
+ * ExpensesPage — Registro y gestión de gastos.
+ *
+ * Soporta dos flujos según la categoría:
+ *  - "Ingredientes": tabla de líneas donde se elige ingrediente del catálogo.
+ *    Al guardar actualiza `ingredients.unit_cost` y `recipe_ingredients.cost` en DB.
+ *  - Otras categorías: formulario simple con concepto, proveedor, cantidad y precio.
+ *
+ * Los gastos con paymentStatus="pending" se pueden cerrar después eligiendo método
+ * de pago (genera movimiento en supplier_payments si tiene proveedor asociado).
+ *
+ * Props: expenses, setExpenses, expenseCategories, ingredients, setIngredients,
+ *        recipes, setRecipes, suppliers, setSupplierPayments, showToast
+ */
 import { useState } from "react";
 import { Ico, Modal, $, fmtDate, uid, todayStr, PAY_LABELS } from "../shared.jsx";
 import { supabase, expenseToDb, supplierPaymentToDb } from "../supabase.js";

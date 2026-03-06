@@ -1,3 +1,12 @@
+/**
+ * IngredientsPage — Inventario de materias primas.
+ *
+ * CRUD de ingredientes con stock, stock mínimo y costo unitario. Muestra alertas
+ * visuales para ingredientes bajo su stock mínimo. Permite editar stock y precio
+ * directamente en la tabla sin abrir el modal.
+ *
+ * Props: ingredients, setIngredients, showToast
+ */
 import { useState } from "react";
 import { Ico, Modal, $ } from "../shared.jsx";
 import { supabase, ingredientToDb } from "../supabase.js";

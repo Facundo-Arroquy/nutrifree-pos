@@ -1,3 +1,16 @@
+/**
+ * SettingsPage — Configuración del sistema.
+ *
+ * Permite:
+ *  - Agregar/eliminar categorías de productos (tabla "categories" en DB)
+ *  - Agregar/eliminar categorías de gastos (tabla "expense_categories" en DB)
+ *  - Configurar el rango horario del recordatorio de entregas (localStorage)
+ *  - Ver los usuarios del sistema con sus roles
+ *  - Restaurar datos demo (solo visible en modo demo)
+ *
+ * Props: user, categories, setCategories, expenseCategories, setExpenseCategories,
+ *        showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo
+ */
 import { useState } from "react";
 import { Ico } from "../shared.jsx";
 import { supabase } from "../supabase.js";

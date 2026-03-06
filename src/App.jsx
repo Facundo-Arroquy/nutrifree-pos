@@ -1,3 +1,14 @@
+/**
+ * App.jsx — Componente raíz de la aplicación
+ *
+ * Responsabilidades:
+ *  1. Carga inicial de todos los datos desde Supabase (14 tablas en paralelo)
+ *  2. Estado global compartido con todas las páginas vía objeto `props`
+ *  3. Lógica de autenticación: login, logout, modo demo
+ *  4. Routing client-side mediante estado `page`
+ *  5. Alertas de entrega al login (según ventana de horario configurable)
+ *  6. Sidebar dinámico filtrado por rol del usuario
+ */
 import { useState, useEffect } from "react";
 import {
   CSS, Ico, Toast, LoginPage,
@@ -103,6 +114,7 @@ export default function App() {
     load();
   }, []);
 
+  /** Muestra una notificación temporal. type: "success" | "error" */
   const showToast = (msg, type="success") => setToast({ msg, type });
 
   if (!user) return (
@@ -186,6 +198,7 @@ export default function App() {
     { label: null,        key: "bottom" },
   ];
 
+  /** Restaura los datos demo a su estado original y recarga la aplicación. */
   const resetDemo = () => {
     resetDemoDb();
     window.location.reload();
