@@ -65,6 +65,9 @@ export default function App() {
   const [cashShifts, setCashShifts] = useState([]);
   const [toast, setToast] = useState(null);
   const [deliveryAlerts, setDeliveryAlerts] = useState([]);
+  const [showMenuReminder, setShowMenuReminder] = useState(false);
+  const [menuLunch, setMenuLunch] = useState("");
+  const [menuDinner, setMenuDinner] = useState("");
   const [reminderStart, setReminderStart] = useState(() => localStorage.getItem("reminderStart") || "10:00");
   const [reminderEnd,   setReminderEnd]   = useState(() => localStorage.getItem("reminderEnd")   || "11:00");
 
@@ -116,6 +119,15 @@ export default function App() {
 
   /** Muestra una notificación temporal. type: "success" | "error" */
   const showToast = (msg, type="success") => setToast({ msg, type });
+
+  const saveMenu = () => {
+    const today = todayStr();
+    localStorage.setItem("menuSavedDate", today);
+    if (menuLunch.trim()) localStorage.setItem("menuLunch_" + today, menuLunch.trim());
+    if (menuDinner.trim()) localStorage.setItem("menuDinner_" + today, menuDinner.trim());
+    setShowMenuReminder(false);
+    showToast("Menú del día guardado ✓");
+  };
 
   const marginAlertCount = useMemo(() => {
     return products.filter(p => {
@@ -183,6 +195,11 @@ export default function App() {
             s.deliveryDate === today
           );
           if (alerts.length > 0) setDeliveryAlerts(alerts);
+          if (localStorage.getItem("menuSavedDate") !== today) {
+            setShowMenuReminder(true);
+            setMenuLunch(localStorage.getItem("menuLunch_" + today) || "");
+            setMenuDinner(localStorage.getItem("menuDinner_" + today) || "");
+          }
         }
       }} />
     </>
@@ -330,6 +347,38 @@ export default function App() {
               <button className="btn btn-secondary" onClick={() => setDeliveryAlerts([])}>Cerrar</button>
               <button className="btn btn-primary" onClick={() => { setDeliveryAlerts([]); setPage("orders"); }}>
                 <Ico n="orders" s={14}/> Ver pedidos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showMenuReminder && (
+        <div className="modal-bg">
+          <div className="modal" style={{ maxWidth:440 }}>
+            <div className="modal-header">
+              <div className="modal-title" style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span>🍽️</span> Menú del día
+              </div>
+            </div>
+            <p style={{ fontSize:".84em", color:"var(--t3)", marginBottom:20 }}>
+              Registrá el menú de almuerzo y cena de hoy para que el equipo lo tenga disponible.
+            </p>
+            <div className="form-group" style={{ marginBottom:12 }}>
+              <label className="lbl">☀️ Almuerzo del Día</label>
+              <input value={menuLunch} onChange={e => setMenuLunch(e.target.value)}
+                placeholder="Ej: Milanesa con puré..." autoFocus
+                onKeyDown={e => e.key === "Enter" && saveMenu()}/>
+            </div>
+            <div className="form-group" style={{ marginBottom:20 }}>
+              <label className="lbl">🌙 Cena del Día</label>
+              <input value={menuDinner} onChange={e => setMenuDinner(e.target.value)}
+                placeholder="Ej: Pollo al horno con ensalada..."
+                onKeyDown={e => e.key === "Enter" && saveMenu()}/>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowMenuReminder(false)}>Saltar por ahora</button>
+              <button className="btn btn-primary" onClick={saveMenu}>
+                <Ico n="check" s={13}/> Guardar menú
               </button>
             </div>
           </div>

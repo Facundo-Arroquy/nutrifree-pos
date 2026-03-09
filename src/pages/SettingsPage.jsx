@@ -119,7 +119,7 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
       <div className="card" style={{ maxWidth:420, marginBottom:16 }}>
         <div className="section-title">Sistema</div>
         <div style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
-          Horario en que aparece el recordatorio de entregas al iniciar sesión.
+          Horario en que aparecen los recordatorios al iniciar sesión: entregas pendientes del día y menú del día.
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16, flexWrap:"wrap" }}>
           <div className="form-group" style={{ flex:1, minWidth:120 }}>
