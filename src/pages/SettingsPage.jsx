@@ -137,6 +137,17 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
         <p style={{ fontSize:".76em", color:"var(--t4)" }}>
           Valor actual: <strong>{reminderStart}</strong> – <strong>{reminderEnd}</strong>
         </p>
+        <div style={{ borderTop:"1px solid var(--border)", marginTop:14, paddingTop:14 }}>
+          <div style={{ fontSize:".84em", color:"var(--t3)", marginBottom:10 }}>
+            Reiniciar el recordatorio del menú del día para que vuelva a aparecer al iniciar sesión, sin borrar el menú ya cargado.
+          </div>
+          <button className="btn btn-secondary btn-sm" onClick={() => {
+            localStorage.removeItem("menuSavedDate");
+            showToast("Recordatorio de menú reiniciado ✓");
+          }}>
+            ↺ Reiniciar recordatorio de menú
+          </button>
+        </div>
       </div>
 
       {user?.isDemo && (

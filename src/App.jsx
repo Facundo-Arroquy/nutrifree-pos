@@ -66,8 +66,9 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [deliveryAlerts, setDeliveryAlerts] = useState([]);
   const [showMenuReminder, setShowMenuReminder] = useState(false);
-  const [menuLunch, setMenuLunch] = useState("");
-  const [menuDinner, setMenuDinner] = useState("");
+  const [menuLunchId, setMenuLunchId] = useState("");
+  const [menuDinnerId, setMenuDinnerId] = useState("");
+  const [menuSearch, setMenuSearch] = useState({ lunch: "", dinner: "" });
   const [reminderStart, setReminderStart] = useState(() => localStorage.getItem("reminderStart") || "10:00");
   const [reminderEnd,   setReminderEnd]   = useState(() => localStorage.getItem("reminderEnd")   || "11:00");
 
@@ -120,11 +121,37 @@ export default function App() {
   /** Muestra una notificación temporal. type: "success" | "error" */
   const showToast = (msg, type="success") => setToast({ msg, type });
 
-  const saveMenu = () => {
+  const MENU_PRODUCT_NAME = "Almuerzo y Cena del día";
+
+  const saveMenu = async () => {
+    if (!menuLunchId || !menuDinnerId) { showToast("Seleccioná el almuerzo y la cena", "error"); return; }
+    const kitItems = [{ productId: menuLunchId, qty: 1 }, { productId: menuDinnerId, qty: 1 }];
+    const lunchProd  = products.find(p => p.id === menuLunchId);
+    const dinnerProd = products.find(p => p.id === menuDinnerId);
+    const description = `Almuerzo: ${lunchProd.name} | Cena: ${dinnerProd.name}`;
+    const existing = products.find(p => p.name === MENU_PRODUCT_NAME);
+
+    if (existing) {
+      const { error } = await supabase.from("products")
+        .update({ kit_items: kitItems, description })
+        .eq("id", existing.id);
+      if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
+      setProducts(ps => ps.map(p => p.id === existing.id ? { ...p, kitItems, description } : p));
+    } else {
+      const newProd = {
+        id: crypto.randomUUID(), name: MENU_PRODUCT_NAME,
+        category: categories[0] || "", priceRetail: 0, priceWholesale: 0,
+        unit: "unidad", stock: 0, active: true, photo: null, description, kitItems,
+      };
+      const { error } = await supabase.from("products").insert(productToDb(newProd));
+      if (error) { showToast("Error al crear producto: " + error.message, "error"); return; }
+      setProducts(ps => [...ps, newProd]);
+    }
+
     const today = todayStr();
     localStorage.setItem("menuSavedDate", today);
-    if (menuLunch.trim()) localStorage.setItem("menuLunch_" + today, menuLunch.trim());
-    if (menuDinner.trim()) localStorage.setItem("menuDinner_" + today, menuDinner.trim());
+    localStorage.setItem("menuLunchId_" + today, menuLunchId);
+    localStorage.setItem("menuDinnerId_" + today, menuDinnerId);
     setShowMenuReminder(false);
     showToast("Menú del día guardado ✓");
   };
@@ -197,8 +224,9 @@ export default function App() {
           if (alerts.length > 0) setDeliveryAlerts(alerts);
           if (localStorage.getItem("menuSavedDate") !== today) {
             setShowMenuReminder(true);
-            setMenuLunch(localStorage.getItem("menuLunch_" + today) || "");
-            setMenuDinner(localStorage.getItem("menuDinner_" + today) || "");
+            setMenuLunchId(localStorage.getItem("menuLunchId_" + today) || "");
+            setMenuDinnerId(localStorage.getItem("menuDinnerId_" + today) || "");
+            setMenuSearch({ lunch: "", dinner: "" });
           }
         }
       }} />
@@ -361,20 +389,53 @@ export default function App() {
               </div>
             </div>
             <p style={{ fontSize:".84em", color:"var(--t3)", marginBottom:20 }}>
-              Registrá el menú de almuerzo y cena de hoy para que el equipo lo tenga disponible.
+              Seleccioná los productos del menú de hoy. Se actualizará el kit <strong>{MENU_PRODUCT_NAME}</strong>.
             </p>
-            <div className="form-group" style={{ marginBottom:12 }}>
-              <label className="lbl">☀️ Almuerzo del Día</label>
-              <input value={menuLunch} onChange={e => setMenuLunch(e.target.value)}
-                placeholder="Ej: Milanesa con puré..." autoFocus
-                onKeyDown={e => e.key === "Enter" && saveMenu()}/>
-            </div>
-            <div className="form-group" style={{ marginBottom:20 }}>
-              <label className="lbl">🌙 Cena del Día</label>
-              <input value={menuDinner} onChange={e => setMenuDinner(e.target.value)}
-                placeholder="Ej: Pollo al horno con ensalada..."
-                onKeyDown={e => e.key === "Enter" && saveMenu()}/>
-            </div>
+            {[
+              { label:"☀️ Almuerzo del Día", key:"lunch",  id:menuLunchId,  setId:setMenuLunchId },
+              { label:"🌙 Cena del Día",     key:"dinner", id:menuDinnerId, setId:setMenuDinnerId },
+            ].map(({ label, key, id, setId }) => {
+              const selected = products.find(p => p.id === id);
+              const filtered = products.filter(p =>
+                p.active && p.name !== MENU_PRODUCT_NAME &&
+                (!menuSearch[key] || p.name.toLowerCase().includes(menuSearch[key].toLowerCase()))
+              );
+              return (
+                <div key={key} className="form-group" style={{ marginBottom:14, position:"relative" }}>
+                  <label className="lbl">{label}</label>
+                  {selected
+                    ? <div style={{ display:"flex", alignItems:"center", gap:8, background:"var(--greenl)", border:"1px solid var(--greenlb)", borderRadius:7, padding:"7px 10px" }}>
+                        <span style={{ flex:1, fontSize:".88em", fontWeight:600 }}>{selected.name}</span>
+                        <button className="btn btn-ghost btn-icon btn-sm" onClick={() => { setId(""); setMenuSearch(s => ({...s, [key]:""})); }}>
+                          <Ico n="x" s={12} c="var(--red)"/>
+                        </button>
+                      </div>
+                    : <>
+                        <input
+                          value={menuSearch[key]}
+                          onChange={e => setMenuSearch(s => ({...s, [key]: e.target.value}))}
+                          placeholder="Buscar producto..."
+                          autoFocus={key === "lunch"}
+                        />
+                        {menuSearch[key] && filtered.length > 0 && (
+                          <div style={{ position:"absolute", top:"100%", left:0, right:0, background:"var(--bg1)", border:"1px solid var(--border)", borderRadius:7, boxShadow:"0 4px 16px rgba(0,0,0,.12)", zIndex:50, maxHeight:180, overflowY:"auto" }}>
+                            {filtered.map(p => (
+                              <div key={p.id}
+                                style={{ padding:"8px 12px", cursor:"pointer", fontSize:".88em", borderBottom:"1px solid var(--border)" }}
+                                onMouseDown={() => { setId(p.id); setMenuSearch(s => ({...s, [key]:""})); }}>
+                                {p.name}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {menuSearch[key] && filtered.length === 0 && (
+                          <div style={{ fontSize:".78em", color:"var(--t3)", marginTop:4 }}>Sin resultados</div>
+                        )}
+                      </>
+                  }
+                </div>
+              );
+            })}
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowMenuReminder(false)}>Saltar por ahora</button>
               <button className="btn btn-primary" onClick={saveMenu}>

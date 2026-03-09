@@ -175,7 +175,7 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
     a.click();
   };
 
-  const stockAlert = products.filter(p=>p.active&&p.stock<=5).sort((a,b)=>a.stock-b.stock);
+  const stockAlert = products.filter(p=>p.active&&!p.kitItems?.length&&p.stock<=5).sort((a,b)=>a.stock-b.stock);
 
   // ── Alerta de margen ─────────────────────────────────────────────────────────
   const marginAlert = useMemo(() => {
