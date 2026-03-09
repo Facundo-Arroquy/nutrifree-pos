@@ -81,12 +81,14 @@ export const saleToDb = s => ({
 export const dbToRecipe = r => ({
   id: r.id, productId: r.product_id, prepTime: r.prep_time,
   cookTime: r.cook_time, yield: r.yield, notes: r.notes,
+  minMargin: r.min_margin ?? null,
   ingredients: [], steps: r.steps,
 });
 
 export const recipeToDb = r => ({
   id: r.id, product_id: r.productId, prep_time: r.prepTime,
   cook_time: r.cookTime, yield: r.yield, notes: r.notes,
+  min_margin: r.minMargin != null && r.minMargin !== "" ? Number(r.minMargin) : null,
   steps: r.steps,
 });
 

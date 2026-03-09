@@ -9,7 +9,7 @@
  *  5. Alertas de entrega al login (según ventana de horario configurable)
  *  6. Sidebar dinámico filtrado por rol del usuario
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   CSS, Ico, Toast, LoginPage,
   SEED_PRODUCTS, SEED_CUSTOMERS, SEED_SALES, SEED_CATEGORIES,
@@ -116,6 +116,19 @@ export default function App() {
 
   /** Muestra una notificación temporal. type: "success" | "error" */
   const showToast = (msg, type="success") => setToast({ msg, type });
+
+  const marginAlertCount = useMemo(() => {
+    return products.filter(p => {
+      if (!p.active) return false;
+      const recipe = recipes.find(r => r.productId === p.id);
+      if (!recipe || recipe.minMargin == null || recipe.minMargin === "") return false;
+      const recipeCost = (recipe.ingredients || []).reduce((s, i) => s + (i.cost || 0), 0);
+      const costPerUnit = recipeCost / Math.max(recipe.yield || 1, 1);
+      const price = p.priceRetail || 0;
+      if (price <= 0) return false;
+      return ((price - costPerUnit) / price) * 100 < Number(recipe.minMargin);
+    }).length;
+  }, [products, recipes]);
 
   if (!user) return (
     <>
@@ -226,6 +239,11 @@ export default function App() {
                   {items.map(n => (
                     <button key={n.id} className={`ni${page===n.id?" active":""}`} onClick={() => setPage(n.id)}>
                       <Ico n={n.icon} s={15}/>{n.label}
+                      {n.id === "reports" && marginAlertCount > 0 && (
+                        <span style={{ marginLeft:"auto", background:"var(--red)", color:"white", borderRadius:99, minWidth:17, height:17, fontSize:".6em", fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px", flexShrink:0 }}>
+                          {marginAlertCount}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>

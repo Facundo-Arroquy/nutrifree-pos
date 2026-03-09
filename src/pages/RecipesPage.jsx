@@ -76,7 +76,7 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
     win.onload = () => win.print();
   };
 
-  const openNew = () => { setForm({ productId:products[0]?.id||"", prepTime:0, cookTime:0, yield:1, notes:"", ingredients:[], steps:[] }); setModal("new"); };
+  const openNew = () => { setForm({ productId:products[0]?.id||"", prepTime:0, cookTime:0, yield:1, notes:"", minMargin:"", ingredients:[], steps:[] }); setModal("new"); };
   const openEdit = r => { setForm({...r, ingredients:[...r.ingredients], steps:[...r.steps]}); setModal(r); };
 
   const addIngr = () => {
@@ -153,7 +153,17 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, fontSize:".82em" }}>
                 <div><span style={{ color:"var(--t3)" }}>Costo total:</span><div style={{ fontWeight:700 }}>{$(cost)}</div></div>
                 <div><span style={{ color:"var(--t3)" }}>Costo/unidad:</span><div style={{ fontWeight:700 }}>{$(cpu)}</div></div>
-                {prod && <div style={{ gridColumn:"1/-1" }}><span style={{ color:"var(--t3)" }}>Margen estimado:</span><div style={{ fontWeight:700, color:margin>30?"var(--green)":margin>10?"var(--amber)":"var(--red)" }}>{margin.toFixed(1)}%</div></div>}
+                {prod && <div style={{ gridColumn:"1/-1" }}>
+                  <span style={{ color:"var(--t3)" }}>Margen estimado:</span>
+                  <div style={{ display:"flex", alignItems:"center", gap:6, fontWeight:700, color:margin>30?"var(--green)":margin>10?"var(--amber)":"var(--red)" }}>
+                    {margin.toFixed(1)}%
+                    {r.minMargin != null && r.minMargin !== "" && margin < Number(r.minMargin) && (
+                      <span style={{ fontSize:".72em", background:"var(--redl)", color:"var(--red)", border:"1px solid var(--redlb)", borderRadius:4, padding:"1px 5px", fontWeight:700 }}>
+                        ⚠ bajo umbral ({r.minMargin}%)
+                      </span>
+                    )}
+                  </div>
+                </div>}
               </div>
               <div style={{ display:"flex", gap:6, marginTop:12 }}>
                 <button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();openEdit(r);}}><Ico n="edit" s={12}/>Editar</button>
@@ -177,6 +187,12 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
               </div>
             ))}
           </div>
+          {viewModal.minMargin != null && viewModal.minMargin !== "" && (
+            <div style={{ marginBottom:16, display:"inline-flex", alignItems:"center", gap:6, background:"var(--amberl)", border:"1px solid var(--amberlb)", borderRadius:6, padding:"5px 10px", fontSize:".82em" }}>
+              <span style={{ color:"var(--t3)" }}>Alerta si margen cae por debajo de</span>
+              <strong>{viewModal.minMargin}%</strong>
+            </div>
+          )}
           <div className="section-title">Ingredientes</div>
           <div className="table-wrap" style={{ marginBottom:16 }}>
             <table>
@@ -216,6 +232,7 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
             <div className="form-group"><label className="lbl">Tiempo preparación (min)</label><input type="number" value={form.prepTime} onChange={e=>setF("prepTime",e.target.value)}/></div>
             <div className="form-group"><label className="lbl">Tiempo cocción (min)</label><input type="number" value={form.cookTime} onChange={e=>setF("cookTime",e.target.value)}/></div>
             <div className="form-group"><label className="lbl">Rendimiento (unidades)</label><input type="number" value={form.yield} onChange={e=>setF("yield",e.target.value)}/></div>
+            <div className="form-group"><label className="lbl">Margen mínimo de alerta (%)</label><input type="number" min="0" max="100" step="1" placeholder="Sin alerta" value={form.minMargin ?? ""} onChange={e=>setF("minMargin",e.target.value)}/></div>
             <div className="form-group full"><label className="lbl">Notas</label><textarea value={form.notes} onChange={e=>setF("notes",e.target.value)}/></div>
           </div>
 

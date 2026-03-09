@@ -177,6 +177,26 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
 
   const stockAlert = products.filter(p=>p.active&&p.stock<=5).sort((a,b)=>a.stock-b.stock);
 
+  // ── Alerta de margen ─────────────────────────────────────────────────────────
+  const marginAlert = useMemo(() => {
+    return products
+      .filter(p => p.active)
+      .map(p => {
+        const recipe = (recipes||[]).find(r => r.productId === p.id);
+        if (!recipe || recipe.minMargin == null || recipe.minMargin === "") return null;
+        const minMargin = Number(recipe.minMargin);
+        const recipeCost = (recipe.ingredients||[]).reduce((s, i) => s + (i.cost || 0), 0);
+        const costPerUnit = recipeCost / Math.max(recipe.yield || 1, 1);
+        const price = p.priceRetail || 0;
+        if (price <= 0) return null;
+        const margin = ((price - costPerUnit) / price) * 100;
+        if (margin >= minMargin) return null;
+        return { id:p.id, name:p.name, margin, minMargin, costPerUnit, price };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.margin - b.margin);
+  }, [products, recipes]);
+
   // ── Expenses in period (must be before useMemos that reference it) ────────────
   const pExpenses = (expenses||[]).filter(e => e.date >= from && e.date <= to);
 
@@ -567,6 +587,26 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
               </div>
             ))}
           </div>
+        }
+      </div>
+
+      <div className="card">
+        <div className="section-title">📉 Margen bajo (por receta)</div>
+        {marginAlert.length===0
+          ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>✅ Todos los productos superan su margen mínimo configurado</div>
+          : <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:10 }}>
+              {marginAlert.map(p => (
+                <div key={p.id} style={{ background:"var(--redl)", border:"1px solid var(--redlb)", borderRadius:8, padding:"10px 12px" }}>
+                  <div style={{ fontWeight:600, fontSize:".88em" }}>{p.name}</div>
+                  <div style={{ fontSize:".8em", color:"var(--red)", fontWeight:700, marginTop:4 }}>
+                    Margen: {p.margin.toFixed(1)}% <span style={{ fontWeight:400, color:"var(--t3)" }}>(mín. {p.minMargin}%)</span>
+                  </div>
+                  <div style={{ fontSize:".76em", color:"var(--t3)", marginTop:2 }}>
+                    Costo/u: {$(p.costPerUnit)} · Precio: {$(p.price)}
+                  </div>
+                </div>
+              ))}
+            </div>
         }
       </div>
     </div>
