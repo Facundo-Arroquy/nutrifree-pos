@@ -65,7 +65,7 @@ export default function ProductionPage({ products, setProducts, recipes, setIngr
     });
     for (const { id: ingId, newStock } of ingUpdates) {
       const { error } = await supabase.from("ingredients").update({ stock: newStock }).eq("id", ingId);
-      if (error) console.error("Error al descontar ingrediente:", error.message);
+      if (error) showToast("Error al descontar ingrediente: " + error.message, "error");
     }
 
     setQty(p=>({...p,[id]:""}));

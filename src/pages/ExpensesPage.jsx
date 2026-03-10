@@ -123,7 +123,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       const { error } = await supabase.from("recipe_ingredients")
         .update({ cost: Number(unitPrice) })
         .eq("ingredient_id", ingId);
-      if (error) console.error("Error al sincronizar costo:", error.message);
+      if (error) showToast("Error al sincronizar costo: " + error.message, "error");
     }
     return updatedRecipes;
   };

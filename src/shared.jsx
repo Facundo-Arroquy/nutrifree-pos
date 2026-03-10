@@ -10,6 +10,7 @@
  *  - Lista de usuarios del sistema: USERS
  */
 import { useState, useEffect, useRef, useMemo } from "react";
+import { supabase } from "./supabase.js";
 
 // ─── SEED DATA ────────────────────────────────────────────────────────────────
 // Datos de fallback usados solo si la DB está vacía (no se insertan automáticamente)
@@ -344,21 +345,26 @@ function Modal({ title, onClose, children, lg=false }) {
 }
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
-const USERS = [
-  { id:"admin",  name:"Administrador", role:"admin",  pass:"toto000",   isDemo:false },
-  { id:"vendor", name:"Vendedor",      role:"vendor", pass:"000comida", isDemo:false },
-  { id:"demo",   name:"Usuario Demo",  role:"admin",  pass:"demo1234",  isDemo:true  },
-];
-
 function LoginPage({ onLogin }) {
-  const [user, setUser] = useState("admin");
+  const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
+  const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  const login = () => {
-    const u = USERS.find(x => x.id === user && x.pass === pass);
-    if (u) onLogin(u);
-    else { setErr("Contraseña incorrecta"); setTimeout(() => setErr(""), 2000); }
+  const login = async () => {
+    if (!email || !pass) { setErr("Completá email y contraseña"); return; }
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
+    setLoading(false);
+    if (error) {
+      setErr("Credenciales incorrectas");
+      setTimeout(() => setErr(""), 3000);
+    }
+    // Al iniciar sesión exitosamente, onAuthStateChange en App.jsx maneja el resto
+  };
+
+  const demoLogin = () => {
+    onLogin({ name: "Usuario Demo", role: "admin", isDemo: true });
   };
 
   return (
@@ -370,22 +376,23 @@ function LoginPage({ onLogin }) {
           <div style={{ fontSize:".76em", color:"var(--t4)", marginTop:4, letterSpacing:".01em" }}>Sistema de gestión</div>
         </div>
         <div className="form-group" style={{ marginBottom:12 }}>
-          <label className="lbl">Usuario</label>
-          <select value={user} onChange={e => setUser(e.target.value)}>
-            <option value="admin">Administrador</option>
-            <option value="vendor">Vendedor</option>
-            <option value="demo">🧪 Demo</option>
-          </select>
+          <label className="lbl">Email</label>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="usuario@empresa.com" autoFocus />
         </div>
         <div className="form-group" style={{ marginBottom:22 }}>
           <label className="lbl">Contraseña</label>
-          <input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••" onKeyDown={e => e.key==="Enter" && login()} autoFocus />
+          <input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••" onKeyDown={e => e.key==="Enter" && login()} />
           {err && <span style={{ fontSize:".76em", color:"var(--red)", marginTop:2 }}>{err}</span>}
         </div>
-        <button className="btn btn-primary btn-lg btn-block" onClick={login}>Ingresar</button>
+        <button className="btn btn-primary btn-lg btn-block" onClick={login} disabled={loading}>
+          {loading ? "Ingresando..." : "Ingresar"}
+        </button>
+        <button className="btn btn-ghost btn-block" style={{ marginTop:10, fontSize:".82em" }} onClick={demoLogin}>
+          🧪 Modo demo (sin cuenta)
+        </button>
       </div>
     </div>
   );
 }
 
-export { CSS, Ico, Toast, Modal, LoginPage, USERS, uid, $, fmtDate, fmtTime, fmtDT, todayStr, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, PAY_ORDER_LABELS, SEED_PRODUCTS, SEED_CUSTOMERS, SEED_RECIPES, SEED_SALES, SEED_CATEGORIES };
+export { CSS, Ico, Toast, Modal, LoginPage, uid, $, fmtDate, fmtTime, fmtDT, todayStr, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, PAY_ORDER_LABELS, SEED_PRODUCTS, SEED_CUSTOMERS, SEED_RECIPES, SEED_SALES, SEED_CATEGORIES };

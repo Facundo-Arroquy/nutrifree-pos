@@ -47,6 +47,26 @@ import SettingsPage from "./pages/SettingsPage.jsx";
 import CashShiftPage from "./pages/CashShiftPage.jsx";
 import ImportPage from "./pages/ImportPage.jsx";
 
+// ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
+const sessionToUser = (session) => ({
+  name: session.user.user_metadata?.name || session.user.email?.split("@")[0] || "Usuario",
+  role: session.user.user_metadata?.role || "vendor",
+  email: session.user.email,
+  isDemo: false,
+});
+
+function AccessDenied() {
+  return (
+    <div className="page">
+      <div className="empty">
+        <div className="empty-icon" style={{ opacity:1 }}>🔒</div>
+        <h3>Acceso denegado</h3>
+        <p>No tenés permiso para ver esta sección.</p>
+      </div>
+    </div>
+  );
+}
+
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser] = useState(null);
@@ -72,6 +92,20 @@ export default function App() {
   const [menuSearch, setMenuSearch] = useState({ lunch: "", dinner: "" });
   const [reminderStart, setReminderStart] = useState(() => localStorage.getItem("reminderStart") || "10:00");
   const [reminderEnd,   setReminderEnd]   = useState(() => localStorage.getItem("reminderEnd")   || "11:00");
+  const alertsChecked = useRef(false);
+  const deliveryChecked = useRef(false);
+
+  // ─── Supabase Auth: restaurar sesión y escuchar cambios ───────────────────
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setUser(sessionToUser(session));
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) setUser(sessionToUser(session));
+      else setUser(prev => (prev?.isDemo ? prev : null));
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -121,6 +155,62 @@ export default function App() {
 
   /** Muestra una notificación temporal. type: "success" | "error" */
   const showToast = (msg, type="success") => setToast({ msg, type });
+
+  // ─── Auditoría ─────────────────────────────────────────────────────────────
+  const logAction = async (action, entity, detail = "") => {
+    if (user?.isDemo) return;
+    try {
+      await supabase.from("audit_log").insert({
+        id: crypto.randomUUID(),
+        user_email: user?.email || "desconocido",
+        action,
+        entity,
+        detail,
+        created_at: new Date().toISOString(),
+      });
+    } catch (_) { /* fallo silencioso */ }
+  };
+
+  // ─── Route guards ──────────────────────────────────────────────────────────
+  const PAGE_ROLES = { reports: ["admin"], import: ["admin"] };
+  const canAccess = (pageId) => {
+    if (user?.isDemo) return true;
+    const allowed = PAGE_ROLES[pageId] || ["admin", "vendor"];
+    return allowed.includes(user?.role);
+  };
+
+  // ─── Alertas de entrega para usuarios reales (luego de cargar ventas) ──────
+  useEffect(() => {
+    if (!user || user.isDemo || alertsChecked.current) return;
+    alertsChecked.current = true;
+    const now = new Date();
+    const cur = now.getHours() * 60 + now.getMinutes();
+    const [sh, sm] = reminderStart.split(":").map(Number);
+    const [eh, em] = reminderEnd.split(":").map(Number);
+    if (cur < sh * 60 + sm || cur >= eh * 60 + em) return;
+    const today = todayStr();
+    if (localStorage.getItem("menuSavedDate") !== today) {
+      setShowMenuReminder(true);
+      setMenuLunchId(localStorage.getItem("menuLunchId_" + today) || "");
+      setMenuDinnerId(localStorage.getItem("menuDinnerId_" + today) || "");
+      setMenuSearch({ lunch: "", dinner: "" });
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || user.isDemo || deliveryChecked.current || sales.length === 0) return;
+    deliveryChecked.current = true;
+    const now = new Date();
+    const cur = now.getHours() * 60 + now.getMinutes();
+    const [sh, sm] = reminderStart.split(":").map(Number);
+    const [eh, em] = reminderEnd.split(":").map(Number);
+    if (cur < sh * 60 + sm || cur >= eh * 60 + em) return;
+    const today = todayStr();
+    const alerts = sales.filter(s =>
+      ["open","pending","confirmed","ready"].includes(s.status) && s.deliveryDate === today
+    );
+    if (alerts.length > 0) setDeliveryAlerts(alerts);
+  }, [user, sales]);
 
   const MENU_PRODUCT_NAME = "Almuerzo y Cena del día";
 
@@ -174,10 +264,11 @@ export default function App() {
     <>
       <style>{CSS}</style>
       <LoginPage onLogin={u => {
+        // onLogin solo se llama para modo demo. Los usuarios reales son manejados
+        // por onAuthStateChange (supabase.auth.signInWithPassword en LoginPage).
         if (u.isDemo) {
           initDemoDb(false);
           localStorage.setItem("nutrifree_mode", "demo");
-          // Load demo state into React from localStorage
           const get = (k) => { try { return JSON.parse(localStorage.getItem("nutrifree_demo_" + k) || "[]"); } catch { return []; } };
           const dProds  = get("products");   const dCusts = get("customers");
           const dSls    = get("sales");       const dCats  = get("categories");
@@ -207,29 +298,23 @@ export default function App() {
           setSuppliers(dSupps.map(dbToSupplier));
           setSupplierPayments(dSuppPays.map(dbToSupplierPayment));
           setCashShifts(dShifts.map(dbToCashShift));
-        } else {
-          localStorage.removeItem("nutrifree_mode");
+          // Alertas de entrega para modo demo
+          const now = new Date();
+          const cur = now.getHours() * 60 + now.getMinutes();
+          const [sh, sm] = reminderStart.split(":").map(Number);
+          const [eh, em] = reminderEnd.split(":").map(Number);
+          if (cur >= sh * 60 + sm && cur < eh * 60 + em) {
+            const today = todayStr();
+            if (localStorage.getItem("menuSavedDate") !== today) {
+              setShowMenuReminder(true);
+              setMenuLunchId(localStorage.getItem("menuLunchId_" + today) || "");
+              setMenuDinnerId(localStorage.getItem("menuDinnerId_" + today) || "");
+              setMenuSearch({ lunch: "", dinner: "" });
+            }
+          }
         }
         setUser(u);
         setPage("dashboard");
-        const now = new Date();
-        const cur = now.getHours() * 60 + now.getMinutes();
-        const [sh, sm] = reminderStart.split(":").map(Number);
-        const [eh, em] = reminderEnd.split(":").map(Number);
-        if (cur >= sh * 60 + sm && cur < eh * 60 + em) {
-          const today = todayStr();
-          const alerts = sales.filter(s =>
-            ["open","pending","confirmed","ready"].includes(s.status) &&
-            s.deliveryDate === today
-          );
-          if (alerts.length > 0) setDeliveryAlerts(alerts);
-          if (localStorage.getItem("menuSavedDate") !== today) {
-            setShowMenuReminder(true);
-            setMenuLunchId(localStorage.getItem("menuLunchId_" + today) || "");
-            setMenuDinnerId(localStorage.getItem("menuDinnerId_" + today) || "");
-            setMenuSearch({ lunch: "", dinner: "" });
-          }
-        }
       }} />
     </>
   );
@@ -249,7 +334,7 @@ export default function App() {
     { id:"import",      label:"Importar datos",  icon:"upload",      roles:["admin"],          section:"bottom" },
     { id:"reports",     label:"Reportes",        icon:"reports",     roles:["admin"],          section:"bottom" },
     { id:"settings",    label:"Configuración",   icon:"settings",    roles:["admin","vendor"], section:"bottom" },
-  ].filter(n => n.roles.includes(user.role));
+  ].filter(n => user.isDemo || n.roles.includes(user.role));
   const sidebarSections = [
     { label: null,        key: "top" },
     { label: "Ventas",    key: "ventas" },
@@ -264,7 +349,7 @@ export default function App() {
     window.location.reload();
   };
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction };
 
   return (
     <>
@@ -284,7 +369,10 @@ export default function App() {
                 <div key={sec.key}>
                   {sec.label && <div className="sb-section">{sec.label}</div>}
                   {items.map(n => (
-                    <button key={n.id} className={`ni${page===n.id?" active":""}`} onClick={() => setPage(n.id)}>
+                    <button key={n.id} className={`ni${page===n.id?" active":""}`} onClick={() => {
+                      if (n.id === "reports") logAction("view", "reports", "Acceso a reportes");
+                      setPage(n.id);
+                    }}>
                       <Ico n={n.icon} s={15}/>{n.label}
                       {n.id === "reports" && marginAlertCount > 0 && (
                         <span style={{ marginLeft:"auto", background:"var(--red)", color:"white", borderRadius:99, minWidth:17, height:17, fontSize:".6em", fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px", flexShrink:0 }}>
@@ -327,7 +415,11 @@ export default function App() {
                 <div className="user-av" style={{ width:22, height:22, fontSize:".65em", flexShrink:0 }}>{user.name[0]}</div>
                 <span className="topbar-user-name">{user.name}</span>
               </div>
-              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => { localStorage.removeItem("nutrifree_mode"); setUser(null); }} title="Salir"><Ico n="logout" s={13}/></button>
+              <button className="btn btn-ghost btn-icon btn-sm" onClick={async () => {
+                localStorage.removeItem("nutrifree_mode");
+                if (!user.isDemo) await supabase.auth.signOut();
+                setUser(null);
+              }} title="Salir"><Ico n="logout" s={13}/></button>
             </div>
           </div>
           <div style={{ flex:1, overflow:"hidden" }}>
@@ -342,8 +434,8 @@ export default function App() {
             {page==="ingredients" && <IngredientsPage {...props}/>}
             {page==="expenses" && <ExpensesPage {...props}/>}
             {page==="suppliers" && <SuppliersPage {...props}/>}
-            {page==="import" && <ImportPage {...props}/>}
-            {page==="reports" && <ReportsPage {...props}/>}
+            {page==="import" && (canAccess("import") ? <ImportPage {...props}/> : <AccessDenied/>)}
+            {page==="reports" && (canAccess("reports") ? <ReportsPage {...props}/> : <AccessDenied/>)}
             {page==="settings" && <SettingsPage {...props}/>}
           </div>
         </div>

@@ -141,7 +141,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
     }
     for (const { id, newStock } of stockUpdates) {
       const { error } = await supabase.from("products").update({ stock: newStock }).eq("id", id);
-      if (error) console.error("Error al descontar stock:", error.message);
+      if (error) showToast("Error al descontar stock: " + error.message, "error");
     }
     setProducts(prev => prev.map(p => {
       const upd = stockUpdates.find(u => u.id === p.id);
