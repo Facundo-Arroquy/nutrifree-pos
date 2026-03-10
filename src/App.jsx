@@ -45,6 +45,7 @@ import SuppliersPage from "./pages/SuppliersPage.jsx";
 import ReportsPage from "./pages/ReportsPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
 import CashShiftPage from "./pages/CashShiftPage.jsx";
+import ImportPage from "./pages/ImportPage.jsx";
 
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
 export default function App() {
@@ -245,6 +246,7 @@ export default function App() {
     { id:"cash",        label:"Cierre de Caja",  icon:"cash",        roles:["admin","vendor"], section:"finanzas" },
     { id:"expenses",    label:"Gastos",          icon:"expenses",    roles:["admin","vendor"], section:"finanzas" },
     { id:"suppliers",   label:"Proveedores",     icon:"suppliers",   roles:["admin","vendor"], section:"finanzas" },
+    { id:"import",      label:"Importar datos",  icon:"upload",      roles:["admin"],          section:"bottom" },
     { id:"reports",     label:"Reportes",        icon:"reports",     roles:["admin"],          section:"bottom" },
     { id:"settings",    label:"Configuración",   icon:"settings",    roles:["admin","vendor"], section:"bottom" },
   ].filter(n => n.roles.includes(user.role));
@@ -340,6 +342,7 @@ export default function App() {
             {page==="ingredients" && <IngredientsPage {...props}/>}
             {page==="expenses" && <ExpensesPage {...props}/>}
             {page==="suppliers" && <SuppliersPage {...props}/>}
+            {page==="import" && <ImportPage {...props}/>}
             {page==="reports" && <ReportsPage {...props}/>}
             {page==="settings" && <SettingsPage {...props}/>}
           </div>
