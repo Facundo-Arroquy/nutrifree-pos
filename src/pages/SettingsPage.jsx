@@ -11,15 +11,30 @@
  * Props: user, categories, setCategories, expenseCategories, setExpenseCategories,
  *        showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo
  */
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Ico } from "../shared.jsx";
 import { supabase } from "../supabase.js";
 
 export default function SettingsPage({ user, categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo }) {
   const [newCat, setNewCat] = useState("");
   const [newExpCat, setNewExpCat] = useState("");
+  const [newPass, setNewPass] = useState("");
+  const [newPassConfirm, setNewPassConfirm] = useState("");
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [changingPass, setChangingPass] = useState(false);
   const [rStart, setRStart] = useState(reminderStart);
   const [rEnd,   setREnd]   = useState(reminderEnd);
+
+  const changePassword = async () => {
+    if (newPass.length < 6) { showToast("La contraseña debe tener al menos 6 caracteres", "error"); return; }
+    if (newPass !== newPassConfirm) { showToast("Las contraseñas no coinciden", "error"); return; }
+    setChangingPass(true);
+    const { error } = await supabase.auth.updateUser({ password: newPass });
+    setChangingPass(false);
+    if (error) { showToast("Error al cambiar contraseña: " + error.message, "error"); return; }
+    setNewPass(""); setNewPassConfirm("");
+    showToast("Contraseña actualizada ✓");
+  };
 
   const saveReminderRange = () => {
     if (!rStart || !rEnd || rStart >= rEnd) {
@@ -163,19 +178,30 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
         </div>
       )}
 
-      <div className="card" style={{ maxWidth:420 }}>
-        <div className="section-title">Usuarios del sistema</div>
-        {[{name:"Administrador",role:"admin",pass:"noImporta"},{name:"Vendedor",role:"vendor",pass:"000comida"}].map(u=>(
-          <div key={u.role} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
-            <div>
-              <div style={{ fontWeight:600, fontSize:".88em" }}>{u.name}</div>
-              <div style={{ fontSize:".74em", color:"var(--t3)" }}>Contraseña: {u.pass}</div>
+      {!user?.isDemo && (
+        <div className="card" style={{ maxWidth:420 }}>
+          <div className="section-title">Cambiar contraseña</div>
+          <p style={{ fontSize:".82em", color:"var(--t3)", marginBottom:14 }}>
+            Cuenta actual: <strong>{user?.email}</strong>
+          </p>
+          <div className="form-group" style={{ marginBottom:10 }}>
+            <label className="lbl">Nueva contraseña</label>
+            <div style={{ position:"relative" }}>
+              <input type={showNewPass ? "text" : "password"} value={newPass} onChange={e => setNewPass(e.target.value)} placeholder="Mínimo 6 caracteres" style={{ paddingRight:38 }} />
+              <button type="button" onClick={() => setShowNewPass(v => !v)} style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", alignItems:"center" }} tabIndex={-1}>
+                <Ico n="eye" s={15} c={showNewPass ? "var(--green)" : "var(--t4)"}/>
+              </button>
             </div>
-            <span className="tag" style={{ textTransform:"capitalize" }}>{u.role}</span>
           </div>
-        ))}
-        <p style={{ fontSize:".78em", color:"var(--t3)", marginTop:10 }}>Para cambiar contraseñas, editá el archivo src/shared.jsx</p>
-      </div>
+          <div className="form-group" style={{ marginBottom:14 }}>
+            <label className="lbl">Confirmar contraseña</label>
+            <input type={showNewPass ? "text" : "password"} value={newPassConfirm} onChange={e => setNewPassConfirm(e.target.value)} placeholder="Repetí la nueva contraseña" onKeyDown={e => e.key === "Enter" && changePassword()} />
+          </div>
+          <button className="btn btn-primary btn-sm" onClick={changePassword} disabled={changingPass || !newPass || !newPassConfirm}>
+            {changingPass ? "Guardando..." : "Actualizar contraseña"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

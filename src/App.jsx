@@ -48,12 +48,13 @@ import CashShiftPage from "./pages/CashShiftPage.jsx";
 import ImportPage from "./pages/ImportPage.jsx";
 
 // ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
-const sessionToUser = (session) => ({
-  name: session.user.user_metadata?.name || session.user.email?.split("@")[0] || "Usuario",
-  role: session.user.user_metadata?.role || "vendor",
-  email: session.user.email,
-  isDemo: false,
-});
+const sessionToUser = (session) => {
+  const email = session.user.email || "";
+  // El prefijo del email determina el rol: admin@... → admin, cualquier otro → vendor
+  const role = email.toLowerCase().startsWith("admin") ? "admin" : "vendor";
+  const name = session.user.user_metadata?.name || email.split("@")[0] || "Usuario";
+  return { name, role, email, isDemo: false };
+};
 
 function AccessDenied() {
   return (

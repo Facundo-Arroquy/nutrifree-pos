@@ -348,6 +348,7 @@ function Modal({ title, onClose, children, lg=false }) {
 function LoginPage({ onLogin }) {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
+  const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
@@ -381,7 +382,12 @@ function LoginPage({ onLogin }) {
         </div>
         <div className="form-group" style={{ marginBottom:22 }}>
           <label className="lbl">Contraseña</label>
-          <input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••" onKeyDown={e => e.key==="Enter" && login()} />
+          <div style={{ position:"relative" }}>
+            <input type={showPass ? "text" : "password"} value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••" onKeyDown={e => e.key==="Enter" && login()} style={{ paddingRight:38 }} />
+            <button type="button" onClick={() => setShowPass(v => !v)} style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:"var(--t3)", padding:0, display:"flex", alignItems:"center" }} tabIndex={-1}>
+              <Ico n="eye" s={16} c={showPass ? "var(--green)" : "var(--t4)"}/>
+            </button>
+          </div>
           {err && <span style={{ fontSize:".76em", color:"var(--red)", marginTop:2 }}>{err}</span>}
         </div>
         <button className="btn btn-primary btn-lg btn-block" onClick={login} disabled={loading}>
