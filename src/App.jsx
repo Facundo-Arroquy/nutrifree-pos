@@ -9,7 +9,7 @@
  *  5. Alertas de entrega al login (según ventana de horario configurable)
  *  6. Sidebar dinámico filtrado por rol del usuario
  */
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   CSS, Ico, Toast, LoginPage,
   SEED_PRODUCTS, SEED_CUSTOMERS, SEED_SALES, SEED_CATEGORIES,
