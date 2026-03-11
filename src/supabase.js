@@ -12,7 +12,7 @@ import { demoClient } from "./demoSupabase.js";
 
 // ─── Credenciales desde variables de entorno (.env) ─────────────────────────
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE;
 // ────────────────────────────────────────────────────────────────────────────
 
 const _prod = createClient(SUPABASE_URL, SUPABASE_KEY);
