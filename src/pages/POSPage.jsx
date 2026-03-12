@@ -66,7 +66,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
         return prev.map(i => i.productId===prod.id ? {...i, qty:i.qty+1, subtotal:(i.qty+1)*i.price} : i);
       }
       const price = priceList==="retail" ? prod.priceRetail : prod.priceWholesale;
-      return [...prev, { productId:prod.id, name:prod.name, qty:1, price, originalPrice:price, priceOverridden:false, subtotal:price, isKit, kitItems: prod.kitItems || [] }];
+      return [...prev, { productId:prod.id, name:prod.name, qty:1, price, originalPrice:price, priceOverridden:false, subtotal:price, isKit, kitItems: prod.kitItems || [], includeInTicket: true }];
     });
   };
 
@@ -80,6 +80,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   };
 
   const removeItem = id => setCart(prev => prev.filter(i => i.productId !== id));
+  const toggleTicket = id => setCart(prev => prev.map(i => i.productId===id ? {...i, includeInTicket:!i.includeInTicket} : i));
 
   const overridePrice = (productId, newPrice) => {
     const p = Number(newPrice);
@@ -88,7 +89,8 @@ export default function POSPage({ products, setProducts, customers, setCustomers
     setEditingPrice(null);
   };
 
-  const subtotal = cart.reduce((a,b) => a+b.subtotal, 0);
+  const subtotal = cart.reduce((a,b) => a + (b.includeInTicket ? b.subtotal : 0), 0);
+  const deliveryExcluded = cart.filter(i => isDelivery(i.name) && !i.includeInTicket).reduce((a,b) => a+b.subtotal, 0);
   const discountAmt = discountType==="pct"
     ? Math.round(subtotal * (Number(discountValue)||0) / 100)
     : Math.min(Number(discountValue)||0, subtotal);
@@ -251,10 +253,10 @@ export default function POSPage({ products, setProducts, customers, setCustomers
               <div style={{ fontSize:".85em" }}>Seleccioná productos</div>
             </div>
           ) : cart.map(item => (
-            <div key={item.productId} className="cart-item">
+            <div key={item.productId} className="cart-item" style={!item.includeInTicket ? { opacity:.65 } : {}}>
               <div style={{ flex:1, minWidth:0 }}>
-                <div className="cart-item-name">{item.name}</div>
-                <div className="cart-item-sub" style={{ display:"flex", alignItems:"center", gap:3 }}>
+                <div className="cart-item-name" style={!item.includeInTicket ? { textDecoration:"line-through", color:"var(--t3)" } : {}}>{item.name}</div>
+                <div className="cart-item-sub" style={{ display:"flex", alignItems:"center", gap:3, flexWrap:"wrap" }}>
                   {editingPrice===item.productId ? (
                     <input type="number" defaultValue={item.price} autoFocus
                       style={{ width:74, padding:"1px 5px", fontSize:".82em", borderRadius:5, border:"1px solid var(--border)" }}
@@ -269,6 +271,17 @@ export default function POSPage({ products, setProducts, customers, setCustomers
                       </button>
                     </>
                   )}
+                  {isDelivery(item.name) && (
+                    <button
+                      onClick={() => toggleTicket(item.productId)}
+                      style={{ fontSize:".68em", padding:"2px 7px", borderRadius:5, border:"1px solid", cursor:"pointer", fontWeight:600, lineHeight:1.4,
+                        background: item.includeInTicket ? "var(--greenl)" : "var(--s2)",
+                        borderColor: item.includeInTicket ? "var(--greenlb)" : "var(--border)",
+                        color: item.includeInTicket ? "var(--green)" : "var(--t3)" }}
+                      title="Incluir o no en el ticket">
+                      {item.includeInTicket ? "En ticket" : "Sin ticket"}
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="qty-ctrl">
@@ -277,7 +290,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
                 <button className="qty-btn" onClick={()=>updateQty(item.productId,1)}>+</button>
               </div>
               <div style={{ minWidth:70, textAlign:"right" }}>
-                <div style={{ fontWeight:700, fontSize:".9em" }}>{$(item.subtotal)}</div>
+                <div style={{ fontWeight:700, fontSize:".9em", color: item.includeInTicket ? undefined : "var(--t4)", textDecoration: item.includeInTicket ? undefined : "line-through" }}>{$(item.subtotal)}</div>
                 <button className="btn btn-ghost btn-icon" style={{ padding:3, marginTop:2 }} onClick={()=>removeItem(item.productId)}>
                   <Ico n="x" s={12} c="var(--red)"/>
                 </button>
@@ -393,10 +406,16 @@ export default function POSPage({ products, setProducts, customers, setCustomers
               <span style={{ color:"var(--red)", fontWeight:600 }}>-{$(discountAmt)}</span>
             </div>
           )}
-          <div className="tot-row" style={{ fontSize:"1.1em", marginBottom:16 }}>
+          <div className="tot-row" style={{ fontSize:"1.1em", marginBottom: deliveryExcluded > 0 ? 8 : 16 }}>
             <span style={{ fontWeight:700 }}>Total a cobrar:</span>
             <span style={{ fontWeight:800, color:"var(--green)", fontSize:"1.3em" }}>{$(total)}</span>
           </div>
+          {deliveryExcluded > 0 && (
+            <div style={{ background:"var(--s2)", border:"1px solid var(--border)", borderRadius:8, padding:"7px 12px", marginBottom:16, fontSize:".82em", color:"var(--t3)", display:"flex", justifyContent:"space-between" }}>
+              <span>Envío cobrado aparte (no incluido)</span>
+              <span style={{ fontWeight:600, color:"var(--t2)" }}>{$(deliveryExcluded)}</span>
+            </div>
+          )}
           {selectedCustomer && (
             <div style={{ background:"var(--greenl)", border:"1px solid var(--greenlb)", borderRadius:8, padding:"8px 12px", marginBottom:14, fontSize:".84em" }}>
               {(() => { const b = custBal(selectedCustomer.id); return <>Cliente: <strong>{selectedCustomer.name}</strong> · Saldo actual: <span className={b>=0?"balance-pos":"balance-neg"}>{$(b)}</span></>; })()}

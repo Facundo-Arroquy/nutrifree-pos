@@ -25,7 +25,7 @@ const dAgoH = (n, h = 10) => {
 
 export const DEMO_SEED = {
   categories: [
-    { name:"Viandas" }, { name:"Panadería" }, { name:"Postres" }, { name:"Bebidas" },
+    { name:"Viandas" }, { name:"Panadería" }, { name:"Postres" }, { name:"Bebidas" }, { name:"Servicios" },
   ],
   expense_categories: [
     { name:"Ingredientes" }, { name:"Servicios" }, { name:"Envases" }, { name:"Otros" },
@@ -37,6 +37,8 @@ export const DEMO_SEED = {
     { id:"dp4", name:"Pan de molde sin TACC",  category:"Panadería", price_retail:1100, price_wholesale:900,  unit:"unit", stock:8,  active:true, photo:null, description:"Pan de molde 400g",                  kit_items:[] },
     { id:"dp5", name:"Flan casero",            category:"Postres",   price_retail:900,  price_wholesale:750,  unit:"unit", stock:6,  active:true, photo:null, description:"Flan de vainilla con caramelo",      kit_items:[] },
     { id:"dp6", name:"Budín de limón",         category:"Postres",   price_retail:1300, price_wholesale:1050, unit:"unit", stock:5,  active:true, photo:null, description:"Budín esponjoso con glaseado",       kit_items:[] },
+    { id:"dp7", name:"Envio",                  category:"Servicios", price_retail:800,  price_wholesale:600,  unit:"unit", stock:999, active:true, photo:null, description:"Costo de envío a domicilio",         kit_items:[] },
+    { id:"dp8", name:"Envio Extra",            category:"Servicios", price_retail:1200, price_wholesale:900,  unit:"unit", stock:999, active:true, photo:null, description:"Envío a zona extendida",             kit_items:[] },
   ],
   customers: [
     { id:"dc1", name:"Ana Rodríguez",       phone:"11-2345-6789", address:"Av. Santa Fe 1234", notes:"Sin TACC estricto", price_list:"retail",    balance:4200, discount_pct:0 },
