@@ -7,13 +7,13 @@
  *  3. Si el producto tiene receta, descuenta stock de cada ingrediente
  *     proporcionalmente (qty_ingrediente × N / recipe.yield)
  *
- * Props: products, setProducts, recipes, setIngredients, setStockMovements, showToast
+ * Props: products, setProducts, recipes, setIngredients, setStockMovements, showToast, logAction
  */
 import { useState } from "react";
 import { Ico } from "../shared.jsx";
 import { supabase, stockMovementToDb } from "../supabase.js";
 
-export default function ProductionPage({ products, setProducts, recipes, setIngredients, setStockMovements, showToast }) {
+export default function ProductionPage({ products, setProducts, recipes, setIngredients, setStockMovements, showToast, logAction }) {
   const [qty, setQty] = useState({});
 
   const setQ = (id,v) => setQty(p=>({...p,[id]:v}));
@@ -35,6 +35,7 @@ export default function ProductionPage({ products, setProducts, recipes, setIngr
 
     const recipe = recipes.find(r => r.productId === id);
     if (!recipe) {
+      logAction?.("producción", "stock", `+${q} u. de "${product.name}" — sin receta`);
       setQty(p=>({...p,[id]:""}));
       showToast(`+${q} unidades · sin receta asociada`, "error");
       return;
@@ -68,6 +69,7 @@ export default function ProductionPage({ products, setProducts, recipes, setIngr
       if (error) showToast("Error al descontar ingrediente: " + error.message, "error");
     }
 
+    logAction?.("producción", "stock", `+${q} u. de "${product.name}" — ingredientes descontados`);
     setQty(p=>({...p,[id]:""}));
     showToast(`+${q} unidades registradas · ingredientes descontados`);
   };

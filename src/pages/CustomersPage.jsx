@@ -5,13 +5,13 @@
  * account_payments (charges - payments). Permite registrar pagos manuales
  * contra la deuda de un cliente y ver el historial de movimientos.
  *
- * Props: customers, setCustomers, sales, accountPayments, setAccountPayments, showToast
+ * Props: customers, setCustomers, sales, accountPayments, setAccountPayments, showToast, logAction
  */
 import { useState } from "react";
 import { Ico, Modal, $, fmtDate, uid, PAY_LABELS, STATUS_LABELS, STATUS_COLORS, todayStr } from "../shared.jsx";
 import { supabase, customerToDb, accountPaymentToDb } from "../supabase.js";
 
-export default function CustomersPage({ customers, setCustomers, sales, accountPayments, setAccountPayments, showToast }) {
+export default function CustomersPage({ customers, setCustomers, sales, accountPayments, setAccountPayments, showToast, logAction }) {
   const custBal = (id) => {
     const c = customers.find(x => x.id === id);
     return (c?.balance ?? 0) + accountPayments.filter(p => p.customerId === id)
@@ -37,21 +37,25 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
       const { error } = await supabase.from("customers").insert(customerToDb(newCustomer));
       if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
       setCustomers(p => [...p, newCustomer]);
+      logAction?.("crear", "cliente", `Creó "${newCustomer.name}" — lista ${newCustomer.priceList}`);
     } else {
       const updated = {...form, balance:Number(form.balance)||0};
       const { error } = await supabase.from("customers").update(customerToDb(updated)).eq("id", modal.id);
       if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
       setCustomers(p => p.map(c => c.id===modal.id ? {...c,...updated} : c));
+      logAction?.("editar", "cliente", `Editó "${updated.name}"`);
     }
     setModal(null);
     showToast("Cliente guardado");
   };
 
   const del = async (id) => {
+    const customer = customers.find(c => c.id === id);
     if (confirm("¿Eliminar cliente?")) {
       const { error } = await supabase.from("customers").delete().eq("id", id);
       if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
       setCustomers(p=>p.filter(c=>c.id!==id));
+      logAction?.("eliminar", "cliente", `Eliminó "${customer?.name}"`);
       showToast("Eliminado");
     }
   };
@@ -63,6 +67,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
     const { error } = await supabase.from("customers").update({ balance: newBalance }).eq("id", id);
     if (error) { showToast("Error al ajustar saldo: " + error.message, "error"); return; }
     setCustomers(p => p.map(c => c.id===id ? {...c, balance: newBalance} : c));
+    logAction?.("ajuste_saldo", "cuenta_corriente", `"${customer.name}" ajuste $${amount} → nuevo saldo $${newBalance}`);
     showToast("Saldo actualizado");
   };
 
@@ -74,6 +79,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
     const { error: payErr } = await supabase.from("account_payments").insert(accountPaymentToDb(payment));
     if (payErr) { showToast("Error al registrar pago: " + payErr.message, "error"); return; }
     setAccountPayments(prev => [...prev, payment]);
+    logAction?.("pago", "cuenta_corriente", `"${payModal.name}" — $${amount} — ${PAY_LABELS[payForm.paymentMethod]||payForm.paymentMethod}`);
     setPayModal(null);
     showToast("Pago registrado");
   };

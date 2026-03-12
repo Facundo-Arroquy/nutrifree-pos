@@ -10,7 +10,7 @@
  * de pago (genera movimiento en supplier_payments si tiene proveedor asociado).
  *
  * Props: expenses, setExpenses, expenseCategories, ingredients, setIngredients,
- *        recipes, setRecipes, suppliers, setSupplierPayments, showToast
+ *        recipes, setRecipes, suppliers, setSupplierPayments, showToast, logAction
  */
 import { useState } from "react";
 import { Ico, Modal, $, fmtDate, uid, todayStr, PAY_LABELS } from "../shared.jsx";
@@ -43,7 +43,7 @@ function CloseExpenseModal({ expense, onClose, onConfirm }) {
   );
 }
 
-export default function ExpensesPage({ expenses, setExpenses, expenseCategories, ingredients, setIngredients, recipes, setRecipes, suppliers, supplierPayments, setSupplierPayments, showToast }) {
+export default function ExpensesPage({ expenses, setExpenses, expenseCategories, ingredients, setIngredients, recipes, setRecipes, suppliers, supplierPayments, setSupplierPayments, showToast, logAction }) {
   const defaultCat = expenseCategories[0] || "Ingredientes";
   const emptyLine = () => ({ ingredientId: "", qty: 1, unit: "", unitPrice: 0, subtotal: 0 });
   const emptyForm = { date:todayStr(), supplier:"", supplierId:null, concept:"", quantity:1, unit:"unidades", unitPrice:0, total:0, paymentMethod:"", paymentStatus:"pending", category:defaultCat, notes:"", ingredientLines:[emptyLine()] };
@@ -175,6 +175,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
         return changed ? {...r, ingredients:newIngrs} : r;
       }));
       const updatedCount = recipes.filter(r => r.ingredients.some(ri => validLines.find(l => l.ingredientId===ri.ingredientId && Number(l.unitPrice)))).length;
+      logAction?.(modal==="new" ? "crear" : "editar", "gasto", `Ingredientes: "${concept}" — $${total}`);
       showToast(updatedCount>0 ? `Gasto guardado · Costo actualizado en ${updatedCount} receta${updatedCount!==1?"s":""}` : "Gasto guardado");
       setModal(null);
       return;
@@ -204,6 +205,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
       setExpenses(p => p.map(e => e.id===modal.id ? {...e,...data} : e));
     }
+    logAction?.(modal==="new" ? "crear" : "editar", "gasto", `"${data.concept}" — $${data.total} (${data.category})`);
     if (data.category==="Ingredientes" && data.unitPrice > 0) {
       const updated = await syncIngredientCosts(data.concept, data.unitPrice);
       if (updated > 0) showToast(`Gasto guardado · Costo actualizado en ${updated} receta${updated!==1?"s":""}`);
@@ -215,10 +217,12 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
   };
 
   const del = async (id) => {
+    const expense = expenses.find(e => e.id === id);
     if (confirm("¿Eliminar gasto?")) {
       const { error } = await supabase.from("expenses").delete().eq("id", id);
       if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
       setExpenses(p => p.filter(e => e.id!==id));
+      logAction?.("eliminar", "gasto", `Eliminó "${expense?.concept}" — $${expense?.total}`);
       showToast("Eliminado");
     }
   };
@@ -232,6 +236,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       await supabase.from("supplier_payments").insert(supplierPaymentToDb(payment));
       setSupplierPayments(prev => [...prev, payment]);
     }
+    logAction?.("pagar", "gasto", `"${expense.concept}" — $${expense.total} — ${PAY_LABELS[paymentMethod]||paymentMethod}`);
     setPayModal(null);
     showToast("Gasto cerrado ✓");
   };

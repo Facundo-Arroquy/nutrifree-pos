@@ -5,13 +5,13 @@
  * productos). Los kits expanden sus componentes al procesar ventas.
  * Filtros por categoría y búsqueda por nombre.
  *
- * Props: products, setProducts, categories, showToast
+ * Props: products, setProducts, categories, showToast, logAction
  */
 import { useState } from "react";
 import { Ico, Modal, $, uid } from "../shared.jsx";
 import { supabase, productToDb } from "../supabase.js";
 
-export default function ProductsPage({ products, setProducts, categories, showToast }) {
+export default function ProductsPage({ products, setProducts, categories, showToast, logAction }) {
   const [modal, setModal] = useState(null);
   const [filterCat, setFilterCat] = useState("Todos");
   const [search, setSearch] = useState("");
@@ -37,21 +37,29 @@ export default function ProductsPage({ products, setProducts, categories, showTo
       const { error } = await supabase.from("products").insert(productToDb(newProduct));
       if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
       setProducts(p => [...p, newProduct]);
+      logAction?.("crear", "producto", `Creó "${newProduct.name}" — precio $${newProduct.priceRetail}/$${newProduct.priceWholesale}, stock ${newProduct.stock}`);
     } else {
       const updated = {...form, priceRetail:Number(form.priceRetail), priceWholesale:Number(form.priceWholesale), stock:Number(form.stock)};
       const { error } = await supabase.from("products").update(productToDb(updated)).eq("id", modal.id);
       if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
       setProducts(p => p.map(x => x.id===modal.id ? {...x,...updated} : x));
+      const changes = [];
+      if (modal.priceRetail !== updated.priceRetail) changes.push(`precio retail $${modal.priceRetail}→$${updated.priceRetail}`);
+      if (modal.priceWholesale !== updated.priceWholesale) changes.push(`precio mayor $${modal.priceWholesale}→$${updated.priceWholesale}`);
+      if (modal.stock !== updated.stock) changes.push(`stock ${modal.stock}→${updated.stock}`);
+      logAction?.("editar", "producto", `"${updated.name}"${changes.length ? ` — ${changes.join(", ")}` : ""}`);
     }
     setModal(null);
     showToast("Producto guardado");
   };
 
   const del = async (id) => {
+    const product = products.find(p => p.id === id);
     if (confirm("¿Eliminar producto?")) {
       const { error } = await supabase.from("products").delete().eq("id", id);
       if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
       setProducts(p=>p.filter(x=>x.id!==id));
+      logAction?.("eliminar", "producto", `Eliminó "${product?.name}"`);
       showToast("Eliminado");
     }
   };
@@ -63,6 +71,7 @@ export default function ProductsPage({ products, setProducts, categories, showTo
     const { error } = await supabase.from("products").update({ active }).eq("id", id);
     if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
     setProducts(p => p.map(x => x.id===id ? {...x, active} : x));
+    logAction?.("estado", "producto", `"${product.name}" → ${active ? "activo" : "inactivo"}`);
   };
 
   return (

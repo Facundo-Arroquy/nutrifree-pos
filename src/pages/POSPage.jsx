@@ -14,7 +14,7 @@ import { useState, useEffect } from "react";
 import { Ico, Modal, $, PAY_ORDER_LABELS, uid, todayStr } from "../shared.jsx";
 import { supabase, saleToDb, accountPaymentToDb } from "../supabase.js";
 
-export default function POSPage({ products, setProducts, customers, setCustomers, sales, setSales, accountPayments, setAccountPayments, showToast }) {
+export default function POSPage({ products, setProducts, customers, setCustomers, sales, setSales, accountPayments, setAccountPayments, showToast, logAction }) {
   const custBal = (id) => {
     const c = customers.find(x => x.id === id);
     return (c?.balance ?? 0) + accountPayments.filter(p => p.customerId === id)
@@ -162,6 +162,10 @@ export default function POSPage({ products, setProducts, customers, setCustomers
       setAccountPayments(prev => [...prev, charge]);
     }
     setSales(prev => [sale, ...prev]);
+    const cliente = selectedCustomer?.name || "Anónimo";
+    const metodo = PAY_ORDER_LABELS?.[payMethod] || payMethod;
+    logAction?.(status === "closed" ? "venta" : "pedido", "pos",
+      `$${total} — ${cliente} — ${metodo}${discountAmt > 0 ? ` (desc. $${discountAmt})` : ""}`);
     setPayModal(false);
     clearCart();
     showToast(status==="closed" ? "Venta registrada ✓" : "Pedido guardado ✓");
