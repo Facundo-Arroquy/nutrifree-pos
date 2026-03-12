@@ -36,6 +36,8 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   const [deliveryModal, setDeliveryModal] = useState(null); // { id, customerName }
   const [deliveryDate, setDeliveryDate] = useState("");
 
+  const isDelivery = name => /^envio/i.test((name||"").trim());
+
   const categories = ["Todos", ...new Set(products.map(p => p.category))];
   const filtered = products.filter(p => p.active &&
     (filterCat==="Todos" || p.category===filterCat) &&

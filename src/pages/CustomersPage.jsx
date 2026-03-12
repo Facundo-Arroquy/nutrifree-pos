@@ -8,7 +8,7 @@
  * Props: customers, setCustomers, sales, accountPayments, setAccountPayments, showToast
  */
 import { useState } from "react";
-import { Ico, Modal, $, fmtDate, uid, PAY_LABELS, todayStr } from "../shared.jsx";
+import { Ico, Modal, $, fmtDate, uid, PAY_LABELS, STATUS_LABELS, STATUS_COLORS, todayStr } from "../shared.jsx";
 import { supabase, customerToDb, accountPaymentToDb } from "../supabase.js";
 
 export default function CustomersPage({ customers, setCustomers, sales, accountPayments, setAccountPayments, showToast }) {
@@ -23,11 +23,12 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
   const [payModal, setPayModal] = useState(null); // customer object
   const [payForm, setPayForm] = useState({ amount:"", paymentMethod:"cash", notes:"" });
+  const [expandedSaleId, setExpandedSaleId] = useState(null);
 
   const filtered = customers.filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search));
 
-  const openNew = () => { setForm({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0, discountPct:0 }); setModal("new"); };
-  const openEdit = c => { setForm({...c}); setModal(c); };
+  const openNew = () => { setForm({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0, discountPct:0 }); setExpandedSaleId(null); setModal("new"); };
+  const openEdit = c => { setForm({...c}); setExpandedSaleId(null); setModal(c); };
 
   const save = async () => {
     if (!form.name) { showToast("El nombre es obligatorio", "error"); return; }
@@ -169,6 +170,67 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
                           <td style={{ fontSize:".84em" }}>{PAY_LABELS[p.paymentMethod]||"—"}</td>
                           <td style={{ fontSize:".82em", color:"var(--t3)" }}>{p.notes||"—"}</td>
                         </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+          {modal!=="new" && (() => {
+            const custSales = sales
+              .filter(s => s.customerId === modal.id)
+              .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+            if (!custSales.length) return null;
+            return (
+              <div style={{ marginBottom:14 }}>
+                <div className="section-title">Historial de pedidos</div>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr><th>Fecha</th><th>Estado</th><th>Total</th><th>Método</th><th>Notas</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                      {custSales.map(s => (
+                        <>
+                          <tr key={s.id} className="tr-click" onClick={() => setExpandedSaleId(expandedSaleId === s.id ? null : s.id)}>
+                            <td style={{ fontSize:".82em", color:"var(--t3)" }}>{fmtDate(s.createdAt)}</td>
+                            <td><span className={`badge ${STATUS_COLORS[s.status]||"badge-gray"}`}>{STATUS_LABELS[s.status]||s.status}</span></td>
+                            <td style={{ fontWeight:700 }}>{$(s.total)}</td>
+                            <td style={{ fontSize:".84em" }}>{PAY_LABELS[s.paymentMethod]||"—"}</td>
+                            <td style={{ fontSize:".82em", color:"var(--t3)", maxWidth:140, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.notes||"—"}</td>
+                            <td style={{ textAlign:"center" }}>
+                              <span style={{ display:"inline-block", transition:"transform .15s", transform: expandedSaleId===s.id ? "rotate(180deg)" : "rotate(0deg)" }}>
+                                <Ico n="chevron" s={13} c="var(--t3)"/>
+                              </span>
+                            </td>
+                          </tr>
+                          {expandedSaleId === s.id && (
+                            <tr key={s.id+"-detail"}>
+                              <td colSpan={6} style={{ padding:"0 8px 10px 8px", background:"var(--bg2)" }}>
+                                <div style={{ padding:"8px 4px", fontSize:".85em" }}>
+                                  {s.items.map((item, i) => (
+                                    <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"4px 8px", borderBottom:"1px solid var(--border)", gap:8 }}>
+                                      <span style={{ color:"var(--t1)", flex:1 }}>{item.name}</span>
+                                      <span style={{ color:"var(--t3)", minWidth:60, textAlign:"center" }}>x{item.qty}</span>
+                                      <span style={{ color:"var(--t2)", minWidth:70, textAlign:"right" }}>{$(item.price)} c/u</span>
+                                      <span style={{ fontWeight:600, minWidth:80, textAlign:"right" }}>{$(item.subtotal)}</span>
+                                    </div>
+                                  ))}
+                                  {(s.discountAmount > 0) && (
+                                    <div style={{ display:"flex", justifyContent:"space-between", padding:"4px 8px", color:"var(--amber)", fontSize:".9em" }}>
+                                      <span>Descuento</span>
+                                      <span>-{$(s.discountAmount)}</span>
+                                    </div>
+                                  )}
+                                  <div style={{ display:"flex", justifyContent:"flex-end", padding:"6px 8px 0", fontWeight:700, fontSize:"1em" }}>
+                                    Total: {$(s.total)}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </>
                       ))}
                     </tbody>
                   </table>
