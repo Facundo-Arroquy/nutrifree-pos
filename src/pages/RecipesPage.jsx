@@ -20,6 +20,35 @@ export default function RecipesPage({ recipes, setRecipes, products, ingredients
   const [newStep, setNewStep] = useState("");
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
 
+  const NUTR_FIELDS = [
+    { key:"calories", label:"Calorías", unit:"kcal" },
+    { key:"protein",  label:"Proteínas", unit:"g" },
+    { key:"carbs",    label:"Carbohidratos", unit:"g" },
+    { key:"fat",      label:"Grasas", unit:"g" },
+    { key:"fiber",    label:"Fibra", unit:"g" },
+    { key:"sugar",    label:"Azúcares", unit:"g" },
+    { key:"sodium",   label:"Sodio", unit:"mg" },
+  ];
+
+  const calcNutrition = (r) => {
+    let totalWeight = 0;
+    const totals = Object.fromEntries(NUTR_FIELDS.map(f => [f.key, 0]));
+    let hasData = false;
+    for (const ri of r.ingredients) {
+      if (ri.unit !== "g") continue;
+      const ing = ingredients.find(x => x.id === ri.ingredientId);
+      if (!ing) continue;
+      if (!NUTR_FIELDS.some(f => ing[f.key] != null)) continue;
+      hasData = true;
+      totalWeight += Number(ri.qty);
+      for (const { key } of NUTR_FIELDS) {
+        if (ing[key] != null) totals[key] += Number(ri.qty) * Number(ing[key]) / 100;
+      }
+    }
+    if (!hasData || totalWeight === 0) return null;
+    return Object.fromEntries(NUTR_FIELDS.map(f => [f.key, (totals[f.key] / totalWeight) * 100]));
+  };
+
   const ingredientCost = (i) => {
     const ing = i.ingredientId
       ? ingredients.find(x => x.id === i.ingredientId)
@@ -208,6 +237,23 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
               </tbody>
             </table>
           </div>
+          {(() => {
+            const nutr = calcNutrition(viewModal);
+            if (!nutr) return null;
+            return (
+              <>
+                <div className="section-title" style={{ marginBottom:12 }}>Información Nutricional <span style={{ fontSize:".76em", fontWeight:400, color:"var(--t3)" }}>por 100g</span></div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:16 }}>
+                  {NUTR_FIELDS.map(({ key, label, unit }) => (
+                    <div key={key} style={{ background:"var(--s2)", borderRadius:8, padding:"8px 10px", textAlign:"center" }}>
+                      <div style={{ fontSize:".68em", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".4px", marginBottom:4 }}>{label}</div>
+                      <div style={{ fontWeight:700, fontSize:".95em" }}>{nutr[key].toFixed(1)} <span style={{ fontSize:".75em", color:"var(--t3)", fontWeight:400 }}>{unit}</span></div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
           <div className="section-title">Pasos</div>
           {viewModal.steps.map((s,i)=>(
             <div key={i} style={{ display:"flex", gap:10, marginBottom:8, padding:"8px 0", borderBottom:"1px solid var(--border)" }}>

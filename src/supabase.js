@@ -150,12 +150,20 @@ export const dbToIngredient = r => ({
   id: r.id, name: r.name, category: r.category, unit: r.unit,
   stock: r.stock, stockMin: r.stock_min, unitCost: r.unit_cost,
   supplier: r.supplier, notes: r.notes, createdAt: r.created_at,
+  calories: r.calories ?? null, protein: r.protein ?? null,
+  carbs: r.carbs ?? null, fat: r.fat ?? null,
+  fiber: r.fiber ?? null, sugar: r.sugar ?? null, sodium: r.sodium ?? null,
 });
+
+const toNutr = v => (v != null && v !== "") ? Number(v) : null;
 
 export const ingredientToDb = i => ({
   id: i.id, name: i.name, category: i.category, unit: i.unit,
   stock: i.stock, stock_min: i.stockMin, unit_cost: i.unitCost,
   supplier: i.supplier, notes: i.notes,
+  calories: toNutr(i.calories), protein: toNutr(i.protein),
+  carbs: toNutr(i.carbs), fat: toNutr(i.fat),
+  fiber: toNutr(i.fiber), sugar: toNutr(i.sugar), sodium: toNutr(i.sodium),
 });
 
 export const dbToAccountPayment = r => ({

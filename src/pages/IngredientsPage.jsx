@@ -15,7 +15,7 @@ const INGR_CATS = ["Harinas","Lácteos","Grasas/Aceites","Endulzantes","Frutas/V
 const INGR_UNITS = ["g","kg","ml","l","unidad","unidades","cdas","ctas"];
 
 export default function IngredientsPage({ ingredients, setIngredients, showToast }) {
-  const emptyForm = { name:"", category:"Harinas", unit:"g", stock:0, stockMin:0, unitCost:0, supplier:"", notes:"" };
+  const emptyForm = { name:"", category:"Harinas", unit:"g", stock:0, stockMin:0, unitCost:0, supplier:"", notes:"", calories:"", protein:"", carbs:"", fat:"", fiber:"", sugar:"", sodium:"" };
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [filterCat, setFilterCat] = useState("Todos");
@@ -173,6 +173,18 @@ export default function IngredientsPage({ ingredients, setIngredients, showToast
             <div className="form-group"><label className="lbl">Proveedor</label><input value={form.supplier} onChange={e=>setF("supplier",e.target.value)} placeholder="Nombre del proveedor"/></div>
             <div className="form-group full"><label className="lbl">Notas</label><textarea value={form.notes} onChange={e=>setF("notes",e.target.value)} placeholder="Información adicional"/></div>
           </div>
+
+          <div className="section-title" style={{ marginBottom:12 }}>Información Nutricional <span style={{ fontSize:".76em", fontWeight:400, color:"var(--t3)" }}>(por 100g — solo aplica a ingredientes en gramos)</span></div>
+          <div className="form-grid">
+            <div className="form-group"><label className="lbl">Calorías (kcal)</label><input type="number" min="0" step="0.1" placeholder="—" value={form.calories ?? ""} onChange={e=>setF("calories",e.target.value)}/></div>
+            <div className="form-group"><label className="lbl">Proteínas (g)</label><input type="number" min="0" step="0.1" placeholder="—" value={form.protein ?? ""} onChange={e=>setF("protein",e.target.value)}/></div>
+            <div className="form-group"><label className="lbl">Carbohidratos (g)</label><input type="number" min="0" step="0.1" placeholder="—" value={form.carbs ?? ""} onChange={e=>setF("carbs",e.target.value)}/></div>
+            <div className="form-group"><label className="lbl">Grasas (g)</label><input type="number" min="0" step="0.1" placeholder="—" value={form.fat ?? ""} onChange={e=>setF("fat",e.target.value)}/></div>
+            <div className="form-group"><label className="lbl">Fibra (g)</label><input type="number" min="0" step="0.1" placeholder="—" value={form.fiber ?? ""} onChange={e=>setF("fiber",e.target.value)}/></div>
+            <div className="form-group"><label className="lbl">Azúcares (g)</label><input type="number" min="0" step="0.1" placeholder="—" value={form.sugar ?? ""} onChange={e=>setF("sugar",e.target.value)}/></div>
+            <div className="form-group"><label className="lbl">Sodio (mg)</label><input type="number" min="0" step="0.1" placeholder="—" value={form.sodium ?? ""} onChange={e=>setF("sodium",e.target.value)}/></div>
+          </div>
+
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={()=>setModal(null)}>Cancelar</button>
             <button className="btn btn-primary" onClick={save}><Ico n="check" s={13}/>Guardar</button>

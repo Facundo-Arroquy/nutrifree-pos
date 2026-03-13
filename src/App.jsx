@@ -109,9 +109,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!user || user.isDemo) return;
     const load = async () => {
-      // Ensure no stale demo flag affects production data load
-      localStorage.removeItem("nutrifree_mode");
       const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }] = await Promise.all([
         supabase.from("categories").select("*"),
         supabase.from("expense_categories").select("*").order("name"),
@@ -152,7 +151,7 @@ export default function App() {
       if (shifts && shifts.length > 0) setCashShifts(shifts.map(dbToCashShift));
     };
     load();
-  }, []);
+  }, [user?.email]);
 
   /** Muestra una notificación temporal. type: "success" | "error" */
   const showToast = (msg, type="success") => setToast({ msg, type });
