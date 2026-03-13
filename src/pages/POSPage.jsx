@@ -73,10 +73,16 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   const updateQty = (productId, delta) => {
     setCart(prev => prev.map(i => {
       if (i.productId !== productId) return i;
-      const nq = i.qty + delta;
+      const nq = Math.round((i.qty + delta) * 100) / 100;
       if (nq <= 0) return null;
       return {...i, qty:nq, subtotal:nq*i.price};
     }).filter(Boolean));
+  };
+
+  const setQty = (productId, val) => {
+    const nq = Number(val);
+    if (!nq || nq <= 0) return;
+    setCart(prev => prev.map(i => i.productId !== productId ? i : {...i, qty:nq, subtotal:nq*i.price}));
   };
 
   const removeItem = id => setCart(prev => prev.filter(i => i.productId !== id));
@@ -290,7 +296,13 @@ export default function POSPage({ products, setProducts, customers, setCustomers
               </div>
               <div className="qty-ctrl">
                 <button className="qty-btn" onClick={()=>updateQty(item.productId,-1)}>−</button>
-                <span className="qty-num">{item.qty}</span>
+                <input
+                  type="number" min="0.01" step="0.01"
+                  className="qty-num"
+                  value={item.qty}
+                  onChange={e=>setQty(item.productId, e.target.value)}
+                  style={{ width:46, textAlign:"center", border:"none", background:"transparent", fontWeight:700, fontSize:"inherit", padding:0 }}
+                />
                 <button className="qty-btn" onClick={()=>updateQty(item.productId,1)}>+</button>
               </div>
               <div style={{ minWidth:70, textAlign:"right" }}>
