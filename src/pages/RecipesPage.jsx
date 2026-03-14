@@ -179,7 +179,8 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
           const prod = products.find(p=>p.id===r.productId);
           const cost = totalCost(r.ingredients);
           const cpu = costPerUnit(r);
-          const margin = prod ? ((prod.priceRetail - cpu)/prod.priceRetail*100) : 0;
+          const margin = prod?.priceRetail > 0 ? ((prod.priceRetail - cpu)/prod.priceRetail*100) : 0;
+          const marginW = prod?.priceWholesale > 0 ? ((prod.priceWholesale - cpu)/prod.priceWholesale*100) : null;
           return (
             <div key={r.id} className="card card-hover" onClick={()=>setViewModal(r)}>
               <div style={{ fontWeight:700, fontSize:".95em", marginBottom:4 }}>{prod?.name||"Producto eliminado"}</div>
@@ -189,16 +190,22 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, fontSize:".82em" }}>
                 <div><span style={{ color:"var(--t3)" }}>Costo total:</span><div style={{ fontWeight:700 }}>{$(cost)}</div></div>
                 <div><span style={{ color:"var(--t3)" }}>Costo/unidad:</span><div style={{ fontWeight:700 }}>{$(cpu)}</div></div>
-                {prod && <div style={{ gridColumn:"1/-1" }}>
-                  <span style={{ color:"var(--t3)" }}>Margen estimado:</span>
-                  <div style={{ display:"flex", alignItems:"center", gap:6, fontWeight:700, color:margin>30?"var(--green)":margin>10?"var(--amber)":"var(--red)" }}>
-                    {margin.toFixed(1)}%
-                    {r.minMargin != null && r.minMargin !== "" && margin < Number(r.minMargin) && (
-                      <span style={{ fontSize:".72em", background:"var(--redl)", color:"var(--red)", border:"1px solid var(--redlb)", borderRadius:4, padding:"1px 5px", fontWeight:700 }}>
-                        ⚠ bajo umbral ({r.minMargin}%)
-                      </span>
-                    )}
+                {prod && <div style={{ gridColumn:"1/-1", display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                  <div>
+                    <span style={{ color:"var(--t3)" }}>Margen minorista:</span>
+                    <div style={{ display:"flex", alignItems:"center", gap:4, fontWeight:700, color:margin>30?"var(--green)":margin>10?"var(--amber)":"var(--red)" }}>
+                      {margin.toFixed(1)}%
+                      {r.minMargin != null && r.minMargin !== "" && margin < Number(r.minMargin) && (
+                        <span style={{ fontSize:".72em", background:"var(--redl)", color:"var(--red)", border:"1px solid var(--redlb)", borderRadius:4, padding:"1px 5px", fontWeight:700 }}>⚠</span>
+                      )}
+                    </div>
                   </div>
+                  {marginW !== null && <div>
+                    <span style={{ color:"var(--t3)" }}>Margen mayorista:</span>
+                    <div style={{ fontWeight:700, color:marginW>30?"var(--green)":marginW>10?"var(--amber)":"var(--red)" }}>
+                      {marginW.toFixed(1)}%
+                    </div>
+                  </div>}
                 </div>}
               </div>
               <div style={{ display:"flex", gap:6, marginTop:12 }}>
