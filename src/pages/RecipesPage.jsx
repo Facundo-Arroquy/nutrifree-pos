@@ -15,6 +15,7 @@ import { supabase, recipeToDb, recipeIngredientToDb } from "../supabase.js";
 export default function RecipesPage({ recipes, setRecipes, products, ingredients, showToast }) {
   const [modal, setModal] = useState(null);
   const [viewModal, setViewModal] = useState(null);
+  const [search, setSearch] = useState("");
   const [form, setForm] = useState({ productId:"", prepTime:0, cookTime:0, yield:1, notes:"", ingredients:[], steps:[] });
   const [newIngr, setNewIngr] = useState({ ingredientId:"", qty:"" });
   const [newStep, setNewStep] = useState("");
@@ -167,8 +168,13 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
         <button className="btn btn-primary" onClick={openNew}><Ico n="plus" s={14}/>Nueva receta</button>
       </div>
 
+      <div className="search-wrap" style={{ marginBottom:16, maxWidth:320 }}>
+        <div className="search-ico"><Ico n="search" s={14}/></div>
+        <input placeholder="Buscar receta..." value={search} onChange={e=>setSearch(e.target.value)}/>
+      </div>
+
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:14 }}>
-        {recipes.map(r => {
+        {recipes.filter(r => !search || (products.find(p=>p.id===r.productId)?.name||"").toLowerCase().includes(search.toLowerCase())).map(r => {
           const prod = products.find(p=>p.id===r.productId);
           const cost = totalCost(r.ingredients);
           const cpu = costPerUnit(r);

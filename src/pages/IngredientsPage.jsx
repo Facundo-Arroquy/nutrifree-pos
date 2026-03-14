@@ -19,12 +19,13 @@ export default function IngredientsPage({ ingredients, setIngredients, showToast
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [filterCat, setFilterCat] = useState("Todos");
+  const [search, setSearch] = useState("");
   const [stockEdit, setStockEdit] = useState({});
   const [priceEdit, setPriceEdit] = useState({});
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
 
   const filtered = ingredients
-    .filter(i => filterCat==="Todos" || i.category===filterCat)
+    .filter(i => (filterCat==="Todos" || i.category===filterCat) && (!search || i.name.toLowerCase().includes(search.toLowerCase())))
     .sort((a,b) => a.name.localeCompare(b.name));
 
   const lowStock = ingredients.filter(i => i.stockMin > 0 && i.stock <= i.stockMin);
@@ -92,6 +93,11 @@ export default function IngredientsPage({ ingredients, setIngredients, showToast
         <div className="stat"><div className="stat-num">{ingredients.length}</div><div className="stat-label">Total ingredientes</div><div className="stat-icon">🧂</div></div>
         <div className={`stat${lowStock.length>0?" stat-red":""}`}><div className="stat-num">{lowStock.length}</div><div className="stat-label">Stock bajo</div><div className="stat-icon">⚠️</div></div>
         <div className="stat"><div className="stat-num">{$(totalValue)}</div><div className="stat-label">Valor en stock</div><div className="stat-icon">💰</div></div>
+      </div>
+
+      <div className="search-wrap" style={{ marginBottom:12, maxWidth:320 }}>
+        <div className="search-ico"><Ico n="search" s={14}/></div>
+        <input placeholder="Buscar ingrediente..." value={search} onChange={e=>setSearch(e.target.value)}/>
       </div>
 
       <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:16 }}>
