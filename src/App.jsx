@@ -71,6 +71,7 @@ function AccessDenied() {
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [page, setPage] = useState("dashboard");
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -100,6 +101,7 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setUser(sessionToUser(session));
+      setAuthLoading(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) setUser(sessionToUser(session));
@@ -259,6 +261,18 @@ export default function App() {
       return ((price - costPerUnit) / price) * 100 < Number(recipe.minMargin);
     }).length;
   }, [products, recipes]);
+
+  if (authLoading) return (
+    <>
+      <style>{CSS}</style>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"var(--s1)" }}>
+        <div style={{ textAlign:"center", color:"var(--t3)" }}>
+          <div style={{ fontSize:"2em", marginBottom:12 }}>🌿</div>
+          <div style={{ fontSize:".9em" }}>Cargando...</div>
+        </div>
+      </div>
+    </>
+  );
 
   if (!user) return (
     <>
