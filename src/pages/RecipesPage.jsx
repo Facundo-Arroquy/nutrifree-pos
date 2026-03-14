@@ -165,12 +165,13 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
     <div className="page">
       <div className="page-header">
         <div><div className="page-title">Recetas</div><div className="page-sub">Fichas técnicas de productos</div></div>
-        <button className="btn btn-primary" onClick={openNew}><Ico n="plus" s={14}/>Nueva receta</button>
-      </div>
-
-      <div className="search-wrap" style={{ marginBottom:16, maxWidth:320 }}>
-        <div className="search-ico"><Ico n="search" s={14}/></div>
-        <input placeholder="Buscar receta..." value={search} onChange={e=>setSearch(e.target.value)}/>
+        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+          <div className="search-wrap" style={{ minWidth:220 }}>
+            <div className="search-ico"><Ico n="search" s={14}/></div>
+            <input placeholder="Buscar receta..." value={search} onChange={e=>setSearch(e.target.value)}/>
+          </div>
+          <button className="btn btn-primary" onClick={openNew}><Ico n="plus" s={14}/>Nueva receta</button>
+        </div>
       </div>
 
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:14 }}>
