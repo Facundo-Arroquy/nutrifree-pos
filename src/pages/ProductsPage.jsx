@@ -30,6 +30,14 @@ export default function ProductsPage({ products, setProducts, categories, showTo
   const openNew = () => { setForm(emptyForm); setKitProductId(""); setKitQty(1); setModal("new"); };
   const openEdit = p => { setForm({...p, isKit: p.kitItems?.length > 0, kitItems: p.kitItems || []}); setKitProductId(""); setKitQty(1); setModal(p); };
 
+  const exportCsv = () => {
+    const headers = ["Nombre","Categoría","Precio Minorista","Precio Mayorista","Unidad","Stock","Activo","Descripción"];
+    const rows = products.map(p => [p.name, p.category, p.priceRetail, p.priceWholesale, p.unit, p.stock, p.active?"Sí":"No", p.description||""]);
+    const csv = "\uFEFF" + [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv;charset=utf-8;" }));
+    a.download = "productos.csv"; a.click();
+  };
+
   const save = async () => {
     if (!form.name) { showToast("El nombre es obligatorio", "error"); return; }
     if (modal==="new") {
@@ -78,7 +86,10 @@ export default function ProductsPage({ products, setProducts, categories, showTo
     <div className="page">
       <div className="page-header">
         <div><div className="page-title">Productos</div><div className="page-sub">{products.length} registrados</div></div>
-        <button className="btn btn-primary" onClick={openNew}><Ico n="plus" s={14}/>Nuevo producto</button>
+        <div style={{ display:"flex", gap:8 }}>
+          <button className="btn btn-secondary" onClick={exportCsv}><Ico n="download" s={14}/>Exportar CSV</button>
+          <button className="btn btn-primary" onClick={openNew}><Ico n="plus" s={14}/>Nuevo producto</button>
+        </div>
       </div>
 
       <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap" }}>

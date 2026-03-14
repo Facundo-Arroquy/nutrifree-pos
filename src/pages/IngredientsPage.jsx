@@ -34,6 +34,14 @@ export default function IngredientsPage({ ingredients, setIngredients, showToast
   const openNew  = () => { setForm(emptyForm); setModal("new"); };
   const openEdit = i  => { setForm({...i}); setModal(i); };
 
+  const exportCsv = () => {
+    const headers = ["Nombre","Categoría","Unidad","Stock","Stock Mínimo","Costo/Unidad","Proveedor","Notas","Calorías (kcal)","Proteínas (g)","Carbohidratos (g)","Grasas (g)","Fibra (g)","Azúcares (g)","Sodio (mg)"];
+    const rows = ingredients.map(i => [i.name, i.category, i.unit, i.stock, i.stockMin, i.unitCost, i.supplier||"", i.notes||"", i.calories??"", i.protein??"", i.carbs??"", i.fat??"", i.fiber??"", i.sugar??"", i.sodium??""]);
+    const csv = "\uFEFF" + [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv;charset=utf-8;" }));
+    a.download = "ingredientes.csv"; a.click();
+  };
+
   const save = async () => {
     if (!form.name) { showToast("El nombre es obligatorio", "error"); return; }
     const data = { ...form, stock:Number(form.stock)||0, stockMin:Number(form.stockMin)||0, unitCost:Number(form.unitCost)||0 };
@@ -86,7 +94,10 @@ export default function IngredientsPage({ ingredients, setIngredients, showToast
     <div className="page">
       <div className="page-header">
         <div><div className="page-title">Ingredientes</div><div className="page-sub">{ingredients.length} registrados</div></div>
-        <button className="btn btn-primary" onClick={openNew}><Ico n="plus" s={14}/>Nuevo ingrediente</button>
+        <div style={{ display:"flex", gap:8 }}>
+          <button className="btn btn-secondary" onClick={exportCsv}><Ico n="download" s={14}/>Exportar CSV</button>
+          <button className="btn btn-primary" onClick={openNew}><Ico n="plus" s={14}/>Nuevo ingrediente</button>
+        </div>
       </div>
 
       <div className="stats-row" style={{ gridTemplateColumns:"repeat(3,1fr)" }}>

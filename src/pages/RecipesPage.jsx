@@ -106,6 +106,22 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
     win.onload = () => win.print();
   };
 
+  const exportCsv = () => {
+    const headers = ["Producto","Tiempo Prep (min)","Tiempo Cocción (min)","Rendimiento","Costo Total","Costo/Unidad","Margen Minorista (%)","Margen Mayorista (%)","Notas","Ingredientes"];
+    const rows = recipes.map(r => {
+      const prod = products.find(p => p.id === r.productId);
+      const cost = totalCost(r.ingredients);
+      const cpu = costPerUnit(r);
+      const marginR = prod?.priceRetail > 0 ? ((prod.priceRetail - cpu) / prod.priceRetail * 100).toFixed(1) : "";
+      const marginW = prod?.priceWholesale > 0 ? ((prod.priceWholesale - cpu) / prod.priceWholesale * 100).toFixed(1) : "";
+      const ingList = r.ingredients.map(i => `${i.name} ${i.qty}${i.unit}`).join(" | ");
+      return [prod?.name||"Producto eliminado", r.prepTime, r.cookTime, r.yield, cost.toFixed(2), cpu.toFixed(2), marginR, marginW, r.notes||"", ingList];
+    });
+    const csv = "\uFEFF" + [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv;charset=utf-8;" }));
+    a.download = "recetas.csv"; a.click();
+  };
+
   const openNew = () => { setForm({ productId:products[0]?.id||"", prepTime:0, cookTime:0, yield:1, notes:"", minMargin:"", ingredients:[], steps:[] }); setModal("new"); };
   const openEdit = r => { setForm({...r, ingredients:[...r.ingredients], steps:[...r.steps]}); setModal(r); };
 
@@ -170,6 +186,7 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
             <div className="search-ico"><Ico n="search" s={14}/></div>
             <input placeholder="Buscar receta..." value={search} onChange={e=>setSearch(e.target.value)}/>
           </div>
+          <button className="btn btn-secondary" onClick={exportCsv}><Ico n="download" s={14}/>Exportar CSV</button>
           <button className="btn btn-primary" onClick={openNew}><Ico n="plus" s={14}/>Nueva receta</button>
         </div>
       </div>
