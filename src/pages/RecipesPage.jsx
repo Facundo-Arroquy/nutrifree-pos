@@ -19,6 +19,7 @@ export default function RecipesPage({ recipes, setRecipes, products, ingredients
   const [form, setForm] = useState({ productId:"", prepTime:0, cookTime:0, yield:1, notes:"", ingredients:[], steps:[] });
   const [newIngr, setNewIngr] = useState({ ingredientId:"", qty:"" });
   const [newStep, setNewStep] = useState("");
+  const [prodSearch, setProdSearch] = useState("");
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
 
   const NUTR_FIELDS = [
@@ -122,8 +123,8 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
     a.download = "recetas.csv"; a.click();
   };
 
-  const openNew = () => { setForm({ productId:products[0]?.id||"", prepTime:0, cookTime:0, yield:1, notes:"", minMargin:"", ingredients:[], steps:[] }); setModal("new"); };
-  const openEdit = r => { setForm({...r, ingredients:[...r.ingredients], steps:[...r.steps]}); setModal(r); };
+  const openNew = () => { setForm({ productId:"", prepTime:0, cookTime:0, yield:1, notes:"", minMargin:"", ingredients:[], steps:[] }); setProdSearch(""); setModal("new"); };
+  const openEdit = r => { setForm({...r, ingredients:[...r.ingredients], steps:[...r.steps]}); setProdSearch(products.find(p=>p.id===r.productId)?.name||""); setModal(r); };
 
   const addIngr = () => {
     if (!newIngr.ingredientId || !newIngr.qty) return;
@@ -302,9 +303,30 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
           <div className="form-grid" style={{ marginBottom:16 }}>
             <div className="form-group full">
               <label className="lbl">Producto *</label>
-              <select value={form.productId} onChange={e=>setF("productId",e.target.value)}>
-                {products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
+              <div style={{ position:"relative" }}>
+                <input
+                  value={prodSearch}
+                  onChange={e=>{ setProdSearch(e.target.value); if(!e.target.value) setF("productId",""); }}
+                  placeholder="Buscar producto..."
+                  autoComplete="off"
+                />
+                {prodSearch && (() => {
+                  const matches = products.filter(p => p.name.toLowerCase().includes(prodSearch.toLowerCase()));
+                  const exact = products.find(p=>p.id===form.productId);
+                  if (exact && exact.name.toLowerCase()===prodSearch.toLowerCase()) return null;
+                  if (!matches.length) return null;
+                  return (
+                    <div style={{ position:"absolute", zIndex:99, background:"var(--s1)", border:"1px solid var(--border)", borderRadius:8, width:"100%", maxHeight:180, overflowY:"auto", boxShadow:"0 4px 16px #0002", top:"calc(100% + 4px)" }}>
+                      {matches.map(p=>(
+                        <div key={p.id} style={{ padding:"8px 12px", cursor:"pointer", fontSize:".88em" }}
+                          onMouseDown={()=>{ setF("productId",p.id); setProdSearch(p.name); }}>
+                          {p.name}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
             <div className="form-group"><label className="lbl">Tiempo preparación (min)</label><input type="number" value={form.prepTime} onChange={e=>setF("prepTime",e.target.value)}/></div>
             <div className="form-group"><label className="lbl">Tiempo cocción (min)</label><input type="number" value={form.cookTime} onChange={e=>setF("cookTime",e.target.value)}/></div>
