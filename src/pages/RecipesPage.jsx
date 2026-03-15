@@ -318,7 +318,7 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
             <div key={i} style={{ display:"flex", gap:8, alignItems:"center", marginBottom:6 }}>
               <span style={{ flex:2, fontSize:".86em" }}>{ing.name}</span>
               <span style={{ fontSize:".84em", color:"var(--t3)" }}>{ing.qty} {ing.unit}</span>
-              <span style={{ fontSize:".84em" }}>{$(ing.cost)}</span>
+              <span style={{ fontSize:".84em" }}>{$(ingredientCost(ing))}</span>
               <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>removeIngr(i)}><Ico n="x" s={12} c="var(--red)"/></button>
             </div>
           ))}

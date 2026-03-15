@@ -155,6 +155,18 @@ export default function App() {
     load();
   }, [user?.email]);
 
+  // Sincroniza costos de recipe_ingredients cuando cambia el precio de un ingrediente
+  useEffect(() => {
+    if (!ingredients.length || !recipes.length) return;
+    setRecipes(prev => prev.map(r => ({
+      ...r,
+      ingredients: r.ingredients.map(ri => {
+        const ing = ingredients.find(x => x.id === ri.ingredientId);
+        return ing ? { ...ri, cost: ri.qty * ing.unitCost } : ri;
+      }),
+    })));
+  }, [ingredients]);
+
   /** Muestra una notificación temporal. type: "success" | "error" */
   const showToast = (msg, type="success") => setToast({ msg, type });
 
