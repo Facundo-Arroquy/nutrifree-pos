@@ -42,11 +42,20 @@ export default function ChatWidget({ faqEntries }) {
     if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, open]);
 
+  const saveMissed = (question) => {
+    try {
+      const prev = JSON.parse(localStorage.getItem("faq_missed") || "[]");
+      const entry = { id: crypto.randomUUID(), question, date: new Date().toISOString() };
+      localStorage.setItem("faq_missed", JSON.stringify([entry, ...prev].slice(0, 200)));
+    } catch (_) {}
+  };
+
   const send = () => {
     const q = input.trim();
     if (!q) return;
     const userMsg = { from: "user", text: q };
     const match = matchQuery(q, faqEntries, threshold);
+    if (!match) saveMissed(q);
     const botMsg = { from: "bot", text: match ? match.answer : FALLBACK };
     setMessages(prev => [...prev, userMsg, botMsg]);
     setInput("");

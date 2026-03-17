@@ -9,17 +9,41 @@ import { dbToFaqEntry, faqEntryToDb } from "../supabase.js";
 
 const EMPTY = { id: "", question: "", answer: "" };
 
+function loadMissed() {
+  try { return JSON.parse(localStorage.getItem("faq_missed") || "[]"); } catch { return []; }
+}
+
 export default function HelpAdminPage({ faqEntries, setFaqEntries, showToast }) {
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [missed, setMissed] = useState(loadMissed);
+  const [prefillFrom, setPrefillFrom] = useState(null);
   const [threshold, setThreshold] = useState(
     () => Number(localStorage.getItem("faqThreshold") || 0.25)
   );
 
-  const openNew = () => { setForm(EMPTY); setModal(true); };
-  const openEdit = (e) => { setForm({ ...e }); setModal(true); };
-  const close = () => { setModal(false); setForm(EMPTY); };
+  const openNew = () => { setForm(EMPTY); setPrefillFrom(null); setModal(true); };
+  const openEdit = (e) => { setForm({ ...e }); setPrefillFrom(null); setModal(true); };
+  const close = () => { setModal(false); setForm(EMPTY); setPrefillFrom(null); };
+
+  const openFromMissed = (m) => {
+    setForm({ ...EMPTY, question: m.question });
+    setPrefillFrom(m.id);
+    setModal(true);
+  };
+
+  const deleteMissed = (id) => {
+    const next = missed.filter(m => m.id !== id);
+    localStorage.setItem("faq_missed", JSON.stringify(next));
+    setMissed(next);
+  };
+
+  const clearAllMissed = () => {
+    if (!confirm("¿Eliminar todas las preguntas sin respuesta?")) return;
+    localStorage.setItem("faq_missed", "[]");
+    setMissed([]);
+  };
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -43,6 +67,7 @@ export default function HelpAdminPage({ faqEntries, setFaqEntries, showToast }) 
         ? [{ ...entry, createdAt: new Date().toISOString() }, ...prev]
         : prev.map(e => e.id === entry.id ? entry : e)
     );
+    if (prefillFrom) deleteMissed(prefillFrom);
     showToast(isNew ? "Entrada creada" : "Entrada actualizada");
     close();
     setSaving(false);
@@ -130,6 +155,67 @@ export default function HelpAdminPage({ faqEntries, setFaqEntries, showToast }) 
           </table>
         </div>
       )}
+
+      {/* Preguntas sin respuesta */}
+      <div style={{ marginTop: 32 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          <div className="section-title" style={{ margin: 0 }}>
+            Preguntas sin respuesta
+            {missed.length > 0 && <span className="badge badge-red" style={{ marginLeft: 8 }}>{missed.length}</span>}
+          </div>
+          {missed.length > 0 && (
+            <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto", color: "var(--red)", fontSize: ".8em" }} onClick={clearAllMissed}>
+              Eliminar todas
+            </button>
+          )}
+        </div>
+
+        {missed.length === 0 ? (
+          <div style={{ color: "var(--t3)", fontSize: ".85em", padding: "12px 0" }}>
+            ✓ No hay preguntas sin respuesta por el momento.
+          </div>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pregunta del usuario</th>
+                  <th style={{ width: 120 }}>Fecha</th>
+                  <th style={{ width: 130 }}>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {missed.map(m => (
+                  <tr key={m.id}>
+                    <td style={{ fontWeight: 500 }}>{m.question}</td>
+                    <td style={{ color: "var(--t3)", fontSize: ".82em", whiteSpace: "nowrap" }}>
+                      {new Date(m.date).toLocaleDateString("es-AR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })}
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => openFromMissed(m)}
+                          title="Crear respuesta para esta pregunta"
+                        >
+                          <Ico n="plus" s={12}/> Responder
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-icon btn-sm"
+                          onClick={() => deleteMissed(m.id)}
+                          title="Eliminar"
+                        >
+                          <Ico n="trash" s={13} c="var(--red)"/>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       {modal && (
         <div className="modal-bg">
