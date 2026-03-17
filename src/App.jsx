@@ -92,6 +92,7 @@ export default function App() {
   const [cashShifts, setCashShifts] = useState([]);
   const [faqEntries, setFaqEntries] = useState([]);
   const [faqMissed, setFaqMissed] = useState([]);
+  const [openRecipeId, setOpenRecipeId] = useState(null);
   const [alertBalanceThreshold, setAlertBalanceThreshold] = useState(0);
   const [toast, setToast] = useState(null);
   const [deliveryAlerts, setDeliveryAlerts] = useState([]);
@@ -392,7 +393,7 @@ export default function App() {
     window.location.reload();
   };
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, openRecipeId, setOpenRecipeId, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction };
 
   return (
     <>

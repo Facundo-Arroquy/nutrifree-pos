@@ -14,7 +14,7 @@ import { supabase, ingredientToDb } from "../supabase.js";
 const INGR_CATS = ["Harinas","Lácteos","Grasas/Aceites","Endulzantes","Frutas/Verduras","Especias","Proteínas","Otros"];
 const INGR_UNITS = ["g","kg","ml","l","unidad","unidades","cdas","ctas"];
 
-export default function IngredientsPage({ ingredients, setIngredients, showToast }) {
+export default function IngredientsPage({ ingredients, setIngredients, recipes, products, setPage, setOpenRecipeId, showToast }) {
   const emptyForm = { name:"", category:"Harinas", unit:"g", stock:0, stockMin:0, unitCost:0, supplier:"", notes:"", calories:"", protein:"", carbs:"", fat:"", fiber:"", sugar:"", sodium:"" };
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -23,6 +23,14 @@ export default function IngredientsPage({ ingredients, setIngredients, showToast
   const [stockEdit, setStockEdit] = useState({});
   const [priceEdit, setPriceEdit] = useState({});
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
+
+  const recipesForIngredient = (ingredientId) =>
+    (recipes || []).filter(r => r.ingredients?.some(ri => ri.ingredientId === ingredientId));
+
+  const goToRecipe = (recipeId) => {
+    setOpenRecipeId(recipeId);
+    setPage("recipes");
+  };
 
   const filtered = ingredients
     .filter(i => (filterCat==="Todos" || i.category===filterCat) && (!search || i.name.toLowerCase().includes(search.toLowerCase())))
@@ -119,7 +127,7 @@ export default function IngredientsPage({ ingredients, setIngredients, showToast
 
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Nombre</th><th>Categoría</th><th>Unidad</th><th>Stock</th><th>Mín.</th><th>Costo/unid.</th><th>Proveedor</th><th>Agregar stock</th><th></th></tr></thead>
+          <thead><tr><th>Nombre</th><th>Categoría</th><th>Unidad</th><th>Stock</th><th>Mín.</th><th>Costo/unid.</th><th>Proveedor</th><th>Recetas</th><th>Agregar stock</th><th></th></tr></thead>
           <tbody>
             {filtered.map(i => {
               const low = i.stockMin > 0 && i.stock <= i.stockMin;
@@ -153,6 +161,23 @@ export default function IngredientsPage({ ingredients, setIngredients, showToast
                     )}
                   </td>
                   <td style={{ color:"var(--t3)", fontSize:".86em" }}>{i.supplier||"—"}</td>
+                  <td onClick={e=>e.stopPropagation()}>
+                    <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                      {recipesForIngredient(i.id).map(r => {
+                        const prod = (products||[]).find(p => p.id === r.productId);
+                        return (
+                          <button key={r.id}
+                            className="btn btn-ghost btn-sm"
+                            style={{ fontSize:".74em", padding:"2px 8px", borderRadius:99, border:"1px solid var(--greenlb)", color:"var(--green)", background:"var(--greenl)" }}
+                            onClick={() => goToRecipe(r.id)}
+                          >
+                            {prod?.name || "Receta"}
+                          </button>
+                        );
+                      })}
+                      {recipesForIngredient(i.id).length === 0 && <span style={{ color:"var(--t4)", fontSize:".8em" }}>—</span>}
+                    </div>
+                  </td>
                   <td onClick={e=>e.stopPropagation()} style={{ display:"flex", gap:6, alignItems:"center" }}>
                     <input type="number" style={{ width:80 }} placeholder="Cant." value={stockEdit[i.id]||""}
                       onChange={e=>setStockEdit(p=>({...p,[i.id]:e.target.value}))}
@@ -201,6 +226,29 @@ export default function IngredientsPage({ ingredients, setIngredients, showToast
             <div className="form-group"><label className="lbl">Azúcares (g)</label><input type="number" min="0" step="0.1" placeholder="—" value={form.sugar ?? ""} onChange={e=>setF("sugar",e.target.value)}/></div>
             <div className="form-group"><label className="lbl">Sodio (mg)</label><input type="number" min="0" step="0.1" placeholder="—" value={form.sodium ?? ""} onChange={e=>setF("sodium",e.target.value)}/></div>
           </div>
+
+          {modal !== "new" && (() => {
+            const recs = recipesForIngredient(modal?.id);
+            return recs.length > 0 ? (
+              <div style={{ marginBottom: 16 }}>
+                <div className="section-title" style={{ marginBottom: 10 }}>Usado en recetas</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {recs.map(r => {
+                    const prod = (products||[]).find(p => p.id === r.productId);
+                    return (
+                      <button key={r.id}
+                        className="btn btn-secondary btn-sm"
+                        style={{ borderRadius: 99 }}
+                        onClick={() => { setModal(null); goToRecipe(r.id); }}
+                      >
+                        <Ico n="recipes" s={12}/> {prod?.name || "Receta"}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null;
+          })()}
 
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={()=>setModal(null)}>Cancelar</button>

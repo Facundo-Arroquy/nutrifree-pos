@@ -8,13 +8,20 @@
  *
  * Props: recipes, setRecipes, products, ingredients, showToast
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Ico, Modal, $ } from "../shared.jsx";
 import { supabase, recipeToDb, recipeIngredientToDb } from "../supabase.js";
 
-export default function RecipesPage({ recipes, setRecipes, products, ingredients, showToast }) {
+export default function RecipesPage({ recipes, setRecipes, products, ingredients, openRecipeId, setOpenRecipeId, showToast }) {
   const [modal, setModal] = useState(null);
   const [viewModal, setViewModal] = useState(null);
+
+  useEffect(() => {
+    if (!openRecipeId || !recipes.length) return;
+    const r = recipes.find(x => x.id === openRecipeId);
+    if (r) setViewModal(r);
+    setOpenRecipeId(null);
+  }, [openRecipeId, recipes]);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState({ productId:"", prepTime:0, cookTime:0, yield:1, notes:"", ingredients:[], steps:[] });
   const [newIngr, setNewIngr] = useState({ ingredientId:"", qty:"" });
