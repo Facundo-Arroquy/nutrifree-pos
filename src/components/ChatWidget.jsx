@@ -5,6 +5,16 @@ import { useState, useRef, useEffect } from "react";
 import { supabase } from "../supabase.js";
 
 // ─── Algoritmo de matching ────────────────────────────────────────────────────
+const STOP_WORDS = new Set([
+  "como","que","cuando","donde","quien","cual","para","con","por","una","uno",
+  "los","las","del","hay","puedo","quiero","quisiera","hacer","hago","tengo",
+  "esta","este","ese","esa","esto","eso","son","ser","fue","era","han","has",
+  "mas","muy","bien","mal","puede","pueden","debo","debe","necesito","ver",
+  "saber","decir","dar","tener","usar","poner","agregar","nuevo","nueva",
+  "cual","cuales","cuanto","cuantos","cuanto","desde","hasta","sobre","entre",
+  "sin","con","sus","sus","les","nos","mis","por","que","pero","sin","ya",
+]);
+
 function normalizeText(text) {
   return text
     .toLowerCase()
@@ -12,7 +22,7 @@ function normalizeText(text) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9\s]/g, "")
     .split(/\s+/)
-    .filter(w => w.length > 2);
+    .filter(w => w.length > 2 && !STOP_WORDS.has(w));
 }
 
 function matchQuery(query, entries, threshold = 0.25) {
