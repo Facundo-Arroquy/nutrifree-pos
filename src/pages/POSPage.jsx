@@ -91,10 +91,13 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   };
 
   const updateQty = (productId, delta) => {
+    const prod = products.find(p => p.id === productId);
+    const maxStock = prod ? getKitMaxStock(prod) : Infinity;
     setCart(prev => prev.map(i => {
       if (i.productId !== productId) return i;
       const nq = Math.round((i.qty + delta) * 100) / 100;
       if (nq <= 0) return null;
+      if (delta > 0 && nq > maxStock) { showToast(`Stock insuficiente (máx. ${maxStock})`, "error"); return i; }
       return {...i, qty:nq, subtotal:nq*i.price};
     }).filter(Boolean));
   };
@@ -102,6 +105,9 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   const setQty = (productId, val) => {
     const nq = Number(val);
     if (!nq || nq <= 0) return;
+    const prod = products.find(p => p.id === productId);
+    const maxStock = prod ? getKitMaxStock(prod) : Infinity;
+    if (nq > maxStock) { showToast(`Stock insuficiente (máx. ${maxStock})`, "error"); return; }
     setCart(prev => prev.map(i => i.productId !== productId ? i : {...i, qty:nq, subtotal:nq*i.price}));
   };
 
@@ -129,6 +135,15 @@ export default function POSPage({ products, setProducts, customers, setCustomers
 
   const completeSale = async (status="closed") => {
     if (cart.length === 0) { showToast("El carrito está vacío", "error"); return; }
+    for (const item of cart) {
+      const prod = products.find(p => p.id === item.productId);
+      if (!prod) continue;
+      const maxStock = getKitMaxStock(prod);
+      if (item.qty > maxStock) {
+        showToast(`Stock insuficiente para "${item.name}" (disponible: ${maxStock})`, "error");
+        return;
+      }
+    }
     const sale = {
       id: uid(),
       customerId: selectedCustomer?.id || null,
