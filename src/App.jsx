@@ -31,6 +31,7 @@ import {
   dbToSupplierPayment,
   dbToCashShift,
   dbToFaqEntry,
+  dbToFaqMissed,
 } from "./supabase.js";
 
 import DashboardPage from "./pages/DashboardPage.jsx";
@@ -90,6 +91,7 @@ export default function App() {
   const [supplierPayments, setSupplierPayments] = useState([]);
   const [cashShifts, setCashShifts] = useState([]);
   const [faqEntries, setFaqEntries] = useState([]);
+  const [faqMissed, setFaqMissed] = useState([]);
   const [alertBalanceThreshold, setAlertBalanceThreshold] = useState(
     () => Number(localStorage.getItem("balanceAlertThreshold") || 0)
   );
@@ -120,7 +122,7 @@ export default function App() {
   useEffect(() => {
     if (!user || user.isDemo) return;
     const load = async () => {
-      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }, { data: faqs }] = await Promise.all([
+      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }, { data: faqs }, { data: faqsMissed }] = await Promise.all([
         supabase.from("categories").select("*"),
         supabase.from("expense_categories").select("*").order("name"),
         supabase.from("products").select("*"),
@@ -136,6 +138,7 @@ export default function App() {
         supabase.from("supplier_payments").select("*").order("created_at", { ascending: false }),
         supabase.from("cash_shifts").select("*").order("created_at", { ascending: false }),
         supabase.from("faq_entries").select("*").order("created_at", { ascending: false }),
+        supabase.from("faq_missed").select("*").order("created_at", { ascending: false }),
       ]);
       if (accPaysErr) console.error("[account_payments] Error al cargar:", accPaysErr);
       if (cats && cats.length > 0) setCategories(cats.map(c => c.name));
@@ -160,6 +163,7 @@ export default function App() {
       if (suppPays && suppPays.length > 0) setSupplierPayments(suppPays.map(dbToSupplierPayment));
       if (shifts && shifts.length > 0) setCashShifts(shifts.map(dbToCashShift));
       if (faqs && faqs.length > 0) setFaqEntries(faqs.map(dbToFaqEntry));
+      if (faqsMissed && faqsMissed.length > 0) setFaqMissed(faqsMissed.map(dbToFaqMissed));
     };
     load();
   }, [user?.email]);
@@ -385,7 +389,7 @@ export default function App() {
     window.location.reload();
   };
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, alertBalanceThreshold, setAlertBalanceThreshold, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction };
 
   return (
     <>
@@ -578,7 +582,7 @@ export default function App() {
         </div>
       )}
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)}/>}
-      <ChatWidget faqEntries={faqEntries}/>
+      <ChatWidget faqEntries={faqEntries} setFaqMissed={setFaqMissed}/>
     </>
   );
 }

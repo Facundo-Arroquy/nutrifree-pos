@@ -2,6 +2,7 @@
  * ChatWidget.jsx — Widget flotante de ayuda con matching por palabras clave
  */
 import { useState, useRef, useEffect } from "react";
+import { supabase } from "../supabase.js";
 
 // ─── Algoritmo de matching ────────────────────────────────────────────────────
 function normalizeText(text) {
@@ -29,7 +30,7 @@ function matchQuery(query, entries, threshold = 0.25) {
 
 const FALLBACK = "No tengo en claro eso. Por favor consultá al soporte para más información.";
 
-export default function ChatWidget({ faqEntries }) {
+export default function ChatWidget({ faqEntries, setFaqMissed }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([
     { from: "bot", text: "¡Hola! ¿En qué puedo ayudarte?" }
@@ -42,12 +43,15 @@ export default function ChatWidget({ faqEntries }) {
     if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, open]);
 
-  const saveMissed = (question) => {
-    try {
-      const prev = JSON.parse(localStorage.getItem("faq_missed") || "[]");
-      const entry = { id: crypto.randomUUID(), question, date: new Date().toISOString() };
-      localStorage.setItem("faq_missed", JSON.stringify([entry, ...prev].slice(0, 200)));
-    } catch (_) {}
+  const saveMissed = async (question) => {
+    const { data, error } = await supabase
+      .from("faq_missed")
+      .insert({ question })
+      .select()
+      .single();
+    if (!error && data && setFaqMissed) {
+      setFaqMissed(prev => [{ id: data.id, question: data.question, date: data.created_at }, ...prev]);
+    }
   };
 
   const send = () => {

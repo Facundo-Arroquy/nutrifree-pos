@@ -9,15 +9,10 @@ import { dbToFaqEntry, faqEntryToDb } from "../supabase.js";
 
 const EMPTY = { id: "", question: "", answer: "" };
 
-function loadMissed() {
-  try { return JSON.parse(localStorage.getItem("faq_missed") || "[]"); } catch { return []; }
-}
-
-export default function HelpAdminPage({ faqEntries, setFaqEntries, showToast }) {
+export default function HelpAdminPage({ faqEntries, setFaqEntries, faqMissed, setFaqMissed, showToast }) {
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
-  const [missed, setMissed] = useState(loadMissed);
   const [prefillFrom, setPrefillFrom] = useState(null);
   const [threshold, setThreshold] = useState(
     () => Number(localStorage.getItem("faqThreshold") || 0.25)
@@ -33,16 +28,17 @@ export default function HelpAdminPage({ faqEntries, setFaqEntries, showToast }) 
     setModal(true);
   };
 
-  const deleteMissed = (id) => {
-    const next = missed.filter(m => m.id !== id);
-    localStorage.setItem("faq_missed", JSON.stringify(next));
-    setMissed(next);
+  const deleteMissed = async (id) => {
+    const { error } = await supabase.from("faq_missed").delete().eq("id", id);
+    if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
+    setFaqMissed(prev => prev.filter(m => m.id !== id));
   };
 
-  const clearAllMissed = () => {
+  const clearAllMissed = async () => {
     if (!confirm("¿Eliminar todas las preguntas sin respuesta?")) return;
-    localStorage.setItem("faq_missed", "[]");
-    setMissed([]);
+    const { error } = await supabase.from("faq_missed").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (error) { showToast("Error al limpiar: " + error.message, "error"); return; }
+    setFaqMissed([]);
   };
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -161,16 +157,16 @@ export default function HelpAdminPage({ faqEntries, setFaqEntries, showToast }) 
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
           <div className="section-title" style={{ margin: 0 }}>
             Preguntas sin respuesta
-            {missed.length > 0 && <span className="badge badge-red" style={{ marginLeft: 8 }}>{missed.length}</span>}
+            {faqMissed.length > 0 && <span className="badge badge-red" style={{ marginLeft: 8 }}>{faqMissed.length}</span>}
           </div>
-          {missed.length > 0 && (
+          {faqMissed.length > 0 && (
             <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto", color: "var(--red)", fontSize: ".8em" }} onClick={clearAllMissed}>
               Eliminar todas
             </button>
           )}
         </div>
 
-        {missed.length === 0 ? (
+        {faqMissed.length === 0 ? (
           <div style={{ color: "var(--t3)", fontSize: ".85em", padding: "12px 0" }}>
             ✓ No hay preguntas sin respuesta por el momento.
           </div>
@@ -185,7 +181,7 @@ export default function HelpAdminPage({ faqEntries, setFaqEntries, showToast }) 
                 </tr>
               </thead>
               <tbody>
-                {missed.map(m => (
+                {faqMissed.map(m => (
                   <tr key={m.id}>
                     <td style={{ fontWeight: 500 }}>{m.question}</td>
                     <td style={{ color: "var(--t3)", fontSize: ".82em", whiteSpace: "nowrap" }}>
