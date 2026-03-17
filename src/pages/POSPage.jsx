@@ -66,7 +66,6 @@ export default function POSPage({ products, setProducts, customers, setCustomers
 
   const filtered = products
     .filter(p => p.active &&
-      getKitMaxStock(p) > 0 &&
       (filterCat==="Todos" || p.category===filterCat) &&
       (!search || p.name.toLowerCase().includes(search.toLowerCase()))
     )
@@ -243,7 +242,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
             const effStock = getKitMaxStock(p);
             const isFav = favorites.has(p.id);
             return (
-              <div key={p.id} className={`prod-card${effStock<=5?" low-stock":""}`} onClick={()=>addToCart(p)} style={{ position:"relative" }}>
+              <div key={p.id} className={`prod-card${effStock<=0?" inactive":""}`} onClick={()=>addToCart(p)} style={{ position:"relative" }}>
                 <button
                   onClick={e => toggleFav(e, p.id)}
                   title={isFav ? "Quitar favorito" : "Marcar favorito"}
