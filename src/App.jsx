@@ -92,9 +92,7 @@ export default function App() {
   const [cashShifts, setCashShifts] = useState([]);
   const [faqEntries, setFaqEntries] = useState([]);
   const [faqMissed, setFaqMissed] = useState([]);
-  const [alertBalanceThreshold, setAlertBalanceThreshold] = useState(
-    () => Number(localStorage.getItem("balanceAlertThreshold") || 0)
-  );
+  const [alertBalanceThreshold, setAlertBalanceThreshold] = useState(0);
   const [toast, setToast] = useState(null);
   const [deliveryAlerts, setDeliveryAlerts] = useState([]);
   const [showMenuReminder, setShowMenuReminder] = useState(false);
@@ -122,7 +120,7 @@ export default function App() {
   useEffect(() => {
     if (!user || user.isDemo) return;
     const load = async () => {
-      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }, { data: faqs }, { data: faqsMissed }] = await Promise.all([
+      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }, { data: faqs }, { data: faqsMissed }, { data: settings }] = await Promise.all([
         supabase.from("categories").select("*"),
         supabase.from("expense_categories").select("*").order("name"),
         supabase.from("products").select("*"),
@@ -139,6 +137,7 @@ export default function App() {
         supabase.from("cash_shifts").select("*").order("created_at", { ascending: false }),
         supabase.from("faq_entries").select("*").order("created_at", { ascending: false }),
         supabase.from("faq_missed").select("*").order("created_at", { ascending: false }),
+        supabase.from("app_settings").select("*"),
       ]);
       if (accPaysErr) console.error("[account_payments] Error al cargar:", accPaysErr);
       if (cats && cats.length > 0) setCategories(cats.map(c => c.name));
@@ -164,6 +163,10 @@ export default function App() {
       if (shifts && shifts.length > 0) setCashShifts(shifts.map(dbToCashShift));
       if (faqs && faqs.length > 0) setFaqEntries(faqs.map(dbToFaqEntry));
       if (faqsMissed && faqsMissed.length > 0) setFaqMissed(faqsMissed.map(dbToFaqMissed));
+      if (settings) {
+        const bal = settings.find(s => s.key === "balance_alert_threshold");
+        if (bal) setAlertBalanceThreshold(Number(bal.value) || 0);
+      }
     };
     load();
   }, [user?.email]);

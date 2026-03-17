@@ -181,9 +181,11 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
               placeholder="Ej: 100000"
             />
           </div>
-          <button className="btn btn-primary btn-sm" style={{ alignSelf:"flex-end", marginBottom:1 }} onClick={() => {
+          <button className="btn btn-primary btn-sm" style={{ alignSelf:"flex-end", marginBottom:1 }} onClick={async () => {
             const v = Math.max(0, Number(balThreshold) || 0);
-            localStorage.setItem("balanceAlertThreshold", String(v));
+            const { error } = await supabase.from("app_settings")
+              .upsert({ key: "balance_alert_threshold", value: String(v) }, { onConflict: "key" });
+            if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
             setAlertBalanceThreshold(v);
             showToast("Límite de alerta guardado ✓");
           }}>
