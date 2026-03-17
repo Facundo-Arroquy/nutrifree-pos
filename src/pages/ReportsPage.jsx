@@ -11,7 +11,7 @@
  *
  * Props: sales, expenses, recipes, products, stockMovements
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Ico, $, fmtDate, fmtTime, STATUS_LABELS, STATUS_COLORS, PAY_LABELS } from "../shared.jsx";
 
 // ─── Bar chart (CSS-based, no library) ────────────────────────────────────────
@@ -177,6 +177,55 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
 
   const stockAlert = products.filter(p=>p.active&&!p.kitItems?.length&&p.stock>0&&p.stock<=5).sort((a,b)=>a.stock-b.stock);
 
+  // ── Resumen del día ───────────────────────────────────────────────────────────
+  const [copied, setCopied] = useState(false);
+
+  const daySummary = useMemo(() => {
+    // Ventas: agrupar unidades por categoría
+    const soldItems = closedSales.flatMap(s => s.items || []);
+    const catTotals = {};
+    for (const item of soldItems) {
+      const prod = products.find(p => p.id === item.productId);
+      if (!prod) continue;
+      const key = prod.category;
+      catTotals[key] = (catTotals[key] || 0) + item.qty;
+    }
+
+    // Producción: agrupar por nombre de producto
+    const prodMovs = (stockMovements || []).filter(m =>
+      m.type === "production" &&
+      m.createdAt?.slice(0,10) >= from &&
+      m.createdAt?.slice(0,10) <= to
+    );
+    const prodTotals = {};
+    for (const m of prodMovs) {
+      prodTotals[m.productName] = (prodTotals[m.productName] || 0) + m.qty;
+    }
+
+    return { catTotals, prodTotals };
+  }, [closedSales, stockMovements, products, from, to]);
+
+  const buildSummaryText = useCallback(() => {
+    const { catTotals, prodTotals } = daySummary;
+    const ventasParts = Object.entries(catTotals)
+      .filter(([, qty]) => qty > 0)
+      .map(([cat, qty]) => `${Math.round(qty)} ${cat.toLowerCase()}`);
+    const prodParts = Object.entries(prodTotals)
+      .filter(([, qty]) => qty > 0)
+      .map(([name, qty]) => `${Math.round(qty)} ${name.toLowerCase()}`);
+    const label = from === to ? `el ${from}` : `del ${from} al ${to}`;
+    const ventas = ventasParts.length ? `Se vendieron ${ventasParts.join(", ")}.` : "Sin ventas registradas.";
+    const prod = prodParts.length ? ` Se elaboró ${prodParts.join(", ")}.` : "";
+    return `Resumen ${label}\n${ventas}${prod}`;
+  }, [daySummary, from, to]);
+
+  const copySummary = () => {
+    navigator.clipboard.writeText(buildSummaryText()).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
   // ── Alerta de margen ─────────────────────────────────────────────────────────
   const marginAlert = useMemo(() => {
     return products
@@ -326,6 +375,55 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
           <div className="stat-num">{netResult<0?"-":""}{$(Math.abs(netResult))}</div>
           <div className="stat-label">Resultado neto</div>
           <div className="stat-icon">{netResult>=0?"📈":"📉"}</div>
+        </div>
+      </div>
+
+      {/* ── Resumen del período ─────────────────────────────────────────────── */}
+      <div className="card" style={{ marginBottom:16 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+          <div className="section-title" style={{ margin:0 }}>📋 Resumen del período</div>
+          <button className="btn btn-secondary btn-sm" onClick={copySummary}>
+            {copied ? "✓ Copiado!" : "Copiar texto"}
+          </button>
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+          {/* Ventas por categoría */}
+          <div>
+            <div style={{ fontSize:".78em", fontWeight:700, textTransform:"uppercase", letterSpacing:".6px", color:"var(--t3)", marginBottom:10 }}>Vendido</div>
+            {Object.entries(daySummary.catTotals).length === 0
+              ? <div style={{ color:"var(--t4)", fontSize:".85em" }}>Sin ventas en el período</div>
+              : Object.entries(daySummary.catTotals)
+                  .sort((a,b) => b[1] - a[1])
+                  .map(([cat, qty]) => (
+                    <div key={cat} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderBottom:"1px solid var(--border)" }}>
+                      <span style={{ fontSize:".88em", color:"var(--t2)" }}>{cat}</span>
+                      <span style={{ fontWeight:700, color:"var(--green)", fontSize:".95em" }}>{Math.round(qty)} u.</span>
+                    </div>
+                  ))
+            }
+          </div>
+
+          {/* Producción */}
+          <div>
+            <div style={{ fontSize:".78em", fontWeight:700, textTransform:"uppercase", letterSpacing:".6px", color:"var(--t3)", marginBottom:10 }}>Elaborado</div>
+            {Object.entries(daySummary.prodTotals).length === 0
+              ? <div style={{ color:"var(--t4)", fontSize:".85em" }}>Sin producción registrada en el período</div>
+              : Object.entries(daySummary.prodTotals)
+                  .sort((a,b) => b[1] - a[1])
+                  .map(([name, qty]) => (
+                    <div key={name} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderBottom:"1px solid var(--border)" }}>
+                      <span style={{ fontSize:".88em", color:"var(--t2)" }}>{name}</span>
+                      <span style={{ fontWeight:700, color:"var(--blue)", fontSize:".95em" }}>{Math.round(qty)} u.</span>
+                    </div>
+                  ))
+            }
+          </div>
+        </div>
+
+        {/* Preview del texto */}
+        <div style={{ marginTop:14, background:"var(--s2)", borderRadius:8, padding:"10px 14px", fontSize:".84em", color:"var(--t3)", fontStyle:"italic", whiteSpace:"pre-line" }}>
+          {buildSummaryText()}
         </div>
       </div>
 
