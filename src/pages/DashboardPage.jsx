@@ -22,7 +22,7 @@ function StatCard({ label, value, sub, color = "green" }) {
   );
 }
 
-export default function DashboardPage({ sales, products, cashShifts, customers, alertBalanceThreshold, setPage }) {
+export default function DashboardPage({ sales, products, cashShifts, customers, accountPayments, alertBalanceThreshold, setPage }) {
   const today = todayStr();
   const [dateFrom, setDateFrom] = useState(today);
   const [dateTo,   setDateTo]   = useState(today);
@@ -49,8 +49,18 @@ export default function DashboardPage({ sales, products, cashShifts, customers, 
 
   const openShift = cashShifts.find(s => s.status === "open") || null;
 
+  const custBal = (id) => {
+    const c = (customers || []).find(x => x.id === id);
+    return (c?.balance ?? 0) + (accountPayments || [])
+      .filter(p => p.customerId === id)
+      .reduce((sum, p) => p.type === "payment" ? sum + p.amount : sum - p.amount, 0);
+  };
+
   const debtAlerts = alertBalanceThreshold > 0
-    ? (customers || []).filter(c => c.balance < -alertBalanceThreshold).sort((a, b) => a.balance - b.balance)
+    ? (customers || [])
+        .map(c => ({ ...c, realBalance: custBal(c.id) }))
+        .filter(c => c.realBalance < -alertBalanceThreshold)
+        .sort((a, b) => a.realBalance - b.realBalance)
     : [];
 
   const recentSales = rangeSales.slice(0, 5);
@@ -131,7 +141,7 @@ export default function DashboardPage({ sales, products, cashShifts, customers, 
                   <tr key={c.id}>
                     <td style={{ fontWeight:600, fontSize:".88em" }}>{c.name}</td>
                     <td style={{ color:"var(--t3)", fontSize:".82em" }}>{c.phone || "—"}</td>
-                    <td style={{ textAlign:"right", fontWeight:700, color:"var(--red)" }}>{$(c.balance)}</td>
+                    <td style={{ textAlign:"right", fontWeight:700, color:"var(--red)" }}>{$(c.realBalance)}</td>
                   </tr>
                 ))}
               </tbody>
