@@ -53,17 +53,6 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   };
 
   const categories = ["Todos", ...new Set(products.map(p => p.category))];
-  const filtered = products
-    .filter(p => p.active &&
-      (filterCat==="Todos" || p.category===filterCat) &&
-      (!search || p.name.toLowerCase().includes(search.toLowerCase()))
-    )
-    .sort((a, b) => {
-      const af = favorites.has(a.id) ? 0 : 1;
-      const bf = favorites.has(b.id) ? 0 : 1;
-      return af - bf;
-    });
-
   const getKitMaxStock = (prod) => {
     if (!prod.kitItems?.length) return prod.stock;
     let max = Infinity;
@@ -74,6 +63,18 @@ export default function POSPage({ products, setProducts, customers, setCustomers
     }
     return isFinite(max) ? max : 0;
   };
+
+  const filtered = products
+    .filter(p => p.active &&
+      getKitMaxStock(p) > 0 &&
+      (filterCat==="Todos" || p.category===filterCat) &&
+      (!search || p.name.toLowerCase().includes(search.toLowerCase()))
+    )
+    .sort((a, b) => {
+      const af = favorites.has(a.id) ? 0 : 1;
+      const bf = favorites.has(b.id) ? 0 : 1;
+      return af - bf;
+    });
 
   const addToCart = (prod) => {
     const isKit = prod.kitItems?.length > 0;
@@ -242,7 +243,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
             const effStock = getKitMaxStock(p);
             const isFav = favorites.has(p.id);
             return (
-              <div key={p.id} className={`prod-card${effStock<=0?" inactive":""}`} onClick={()=>addToCart(p)} style={{ position:"relative" }}>
+              <div key={p.id} className={`prod-card${effStock<=5?" low-stock":""}`} onClick={()=>addToCart(p)} style={{ position:"relative" }}>
                 <button
                   onClick={e => toggleFav(e, p.id)}
                   title={isFav ? "Quitar favorito" : "Marcar favorito"}

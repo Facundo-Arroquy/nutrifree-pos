@@ -235,6 +235,7 @@ tbody tr:hover td{background:var(--s1)}
 .prod-card:hover{border-color:var(--green);box-shadow:0 4px 14px rgba(137,184,173,.18);transform:translateY(-1px)}
 .prod-card:active{transform:scale(.98)}
 .prod-card.inactive{opacity:.28;cursor:not-allowed}
+.prod-card.low-stock{border-color:var(--amberlb);background:var(--amberl)}
 .prod-card-name{font-weight:600;font-size:.86em;color:var(--t1);margin-bottom:3px;line-height:1.3}
 .prod-card-cat{font-size:.68em;color:var(--t4);margin-bottom:6px}
 .prod-card-price{font-size:.94em;font-weight:700;color:var(--green)}
