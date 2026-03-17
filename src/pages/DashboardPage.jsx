@@ -7,7 +7,7 @@
  * Props: sales, products, cashShifts, setPage
  */
 import { useState } from "react";
-import { $, fmtDT, fmtTime, todayStr, PAY_LABELS } from "../shared.jsx";
+import { $, fmtDT, fmtTime, todayStr, PAY_LABELS, Ico } from "../shared.jsx";
 
 function StatCard({ label, value, sub, color = "green" }) {
   const bg = { green:"var(--greenl)", amber:"var(--amberl)", blue:"var(--bluel)", red:"var(--redl)" };
@@ -22,7 +22,7 @@ function StatCard({ label, value, sub, color = "green" }) {
   );
 }
 
-export default function DashboardPage({ sales, products, cashShifts, setPage }) {
+export default function DashboardPage({ sales, products, cashShifts, customers, alertBalanceThreshold, setPage }) {
   const today = todayStr();
   const [dateFrom, setDateFrom] = useState(today);
   const [dateTo,   setDateTo]   = useState(today);
@@ -48,6 +48,10 @@ export default function DashboardPage({ sales, products, cashShifts, setPage }) 
     .sort((a, b) => a.stock - b.stock);
 
   const openShift = cashShifts.find(s => s.status === "open") || null;
+
+  const debtAlerts = alertBalanceThreshold > 0
+    ? (customers || []).filter(c => c.balance < -alertBalanceThreshold).sort((a, b) => a.balance - b.balance)
+    : [];
 
   const recentSales = rangeSales.slice(0, 5);
 
@@ -100,6 +104,39 @@ export default function DashboardPage({ sales, products, cashShifts, setPage }) 
             </div>
           </div>
           <button className="btn btn-secondary btn-sm" onClick={() => setPage("cash")}>Ver caja</button>
+        </div>
+      )}
+
+      {/* Alerta clientes con deuda alta */}
+      {debtAlerts.length > 0 && (
+        <div style={{ background:"var(--redl)", border:"1px solid var(--redlb)", borderRadius:"var(--rl)", padding:"14px 20px", marginBottom:22 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
+            <span style={{ fontSize:"1.3em" }}>⚠️</span>
+            <div style={{ fontWeight:700, color:"var(--red)", fontSize:".9em" }}>
+              {debtAlerts.length === 1
+                ? "1 cliente supera el límite de deuda"
+                : `${debtAlerts.length} clientes superan el límite de deuda`}
+            </div>
+            <button className="btn btn-ghost btn-sm" style={{ marginLeft:"auto", fontSize:".8em" }} onClick={() => setPage("customers")}>
+              Ver clientes
+            </button>
+          </div>
+          <div className="table-wrap" style={{ margin:0 }}>
+            <table>
+              <thead>
+                <tr><th>Cliente</th><th>Teléfono</th><th style={{ textAlign:"right" }}>Saldo</th></tr>
+              </thead>
+              <tbody>
+                {debtAlerts.map(c => (
+                  <tr key={c.id}>
+                    <td style={{ fontWeight:600, fontSize:".88em" }}>{c.name}</td>
+                    <td style={{ color:"var(--t3)", fontSize:".82em" }}>{c.phone || "—"}</td>
+                    <td style={{ textAlign:"right", fontWeight:700, color:"var(--red)" }}>{$(c.balance)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

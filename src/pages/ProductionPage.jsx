@@ -15,6 +15,7 @@ import { supabase, stockMovementToDb } from "../supabase.js";
 
 export default function ProductionPage({ products, setProducts, recipes, setIngredients, setStockMovements, showToast, logAction }) {
   const [qty, setQty] = useState({});
+  const [search, setSearch] = useState("");
 
   const setQ = (id,v) => setQty(p=>({...p,[id]:v}));
 
@@ -80,10 +81,18 @@ export default function ProductionPage({ products, setProducts, recipes, setIngr
         <div><div className="page-title">Producción diaria</div><div className="page-sub">Ingresá las unidades producidas hoy para actualizar el stock</div></div>
       </div>
 
-      <div className="card" style={{ marginBottom:16 }}>
-        <div style={{ fontSize:".84em", color:"var(--t2)", display:"flex", gap:8, alignItems:"center" }}>
+      <div className="card" style={{ marginBottom:16, display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
+        <div style={{ fontSize:".84em", color:"var(--t2)", display:"flex", gap:8, alignItems:"center", flex:1 }}>
           <Ico n="alert" s={15} c="var(--amber)"/>
           Ingresá la cantidad producida de cada producto. El stock se incrementará automáticamente.
+        </div>
+        <div className="search-wrap" style={{ minWidth:220 }}>
+          <div className="search-ico"><Ico n="search" s={14}/></div>
+          <input
+            placeholder="Buscar producto..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
         </div>
       </div>
 
@@ -91,7 +100,7 @@ export default function ProductionPage({ products, setProducts, recipes, setIngr
         <table>
           <thead><tr><th>Producto</th><th>Categoría</th><th>Stock actual</th><th>Producción hoy</th><th></th></tr></thead>
           <tbody>
-            {products.filter(p=>p.active).map(p => (
+            {products.filter(p => p.active && (!search || p.name.toLowerCase().includes(search.toLowerCase()))).map(p => (
               <tr key={p.id}>
                 <td style={{ fontWeight:600 }}>{p.name}</td>
                 <td><span className="tag">{p.category}</span></td>

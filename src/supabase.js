@@ -178,6 +178,9 @@ export const accountPaymentToDb = p => ({
   date: p.date, notes: p.notes,
 });
 
+export const dbToFaqEntry = r => ({ id: r.id, question: r.question, answer: r.answer, createdAt: r.created_at });
+export const faqEntryToDb = e => ({ id: e.id, question: e.question, answer: e.answer });
+
 export const dbToStockMovement = r => ({
   id: r.id, productId: r.product_id, productName: r.product_name,
   qty: r.qty, type: r.type, notes: r.notes, createdAt: r.created_at,

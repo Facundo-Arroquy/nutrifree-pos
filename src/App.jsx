@@ -30,6 +30,7 @@ import {
   dbToSupplier,
   dbToSupplierPayment,
   dbToCashShift,
+  dbToFaqEntry,
 } from "./supabase.js";
 
 import DashboardPage from "./pages/DashboardPage.jsx";
@@ -46,6 +47,8 @@ import ReportsPage from "./pages/ReportsPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
 import CashShiftPage from "./pages/CashShiftPage.jsx";
 import ImportPage from "./pages/ImportPage.jsx";
+import HelpAdminPage from "./pages/HelpAdminPage.jsx";
+import ChatWidget from "./components/ChatWidget.jsx";
 
 // ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
 const sessionToUser = (session) => {
@@ -86,6 +89,10 @@ export default function App() {
   const [suppliers, setSuppliers] = useState([]);
   const [supplierPayments, setSupplierPayments] = useState([]);
   const [cashShifts, setCashShifts] = useState([]);
+  const [faqEntries, setFaqEntries] = useState([]);
+  const [alertBalanceThreshold, setAlertBalanceThreshold] = useState(
+    () => Number(localStorage.getItem("balanceAlertThreshold") || 0)
+  );
   const [toast, setToast] = useState(null);
   const [deliveryAlerts, setDeliveryAlerts] = useState([]);
   const [showMenuReminder, setShowMenuReminder] = useState(false);
@@ -113,7 +120,7 @@ export default function App() {
   useEffect(() => {
     if (!user || user.isDemo) return;
     const load = async () => {
-      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }] = await Promise.all([
+      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }, { data: faqs }] = await Promise.all([
         supabase.from("categories").select("*"),
         supabase.from("expense_categories").select("*").order("name"),
         supabase.from("products").select("*"),
@@ -128,6 +135,7 @@ export default function App() {
         supabase.from("suppliers").select("*").order("name"),
         supabase.from("supplier_payments").select("*").order("created_at", { ascending: false }),
         supabase.from("cash_shifts").select("*").order("created_at", { ascending: false }),
+        supabase.from("faq_entries").select("*").order("created_at", { ascending: false }),
       ]);
       if (accPaysErr) console.error("[account_payments] Error al cargar:", accPaysErr);
       if (cats && cats.length > 0) setCategories(cats.map(c => c.name));
@@ -151,6 +159,7 @@ export default function App() {
       if (supps && supps.length > 0) setSuppliers(supps.map(dbToSupplier));
       if (suppPays && suppPays.length > 0) setSupplierPayments(suppPays.map(dbToSupplierPayment));
       if (shifts && shifts.length > 0) setCashShifts(shifts.map(dbToCashShift));
+      if (faqs && faqs.length > 0) setFaqEntries(faqs.map(dbToFaqEntry));
     };
     load();
   }, [user?.email]);
@@ -186,7 +195,7 @@ export default function App() {
   };
 
   // ─── Route guards ──────────────────────────────────────────────────────────
-  const PAGE_ROLES = { reports: ["admin"], import: ["admin"] };
+  const PAGE_ROLES = { reports: ["admin"], import: ["admin"], "help-admin": ["admin"] };
   const canAccess = (pageId) => {
     if (user?.isDemo) return true;
     const allowed = PAGE_ROLES[pageId] || ["admin", "vendor"];
@@ -359,6 +368,7 @@ export default function App() {
     { id:"suppliers",   label:"Proveedores",     icon:"suppliers",   roles:["admin","vendor"], section:"finanzas" },
     { id:"import",      label:"Importar datos",  icon:"upload",      roles:["admin"],          section:"bottom" },
     { id:"reports",     label:"Reportes",        icon:"reports",     roles:["admin"],          section:"bottom" },
+    { id:"help-admin",  label:"FAQ / Ayuda",     icon:"settings",    roles:["admin"],          section:"bottom" },
     { id:"settings",    label:"Configuración",   icon:"settings",    roles:["admin","vendor"], section:"bottom" },
   ].filter(n => user.isDemo || n.roles.includes(user.role));
   const sidebarSections = [
@@ -375,7 +385,7 @@ export default function App() {
     window.location.reload();
   };
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, alertBalanceThreshold, setAlertBalanceThreshold, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction };
 
   return (
     <>
@@ -462,6 +472,7 @@ export default function App() {
             {page==="suppliers" && <SuppliersPage {...props}/>}
             {page==="import" && (canAccess("import") ? <ImportPage {...props}/> : <AccessDenied/>)}
             {page==="reports" && (canAccess("reports") ? <ReportsPage {...props}/> : <AccessDenied/>)}
+            {page==="help-admin" && (canAccess("help-admin") ? <HelpAdminPage {...props}/> : <AccessDenied/>)}
             {page==="settings" && <SettingsPage {...props}/>}
           </div>
         </div>
@@ -567,6 +578,7 @@ export default function App() {
         </div>
       )}
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)}/>}
+      <ChatWidget faqEntries={faqEntries}/>
     </>
   );
 }

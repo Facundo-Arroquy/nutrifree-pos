@@ -15,7 +15,7 @@ import { useState, useRef } from "react";
 import { Ico } from "../shared.jsx";
 import { supabase } from "../supabase.js";
 
-export default function SettingsPage({ user, categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo }) {
+export default function SettingsPage({ user, categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold }) {
   const [newCat, setNewCat] = useState("");
   const [newExpCat, setNewExpCat] = useState("");
   const [newPass, setNewPass] = useState("");
@@ -24,6 +24,7 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
   const [changingPass, setChangingPass] = useState(false);
   const [rStart, setRStart] = useState(reminderStart);
   const [rEnd,   setREnd]   = useState(reminderEnd);
+  const [balThreshold, setBalThreshold] = useState(String(alertBalanceThreshold));
 
   const changePassword = async () => {
     if (newPass.length < 6) { showToast("La contraseña debe tener al menos 6 caracteres", "error"); return; }
@@ -163,6 +164,36 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
             ↺ Reiniciar recordatorio de menú
           </button>
         </div>
+      </div>
+
+      <div className="card" style={{ maxWidth:420, marginBottom:16 }}>
+        <div className="section-title">Alerta de cuenta corriente</div>
+        <div style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
+          Se mostrará una alerta en el Dashboard cuando un cliente tenga saldo negativo mayor a este monto. Ingresá 0 para desactivar la alerta.
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div className="form-group" style={{ flex:1, marginBottom:0 }}>
+            <label className="lbl">Monto límite ($)</label>
+            <input
+              type="text" inputMode="numeric"
+              value={balThreshold}
+              onChange={e => setBalThreshold(e.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="Ej: 100000"
+            />
+          </div>
+          <button className="btn btn-primary btn-sm" style={{ alignSelf:"flex-end", marginBottom:1 }} onClick={() => {
+            const v = Math.max(0, Number(balThreshold) || 0);
+            localStorage.setItem("balanceAlertThreshold", String(v));
+            setAlertBalanceThreshold(v);
+            showToast("Límite de alerta guardado ✓");
+          }}>
+            <Ico n="check" s={13}/> Guardar
+          </button>
+        </div>
+        {alertBalanceThreshold > 0
+          ? <p style={{ fontSize:".76em", color:"var(--t4)", marginTop:8 }}>Activa: alerta cuando deuda supere <strong>${alertBalanceThreshold.toLocaleString("es-AR")}</strong></p>
+          : <p style={{ fontSize:".76em", color:"var(--t4)", marginTop:8 }}>Desactivada (monto en 0)</p>
+        }
       </div>
 
       {user?.isDemo && (

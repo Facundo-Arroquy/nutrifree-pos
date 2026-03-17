@@ -35,14 +35,34 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   const [editingPrice, setEditingPrice] = useState(null);
   const [deliveryModal, setDeliveryModal] = useState(null); // { id, customerName }
   const [deliveryDate, setDeliveryDate] = useState("");
+  const [custSearch, setCustSearch] = useState("");
+  const [favorites, setFavorites] = useState(
+    () => new Set(JSON.parse(localStorage.getItem("pos_favorites") || "[]"))
+  );
 
   const isDelivery = name => /^envio/i.test((name||"").trim());
 
+  const toggleFav = (e, id) => {
+    e.stopPropagation();
+    setFavorites(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      localStorage.setItem("pos_favorites", JSON.stringify([...next]));
+      return next;
+    });
+  };
+
   const categories = ["Todos", ...new Set(products.map(p => p.category))];
-  const filtered = products.filter(p => p.active &&
-    (filterCat==="Todos" || p.category===filterCat) &&
-    (!search || p.name.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = products
+    .filter(p => p.active &&
+      (filterCat==="Todos" || p.category===filterCat) &&
+      (!search || p.name.toLowerCase().includes(search.toLowerCase()))
+    )
+    .sort((a, b) => {
+      const af = favorites.has(a.id) ? 0 : 1;
+      const bf = favorites.has(b.id) ? 0 : 1;
+      return af - bf;
+    });
 
   const getKitMaxStock = (prod) => {
     if (!prod.kitItems?.length) return prod.stock;
@@ -220,9 +240,23 @@ export default function POSPage({ products, setProducts, customers, setCustomers
           {filtered.map(p => {
             const price = priceList==="retail" ? p.priceRetail : p.priceWholesale;
             const effStock = getKitMaxStock(p);
+            const isFav = favorites.has(p.id);
             return (
-              <div key={p.id} className={`prod-card${effStock<=0?" inactive":""}`} onClick={()=>addToCart(p)}>
-                <div className="prod-card-name">{p.name}</div>
+              <div key={p.id} className={`prod-card${effStock<=0?" inactive":""}`} onClick={()=>addToCart(p)} style={{ position:"relative" }}>
+                <button
+                  onClick={e => toggleFav(e, p.id)}
+                  title={isFav ? "Quitar favorito" : "Marcar favorito"}
+                  style={{
+                    position:"absolute", top:5, right:5,
+                    background: isFav ? "var(--amber)" : "var(--s2)",
+                    border: `1.5px solid ${isFav ? "var(--amber)" : "var(--border)"}`,
+                    borderRadius:6, cursor:"pointer", padding:"2px 5px",
+                    fontSize:".78em", lineHeight:1.2, fontWeight:700,
+                    color: isFav ? "white" : "var(--t4)",
+                    transition:"all .15s",
+                  }}
+                >{isFav ? "★ fav" : "☆"}</button>
+                <div className="prod-card-name" style={{ paddingRight:18 }}>{p.name}</div>
                 <div className="prod-card-cat">{p.kitItems?.length > 0 ? "Kit" : p.category}</div>
                 <div className="prod-card-price">{$(price)}</div>
                 <div className="prod-card-stock">Stock: {effStock}</div>
@@ -249,7 +283,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
             </div>
           </div>
           {/* Customer */}
-          <button className="btn btn-secondary btn-sm btn-block" onClick={()=>setCustModal(true)}>
+          <button className="btn btn-secondary btn-sm btn-block" onClick={()=>{ setCustSearch(""); setCustModal(true); }}>
             <Ico n="user" s={13}/>
             {selectedCustomer ? selectedCustomer.name : "Cliente anónimo"}
           </button>
@@ -346,32 +380,45 @@ export default function POSPage({ products, setProducts, customers, setCustomers
 
       {/* CUSTOMER MODAL */}
       {custModal && (
-        <Modal title="Seleccionar cliente" onClose={()=>setCustModal(false)}>
+        <Modal title="Seleccionar cliente" onClose={()=>{ setCustModal(false); setCustSearch(""); }}>
           <div className="search-wrap" style={{ marginBottom:12 }}>
             <div className="search-ico"><Ico n="search" s={14}/></div>
-            <input placeholder="Buscar cliente..." autoFocus id="cust-search"/>
+            <input
+              placeholder="Buscar por nombre o teléfono..."
+              autoFocus
+              value={custSearch}
+              onChange={e => setCustSearch(e.target.value)}
+            />
           </div>
           <button className="btn btn-ghost btn-block btn-sm" style={{ marginBottom:8, justifyContent:"flex-start" }}
-            onClick={()=>{ setSelectedCustomer(null); setCustModal(false); }}>
+            onClick={()=>{ setSelectedCustomer(null); setCustModal(false); setCustSearch(""); }}>
             <Ico n="user" s={14}/> Anónimo
           </button>
-          {customers.map(c => (
-            <button key={c.id} className="btn btn-ghost btn-block btn-sm" style={{ marginBottom:6, justifyContent:"flex-start", textAlign:"left" }}
-              onClick={()=>{
-                setSelectedCustomer(c);
-                setPriceList(c.priceList);
-                if ((c.discountPct||0) > 0) { setDiscountType("pct"); setDiscountValue(String(c.discountPct)); }
-                setCustModal(false);
-              }}>
-              <Ico n="user" s={14}/>
-              <div>
-                <div>{c.name}</div>
-                <div style={{ fontSize:".74em", color:"var(--t3)" }}>
-                  {(() => { const b = custBal(c.id); return <span className={b>0?"balance-pos":b<0?"balance-neg":"balance-zero"}>Saldo: {$(b)}</span>; })()}
+          {customers
+            .filter(c => !custSearch || c.name.toLowerCase().includes(custSearch.toLowerCase()) || (c.phone||"").includes(custSearch))
+            .map(c => (
+              <button key={c.id} className="btn btn-ghost btn-block btn-sm" style={{ marginBottom:6, justifyContent:"flex-start", textAlign:"left" }}
+                onClick={()=>{
+                  setSelectedCustomer(c);
+                  setPriceList(c.priceList);
+                  if ((c.discountPct||0) > 0) { setDiscountType("pct"); setDiscountValue(String(c.discountPct)); }
+                  setCustModal(false);
+                  setCustSearch("");
+                }}>
+                <Ico n="user" s={14}/>
+                <div>
+                  <div>{c.name}</div>
+                  <div style={{ fontSize:".74em", color:"var(--t3)" }}>
+                    {(() => { const b = custBal(c.id); return <span className={b>0?"balance-pos":b<0?"balance-neg":"balance-zero"}>Saldo: {$(b)}</span>; })()}
+                    {c.phone && <span style={{ marginLeft:8 }}>📞 {c.phone}</span>}
+                  </div>
                 </div>
-              </div>
-            </button>
-          ))}
+              </button>
+            ))
+          }
+          {custSearch && customers.filter(c => c.name.toLowerCase().includes(custSearch.toLowerCase()) || (c.phone||"").includes(custSearch)).length === 0 && (
+            <div style={{ fontSize:".84em", color:"var(--t3)", textAlign:"center", padding:"12px 0" }}>Sin resultados</div>
+          )}
         </Modal>
       )}
 
