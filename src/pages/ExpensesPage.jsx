@@ -320,7 +320,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
                 setForm(p=>({...p, supplierId:e.target.value||null, supplier:sup?.name||""}));
               }}>
                 <option value="">— Sin proveedor —</option>
-                {suppliers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+                {[...suppliers].sort((a,b)=>a.name.localeCompare(b.name)).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             {form.category!=="Ingredientes" && <>
@@ -372,7 +372,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
                         <td>
                           <select value={line.ingredientId} onChange={e=>updateLine(idx,"ingredientId",e.target.value)} style={{ minWidth:150 }}>
                             <option value="">— Elegir —</option>
-                            {ingredients.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}
+                            {[...ingredients].sort((a,b)=>a.name.localeCompare(b.name)).map(i=><option key={i.id} value={i.id}>{i.name}</option>)}
                           </select>
                         </td>
                         <td><input type="number" min="0" step="0.01" value={line.qty} onChange={e=>updateLine(idx,"qty",e.target.value)} style={{ width:75 }}/></td>

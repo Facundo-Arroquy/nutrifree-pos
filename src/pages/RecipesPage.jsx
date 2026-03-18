@@ -354,7 +354,7 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
           <div style={{ display:"grid", gridTemplateColumns:"3fr 1fr auto", gap:6, marginBottom:16 }}>
             <select value={newIngr.ingredientId} onChange={e=>setNewIngr(p=>({...p,ingredientId:e.target.value}))}>
               <option value="">-- Seleccionar ingrediente --</option>
-              {ingredients.map(i=><option key={i.id} value={i.id}>{i.name} ({i.unit}) — ${i.unitCost}/{i.unit}</option>)}
+              {[...ingredients].sort((a,b)=>a.name.localeCompare(b.name)).map(i=><option key={i.id} value={i.id}>{i.name} ({i.unit}) — ${i.unitCost}/{i.unit}</option>)}
             </select>
             <input placeholder="Cant." type="number" value={newIngr.qty} onChange={e=>setNewIngr(p=>({...p,qty:e.target.value}))}/>
             <button className="btn btn-primary btn-sm" onClick={addIngr}><Ico n="plus" s={12}/></button>

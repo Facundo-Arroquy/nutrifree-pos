@@ -100,7 +100,7 @@ export default function ProductionPage({ products, setProducts, recipes, setIngr
         <table>
           <thead><tr><th>Producto</th><th>Categoría</th><th>Stock actual</th><th>Producción hoy</th><th></th></tr></thead>
           <tbody>
-            {products.filter(p => p.active && (!search || p.name.toLowerCase().includes(search.toLowerCase()))).map(p => (
+            {products.filter(p => p.active && (!search || p.name.toLowerCase().includes(search.toLowerCase()))).sort((a,b)=>a.name.localeCompare(b.name)).map(p => (
               <tr key={p.id}>
                 <td style={{ fontWeight:600 }}>{p.name}</td>
                 <td><span className="tag">{p.category}</span></td>

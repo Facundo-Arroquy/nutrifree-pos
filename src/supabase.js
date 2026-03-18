@@ -50,12 +50,14 @@ export const dbToCustomer = r => ({
   id: r.id, name: r.name, phone: r.phone, address: r.address,
   notes: r.notes, priceList: r.price_list, balance: r.balance,
   discountPct: r.discount_pct || 0,
+  email: r.email || "", cuit: r.cuit || "",
 });
 
 export const customerToDb = c => ({
   id: c.id, name: c.name, phone: c.phone, address: c.address,
   notes: c.notes, price_list: c.priceList, balance: c.balance,
   discount_pct: Number(c.discountPct) || 0,
+  email: c.email || "", cuit: c.cuit || "",
 });
 
 export const dbToSale = r => ({
@@ -67,6 +69,8 @@ export const dbToSale = r => ({
   discountValue: r.discount_value || 0,
   discountAmount: r.discount_amount || 0,
   deliveryDate: r.delivery_date || null,
+  needsBilling: r.needs_billing || false,
+  billingStatus: r.billing_status || null,
 });
 
 export const saleToDb = s => ({
@@ -78,6 +82,8 @@ export const saleToDb = s => ({
   discount_value: s.discountValue || 0,
   discount_amount: s.discountAmount || 0,
   delivery_date: s.deliveryDate || null,
+  needs_billing: s.needsBilling || false,
+  billing_status: s.billingStatus || null,
 });
 
 export const dbToRecipe = r => ({

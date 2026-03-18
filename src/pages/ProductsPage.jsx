@@ -171,7 +171,7 @@ export default function ProductsPage({ products, setProducts, categories, showTo
                 <div style={{ display:"flex", gap:8, marginBottom:8 }}>
                   <select value={kitProductId} onChange={e=>setKitProductId(e.target.value)} style={{ flex:1 }}>
                     <option value="">— Seleccionar producto —</option>
-                    {products.filter(p => !p.kitItems?.length && p.id !== (modal !== "new" ? modal.id : null)).map(p =>
+                    {products.filter(p => !p.kitItems?.length && p.id !== (modal !== "new" ? modal.id : null)).sort((a,b)=>a.name.localeCompare(b.name)).map(p =>
                       <option key={p.id} value={p.id}>{p.name}</option>
                     )}
                   </select>

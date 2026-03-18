@@ -19,7 +19,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
   };
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState(null); // null | "new" | customer
-  const [form, setForm] = useState({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0, discountPct:0 });
+  const [form, setForm] = useState({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0, discountPct:0, email:"", cuit:"" });
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
   const [payModal, setPayModal] = useState(null); // customer object
   const [payForm, setPayForm] = useState({ amount:"", paymentMethod:"cash", notes:"" });
@@ -27,7 +27,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
 
   const filtered = customers.filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search));
 
-  const openNew = () => { setForm({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0, discountPct:0 }); setExpandedSaleId(null); setModal("new"); };
+  const openNew = () => { setForm({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0, discountPct:0, email:"", cuit:"" }); setExpandedSaleId(null); setModal("new"); };
   const openEdit = c => { setForm({...c}); setExpandedSaleId(null); setModal(c); };
 
   const save = async () => {
@@ -131,6 +131,8 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
           <div className="form-grid" style={{ marginBottom:14 }}>
             <div className="form-group full"><label className="lbl">Nombre *</label><input value={form.name} onChange={e=>set("name",e.target.value)} autoFocus/></div>
             <div className="form-group"><label className="lbl">Teléfono</label><input value={form.phone} onChange={e=>set("phone",e.target.value)}/></div>
+            <div className="form-group"><label className="lbl">Email</label><input type="email" value={form.email||""} onChange={e=>set("email",e.target.value)} placeholder="correo@ejemplo.com"/></div>
+            <div className="form-group"><label className="lbl">CUIT / CUIL</label><input value={form.cuit||""} onChange={e=>set("cuit",e.target.value)} placeholder="20-12345678-9"/></div>
             <div className="form-group"><label className="lbl">Lista de precios</label>
               <select value={form.priceList} onChange={e=>set("priceList",e.target.value)}>
                 <option value="retail">Minorista</option>

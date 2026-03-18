@@ -36,6 +36,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   const [deliveryModal, setDeliveryModal] = useState(null); // { id, customerName }
   const [deliveryDate, setDeliveryDate] = useState("");
   const [custSearch, setCustSearch] = useState("");
+  const [billSale, setBillSale] = useState(false);
   const [favorites, setFavorites] = useState(
     () => new Set(JSON.parse(localStorage.getItem("pos_favorites") || "[]"))
   );
@@ -72,7 +73,8 @@ export default function POSPage({ products, setProducts, customers, setCustomers
     .sort((a, b) => {
       const af = favorites.has(a.id) ? 0 : 1;
       const bf = favorites.has(b.id) ? 0 : 1;
-      return af - bf;
+      if (af !== bf) return af - bf;
+      return a.name.localeCompare(b.name);
     });
 
   const addToCart = (prod) => {
@@ -131,6 +133,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   const clearCart = () => {
     setCart([]); setSelectedCustomer(null); setOrderNotes("");
     setPriceList("retail"); setDiscountType("pct"); setDiscountValue(""); setEditingPrice(null);
+    setBillSale(false);
   };
 
   const completeSale = async (status="closed") => {
@@ -158,6 +161,8 @@ export default function POSPage({ products, setProducts, customers, setCustomers
       discountType,
       discountValue: Number(discountValue) || 0,
       discountAmount: discountAmt,
+      needsBilling: billSale,
+      billingStatus: billSale ? "pending" : null,
     };
     // deduct stock — productos normales (no kits)
     const stockUpdates = cart
@@ -411,6 +416,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
           </button>
           {customers
             .filter(c => !custSearch || c.name.toLowerCase().includes(custSearch.toLowerCase()) || (c.phone||"").includes(custSearch))
+            .sort((a,b) => a.name.localeCompare(b.name))
             .map(c => (
               <button key={c.id} className="btn btn-ghost btn-block btn-sm" style={{ marginBottom:6, justifyContent:"flex-start", textAlign:"left" }}
                 onClick={()=>{
@@ -514,6 +520,19 @@ export default function POSPage({ products, setProducts, customers, setCustomers
             <label className="lbl">Notas del pedido</label>
             <textarea value={orderNotes} onChange={e=>setOrderNotes(e.target.value)} placeholder="Instrucciones especiales..."/>
           </div>
+          <button
+            onClick={() => setBillSale(p => !p)}
+            style={{
+              width:"100%", marginBottom:16, display:"flex", alignItems:"center", justifyContent:"space-between",
+              padding:"9px 14px", borderRadius:8, cursor:"pointer", fontWeight:600, fontSize:".86em",
+              border: `1.5px solid ${billSale ? "var(--green)" : "var(--border)"}`,
+              background: billSale ? "var(--greenl)" : "var(--s1)",
+              color: billSale ? "var(--green)" : "var(--t3)",
+              transition:"all .15s",
+            }}>
+            <span>🧾 Generar factura</span>
+            <span style={{ fontSize:".82em", fontWeight:700 }}>{billSale ? "Sí" : "No"}</span>
+          </button>
           <div className="modal-footer" style={{ paddingTop:0, borderTop:"none", marginTop:0, gap:10 }}>
             <button className="btn btn-secondary" onClick={()=>setPayModal(false)}>Cancelar</button>
             <button className="btn btn-primary btn-lg" onClick={()=>completeSale(pendingStatus)}>

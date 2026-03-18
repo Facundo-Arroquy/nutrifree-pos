@@ -37,6 +37,7 @@ import {
 import DashboardPage from "./pages/DashboardPage.jsx";
 import POSPage from "./pages/POSPage.jsx";
 import OrdersPage from "./pages/OrdersPage.jsx";
+import BillingPage from "./pages/BillingPage.jsx";
 import CustomersPage from "./pages/CustomersPage.jsx";
 import ProductsPage from "./pages/ProductsPage.jsx";
 import ProductionPage from "./pages/ProductionPage.jsx";
@@ -366,6 +367,7 @@ export default function App() {
     { id:"dashboard",   label:"Dashboard",      icon:"dashboard",   roles:["admin","vendor"], section:"top" },
     { id:"pos",         label:"Caja / POS",      icon:"pos",         roles:["admin","vendor"], section:"ventas" },
     { id:"orders",      label:"Pedidos",         icon:"orders",      roles:["admin","vendor"], section:"ventas" },
+    { id:"billing",     label:"Facturación",     icon:"billing",     roles:["admin","vendor"], section:"ventas" },
     { id:"customers",   label:"Clientes",        icon:"customers",   roles:["admin","vendor"], section:"ventas" },
     { id:"products",    label:"Productos",       icon:"products",    roles:["admin","vendor"], section:"productos" },
     { id:"recipes",     label:"Recetas",         icon:"recipes",     roles:["admin","vendor"], section:"productos" },
@@ -470,6 +472,7 @@ export default function App() {
             {page==="dashboard" && <DashboardPage {...props}/>}
             {page==="pos" && <POSPage {...props}/>}
             {page==="orders" && <OrdersPage {...props}/>}
+            {page==="billing" && <BillingPage {...props}/>}
             {page==="cash" && <CashShiftPage {...props}/>}
             {page==="customers" && <CustomersPage {...props}/>}
             {page==="products" && <ProductsPage {...props}/>}
