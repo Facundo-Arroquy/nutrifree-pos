@@ -100,7 +100,11 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
   const totalPending = dateFiltered.filter(e=>e.paymentStatus==="pending").reduce((a,b)=>a+b.total,0);
 
   const openNew  = () => { setForm(emptyForm); setModal("new"); };
-  const openEdit = e  => { setForm({...e, ingredientLines:[emptyLine()]}); setModal(e); };
+  const openEdit = e  => {
+    const lines = e.ingredientLines?.length ? e.ingredientLines : [emptyLine()];
+    setForm({...e, ingredientLines: lines});
+    setModal(e);
+  };
 
   // When saving an ingredient expense, update matching ingredient costs in recipes
   const syncIngredientCosts = async (concept, unitPrice) => {

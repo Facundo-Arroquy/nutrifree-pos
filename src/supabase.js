@@ -114,6 +114,7 @@ export const dbToExpense = r => ({
   total: r.total, paymentMethod: r.payment_method,
   paymentStatus: r.payment_status, category: r.category, notes: r.notes,
   createdAt: r.created_at, supplierId: r.supplier_id || null,
+  ingredientLines: r.ingredient_lines || null,
 });
 
 export const expenseToDb = e => ({
@@ -122,6 +123,7 @@ export const expenseToDb = e => ({
   total: e.total, payment_method: e.paymentMethod,
   payment_status: e.paymentStatus, category: e.category, notes: e.notes,
   supplier_id: e.supplierId || null,
+  ingredient_lines: e.ingredientLines?.filter(l => l.ingredientId) || null,
 });
 
 export const dbToSupplier = r => ({
