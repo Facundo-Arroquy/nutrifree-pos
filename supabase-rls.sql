@@ -16,9 +16,15 @@ ALTER TABLE expense_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE account_payments   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_movements    ENABLE ROW LEVEL SECURITY;
 
--- Proveedores (si existen)
+-- Proveedores
 ALTER TABLE suppliers          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE supplier_payments  ENABLE ROW LEVEL SECURITY;
+
+-- Caja y configuración
+ALTER TABLE cash_shifts        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE faq_entries        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE faq_missed         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_settings       ENABLE ROW LEVEL SECURITY;
 
 -- ─── 2. Políticas: solo usuarios autenticados ─────────────────
 -- Una política por tabla permitiendo todas las operaciones a usuarios autenticados.
@@ -60,6 +66,18 @@ CREATE POLICY "solo_autenticados" ON suppliers
   FOR ALL USING (auth.role() = 'authenticated');
 
 CREATE POLICY "solo_autenticados" ON supplier_payments
+  FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "solo_autenticados" ON cash_shifts
+  FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "solo_autenticados" ON faq_entries
+  FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "solo_autenticados" ON faq_missed
+  FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "solo_autenticados" ON app_settings
   FOR ALL USING (auth.role() = 'authenticated');
 
 -- ─── 3. Tabla audit_log ──────────────────────────────────────
