@@ -122,7 +122,7 @@ export default function App() {
   useEffect(() => {
     if (!user || user.isDemo) return;
     const load = async () => {
-      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }, { data: faqs }, { data: faqsMissed }, { data: settings }] = await Promise.all([
+      const results = await Promise.all([
         supabase.from("categories").select("*"),
         supabase.from("expense_categories").select("*").order("name"),
         supabase.from("products").select("*"),
@@ -141,7 +141,9 @@ export default function App() {
         supabase.from("faq_missed").select("*").order("created_at", { ascending: false }),
         supabase.from("app_settings").select("*"),
       ]);
-      if (accPaysErr) console.error("[account_payments] Error al cargar:", accPaysErr);
+      const TABLES = ["categories","expense_categories","products","customers","sales","recipes","expenses","ingredients","account_payments","stock_movements","recipe_ingredients","suppliers","supplier_payments","cash_shifts","faq_entries","faq_missed","app_settings"];
+      results.forEach(({data, error}, i) => { if (error) console.error(`[load] ERROR en "${TABLES[i]}":`, error); });
+      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }, { data: faqs }, { data: faqsMissed }, { data: settings }] = results;
       if (cats && cats.length > 0) setCategories(cats.map(c => c.name));
       if (expCats && expCats.length > 0) setExpenseCategories(expCats.map(c => c.name));
       if (prods && prods.length > 0) setProducts(prods.map(dbToProduct));
