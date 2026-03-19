@@ -31,8 +31,8 @@ export default function ProductsPage({ products, setProducts, categories, showTo
   const openEdit = p => { setForm({...p, isKit: p.kitItems?.length > 0, kitItems: p.kitItems || []}); setKitProductId(""); setKitQty(1); setModal(p); };
 
   const exportCsv = () => {
-    const headers = ["Nombre","Categoría","Precio Minorista","Precio Mayorista","Unidad","Stock","Activo","Descripción"];
-    const rows = products.map(p => [p.name, p.category, p.priceRetail, p.priceWholesale, p.unit, p.stock, p.active?"Sí":"No", p.description||""]);
+    const headers = ["nombre","categoria","precio_minorista","precio_mayorista","unidad","stock","activo","descripcion"];
+    const rows = products.map(p => [p.name, p.category, p.priceRetail, p.priceWholesale, p.unit, p.stock, p.active?"si":"no", p.description||""]);
     const csv = "\uFEFF" + [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv;charset=utf-8;" }));
     a.download = "productos.csv"; a.click();
