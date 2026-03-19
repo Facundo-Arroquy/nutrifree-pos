@@ -88,7 +88,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
         return prev.map(i => i.productId===prod.id ? {...i, qty:i.qty+1, subtotal:(i.qty+1)*i.price} : i);
       }
       const price = priceList==="retail" ? prod.priceRetail : prod.priceWholesale;
-      return [...prev, { productId:prod.id, name:prod.name, qty:1, price, originalPrice:price, priceOverridden:false, subtotal:price, isKit, kitItems: prod.kitItems || [], includeInTicket: true }];
+      return [...prev, { productId:prod.id, name:prod.name, qty:1, price, originalPrice:price, priceOverridden:false, subtotal:price, isKit, kitItems: prod.kitItems || [], includeInTicket: true, category: prod.category, frozen: false }];
     });
   };
 
@@ -115,6 +115,17 @@ export default function POSPage({ products, setProducts, customers, setCustomers
 
   const removeItem = id => setCart(prev => prev.filter(i => i.productId !== id));
   const toggleTicket = id => setCart(prev => prev.map(i => i.productId===id ? {...i, includeInTicket:!i.includeInTicket} : i));
+
+  const toggleFrozen = (productId) => {
+    setCart(prev => prev.map(i => {
+      if (i.productId !== productId) return i;
+      const newFrozen = !i.frozen;
+      const newPrice = newFrozen
+        ? Math.round(i.originalPrice * 0.85 * 100) / 100
+        : i.originalPrice;
+      return { ...i, frozen: newFrozen, price: newPrice, priceOverridden: false, subtotal: i.qty * newPrice };
+    }));
+  };
 
   const overridePrice = (productId, newPrice) => {
     const p = Number(newPrice);
@@ -235,8 +246,9 @@ export default function POSPage({ products, setProducts, customers, setCustomers
       if (i.priceOverridden) return i;
       const prod = products.find(p => p.id === i.productId);
       if (!prod) return i;
-      const price = priceList==="retail" ? prod.priceRetail : prod.priceWholesale;
-      return {...i, price, originalPrice:price, subtotal:i.qty*price};
+      const basePrice = priceList==="retail" ? prod.priceRetail : prod.priceWholesale;
+      const price = i.frozen ? Math.round(basePrice * 0.85 * 100) / 100 : basePrice;
+      return {...i, price, originalPrice: basePrice, subtotal: i.qty * price};
     }));
   }, [priceList]);
 
@@ -344,6 +356,17 @@ export default function POSPage({ products, setProducts, customers, setCustomers
                         color: item.includeInTicket ? "var(--green)" : "var(--t3)" }}
                       title="Incluir o no en el ticket">
                       {item.includeInTicket ? "En ticket" : "Sin ticket"}
+                    </button>
+                  )}
+                  {item.category === "Viandas" && (
+                    <button
+                      onClick={() => toggleFrozen(item.productId)}
+                      style={{ fontSize:".68em", padding:"2px 7px", borderRadius:5, border:"1px solid", cursor:"pointer", fontWeight:600, lineHeight:1.4,
+                        background: item.frozen ? "#dbeafe" : "var(--s2)",
+                        borderColor: item.frozen ? "#3b82f6" : "var(--border)",
+                        color: item.frozen ? "#1d4ed8" : "var(--t3)" }}
+                      title="Aplicar descuento freezado (-15%)">
+                      {item.frozen ? "❄️ Freezado -15%" : "❄️ Freezar"}
                     </button>
                   )}
                 </div>
