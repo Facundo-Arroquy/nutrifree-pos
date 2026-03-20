@@ -298,19 +298,20 @@ tbody tr:hover td{background:var(--s1)}
 .pos-cat-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px}
 .pos-cat-scroll::-webkit-scrollbar{display:none}
 .pos-cat-scroll > div{display:flex;gap:6px;width:max-content}
+@keyframes sheetIn{from{transform:translateY(100%)}to{transform:translateY(0)}}
 @media(max-width:900px){
   .mob-header{display:flex}
+  .topbar{display:none}
   .import-cols{grid-template-columns:1fr !important}
   .pos-tab-bar{display:flex;background:var(--s0);border-bottom:1px solid var(--border);flex-shrink:0}
   .pos-layout.mob-cart .pos-products{display:none}
   .pos-layout:not(.mob-cart) .pos-cart{display:none}
-  .pos-cart{height:calc(100vh - 52px - 46px);display:flex;flex-direction:column}
   .pos-products{height:calc(100vh - 52px - 46px);overflow-y:auto}
+  .pos-cart{height:calc(100vh - 52px - 46px);display:flex;flex-direction:column;border-left:none}
   .sidebar{transform:translateX(-100%)}
   .sidebar.open{transform:translateX(0)}
   .content{margin-left:0}
   .pos-layout{grid-template-columns:1fr}
-  .pos-cart{height:auto;border-left:none;border-top:1px solid var(--border)}
   .stats-row{grid-template-columns:1fr 1fr}
   .form-grid{grid-template-columns:1fr}
   .form-grid-3{grid-template-columns:1fr 1fr}
@@ -328,10 +329,7 @@ tbody tr:hover td{background:var(--s1)}
   .page-title{font-size:1.2em}
   .modal-bg{align-items:flex-end;padding:0}
   .modal{border-radius:18px 18px 0 0;padding:20px 16px 28px;max-width:100%;position:fixed;bottom:0;left:0;right:0;max-height:92vh;animation:sheetIn .22s cubic-bezier(.22,1,.36,1)}
-  @keyframes sheetIn{from{transform:translateY(100%)}to{transform:translateY(0)}}
   .modal-lg{max-width:100%}
-  .topbar{padding:0 16px}
-  .topbar{display:none}
 
   /* TABLAS → CARDS */
   .table-wrap{border:none;background:transparent;border-radius:0}
