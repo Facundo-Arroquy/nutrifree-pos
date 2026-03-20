@@ -20,6 +20,9 @@ export default function BillingPage({ sales, setSales, customers, showToast }) {
   const now = new Date();
   const [filterMonth, setFilterMonth] = useState(now.getMonth());
   const [filterYear, setFilterYear]   = useState(now.getFullYear());
+  const [expandedId, setExpandedId]   = useState(null);
+
+  const toggleExpand = id => setExpandedId(prev => prev === id ? null : id);
 
   const allBillingSales = sales.filter(s => s.needsBilling);
 
@@ -148,39 +151,81 @@ export default function BillingPage({ sales, setSales, customers, showToast }) {
             <tbody>
               {sortedFiltered.map(s => {
                 const cust = customers.find(c => c.id === s.customerId);
+                const isExpanded = expandedId === s.id;
                 return (
-                  <tr key={s.id}>
-                    <td style={{ whiteSpace:"nowrap", fontSize:".84em", color:"var(--t3)" }}>{fmtDate(s.createdAt)}</td>
-                    <td style={{ fontWeight:600 }}>{s.customerName}</td>
-                    <td style={{ fontSize:".83em", color: cust?.cuit ? "var(--t1)" : "var(--t4)" }}>
-                      {cust?.cuit || <span style={{ fontStyle:"italic" }}>—</span>}
-                    </td>
-                    <td style={{ fontSize:".83em", color: cust?.email ? "var(--t1)" : "var(--t4)" }}>
-                      {cust?.email || <span style={{ fontStyle:"italic" }}>—</span>}
-                    </td>
-                    <td style={{ fontSize:".82em", color:"var(--t2)", maxWidth:220 }}>{fmtItems(s.items)}</td>
-                    <td style={{ textAlign:"right", fontWeight:700, color:"var(--green)", whiteSpace:"nowrap" }}>{$(s.total)}</td>
-                    <td style={{ textAlign:"center" }}><StatusBadge status={s.billingStatus} /></td>
-                    <td style={{ textAlign:"center" }}>
-                      {s.billingStatus === "pending" ? (
-                        <div style={{ display:"flex", gap:6, justifyContent:"center" }}>
-                          <button
-                            className="btn btn-primary btn-sm"
-                            onClick={() => updateStatus(s.id, "done")}>
-                            <Ico n="check" s={12}/>Listo
-                          </button>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            style={{ color:"var(--red)", borderColor:"var(--red)" }}
-                            onClick={() => updateStatus(s.id, "cancelled")}>
-                            <Ico n="x" s={12}/>Cancelar
-                          </button>
-                        </div>
-                      ) : (
-                        <span style={{ fontSize:".78em", color:"var(--t4)" }}>—</span>
-                      )}
-                    </td>
-                  </tr>
+                  <>
+                    <tr
+                      key={s.id}
+                      onClick={() => toggleExpand(s.id)}
+                      style={{ cursor:"pointer", background: isExpanded ? "var(--s2)" : undefined }}
+                    >
+                      <td style={{ whiteSpace:"nowrap", fontSize:".84em", color:"var(--t3)" }}>
+                        <span style={{ marginRight:6, fontSize:".8em", color:"var(--t4)" }}>{isExpanded ? "▾" : "▸"}</span>
+                        {fmtDate(s.createdAt)}
+                      </td>
+                      <td style={{ fontWeight:600 }}>{s.customerName}</td>
+                      <td style={{ fontSize:".83em", color: cust?.cuit ? "var(--t1)" : "var(--t4)" }}>
+                        {cust?.cuit || <span style={{ fontStyle:"italic" }}>—</span>}
+                      </td>
+                      <td style={{ fontSize:".83em", color: cust?.email ? "var(--t1)" : "var(--t4)" }}>
+                        {cust?.email || <span style={{ fontStyle:"italic" }}>—</span>}
+                      </td>
+                      <td style={{ fontSize:".82em", color:"var(--t2)", maxWidth:220 }}>{fmtItems(s.items)}</td>
+                      <td style={{ textAlign:"right", fontWeight:700, color:"var(--green)", whiteSpace:"nowrap" }}>{$(s.total)}</td>
+                      <td style={{ textAlign:"center" }}><StatusBadge status={s.billingStatus} /></td>
+                      <td style={{ textAlign:"center" }} onClick={e => e.stopPropagation()}>
+                        {s.billingStatus === "pending" ? (
+                          <div style={{ display:"flex", gap:6, justifyContent:"center" }}>
+                            <button
+                              className="btn btn-primary btn-sm"
+                              onClick={() => updateStatus(s.id, "done")}>
+                              <Ico n="check" s={12}/>Listo
+                            </button>
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              style={{ color:"var(--red)", borderColor:"var(--red)" }}
+                              onClick={() => updateStatus(s.id, "cancelled")}>
+                              <Ico n="x" s={12}/>Cancelar
+                            </button>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize:".78em", color:"var(--t4)" }}>—</span>
+                        )}
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr key={`${s.id}-detail`} style={{ background:"var(--s2)" }}>
+                        <td colSpan={8} style={{ padding:"0 16px 14px 36px" }}>
+                          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:".81em" }}>
+                            <thead>
+                              <tr>
+                                <th style={{ textAlign:"left", padding:"6px 8px", color:"var(--t4)", fontWeight:600, borderBottom:"1px solid var(--b2)" }}>Producto</th>
+                                <th style={{ textAlign:"center", padding:"6px 8px", color:"var(--t4)", fontWeight:600, borderBottom:"1px solid var(--b2)" }}>Cant.</th>
+                                <th style={{ textAlign:"right", padding:"6px 8px", color:"var(--t4)", fontWeight:600, borderBottom:"1px solid var(--b2)" }}>P. Unit.</th>
+                                <th style={{ textAlign:"right", padding:"6px 8px", color:"var(--t4)", fontWeight:600, borderBottom:"1px solid var(--b2)" }}>Subtotal</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(s.items || []).map((item, idx) => (
+                                <tr key={idx}>
+                                  <td style={{ padding:"5px 8px", color:"var(--t1)" }}>{item.name}</td>
+                                  <td style={{ padding:"5px 8px", textAlign:"center", color:"var(--t2)" }}>{item.qty}</td>
+                                  <td style={{ padding:"5px 8px", textAlign:"right", color:"var(--t2)" }}>{$(item.price)}</td>
+                                  <td style={{ padding:"5px 8px", textAlign:"right", fontWeight:600, color:"var(--t1)" }}>{$(item.price * item.qty)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr>
+                                <td colSpan={3} style={{ padding:"7px 8px", textAlign:"right", fontWeight:700, borderTop:"1px solid var(--b2)", color:"var(--t2)" }}>Total</td>
+                                <td style={{ padding:"7px 8px", textAlign:"right", fontWeight:700, borderTop:"1px solid var(--b2)", color:"var(--green)" }}>{$(s.total)}</td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 );
               })}
             </tbody>
