@@ -302,6 +302,7 @@ tbody tr:hover td{background:var(--s1)}
 @media(max-width:900px){
   .mob-header{display:flex}
   .topbar{display:none}
+  .resp-2col{grid-template-columns:1fr !important}
   .import-cols{grid-template-columns:1fr !important}
   .pos-tab-bar{display:flex;background:var(--s0);border-bottom:1px solid var(--border);flex-shrink:0}
   .pos-layout.mob-cart .pos-products{display:none}
@@ -457,6 +458,9 @@ function LoginPage({ onLogin }) {
         <button className="btn btn-ghost btn-block" style={{ marginTop:10, fontSize:".82em" }} onClick={demoLogin}>
           🧪 Modo demo (sin cuenta)
         </button>
+        <div style={{ textAlign:"center", fontSize:".72em", color:"var(--t4)", marginTop:6 }}>
+          💻 Demo solo disponible desde PC
+        </div>
       </div>
     </div>
   );
