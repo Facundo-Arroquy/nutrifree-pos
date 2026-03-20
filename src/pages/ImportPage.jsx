@@ -82,6 +82,13 @@ function downloadCsv(filename, content) {
 function parseCsv(text) {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) return { headers: [], rows: [] };
+
+  // Auto-detect delimiter: Excel en locale español/argentino usa ";" en vez de ","
+  const firstLine = lines[0];
+  const commaCount = (firstLine.match(/,/g) || []).length;
+  const semicolonCount = (firstLine.match(/;/g) || []).length;
+  const delim = semicolonCount > commaCount ? ";" : ",";
+
   const parseRow = line => {
     const cells = [];
     let cur = "", inQ = false;
@@ -90,20 +97,25 @@ function parseCsv(text) {
       if (c === '"') {
         if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
         else inQ = !inQ;
-      } else if (c === "," && !inQ) { cells.push(cur.trim()); cur = ""; }
+      } else if (c === delim && !inQ) { cells.push(cur.trim()); cur = ""; }
       else cur += c;
     }
     cells.push(cur.trim());
     return cells;
   };
-  const headers = parseRow(lines[0]).map(h => h.toLowerCase().trim());
+  const normalizeHeader = h => h
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")  // quitar acentos
+    .replace(/\s+/g, "_")                               // espacios → guiones bajos
+    .trim();
+  const headers = parseRow(lines[0]).map(normalizeHeader);
   const rows = lines.slice(1).filter(l => l.trim()).map(parseRow);
   return { headers, rows };
 }
 
 // ─── LÓGICA DE IMPORTACIÓN ────────────────────────────────────────────────────
 
-async function importIngredients({ rows, headers, existingIngredients, setIngredients, showToast }) {
+async function importIngredients({ rows, headers, existingIngredients, setIngredients, showToast, onProgress }) {
   const idx = k => headers.indexOf(k);
   const get = (row, k) => row[idx(k)] ?? "";
 
@@ -116,6 +128,7 @@ async function importIngredients({ rows, headers, existingIngredients, setIngred
   const updatedIngredients = [...existingIngredients];
 
   for (let i = 0; i < rows.length; i++) {
+    onProgress?.(i + 1, rows.length);
     const row = rows[i];
     const name = get(row, "nombre").trim();
     if (!name) continue;
@@ -153,7 +166,7 @@ async function importIngredients({ rows, headers, existingIngredients, setIngred
   return { created, updated, errors };
 }
 
-async function importProducts({ rows, headers, existingProducts, setProducts, showToast }) {
+async function importProducts({ rows, headers, existingProducts, setProducts, showToast, onProgress }) {
   const idx = k => headers.indexOf(k);
   const get = (row, k) => row[idx(k)] ?? "";
 
@@ -163,6 +176,7 @@ async function importProducts({ rows, headers, existingProducts, setProducts, sh
   const updatedProducts = [...existingProducts];
 
   for (let i = 0; i < rows.length; i++) {
+    onProgress?.(i + 1, rows.length);
     const row = rows[i];
     const name = get(row, "nombre").trim();
     if (!name) continue;
@@ -186,7 +200,7 @@ async function importProducts({ rows, headers, existingProducts, setProducts, sh
     const existing = updatedProducts.find(p => p.name.toLowerCase() === name.toLowerCase());
 
     if (existing) {
-      const updated_data = { ...existing, ...data, id: existing.id, kitItems: existing.kitItems };
+      const updated_data = { ...existing, ...data, id: existing.id, kitItems: existing.kitItems, photo: existing.photo };
       const { error } = await supabase.from("products").update(productToDb(updated_data)).eq("id", existing.id);
       if (error) { errors.push(`Fila ${i + 2}: ${error.message}`); continue; }
       const idx2 = updatedProducts.findIndex(x => x.id === existing.id);
@@ -205,7 +219,7 @@ async function importProducts({ rows, headers, existingProducts, setProducts, sh
   return { created, updated, errors };
 }
 
-async function importRecipes({ rows, headers, existingProducts, existingIngredients, existingRecipes, setRecipes, showToast }) {
+async function importRecipes({ rows, headers, existingProducts, existingIngredients, existingRecipes, setRecipes, showToast, onProgress }) {
   const idx = k => headers.indexOf(k);
   const get = (row, k) => row[idx(k)] ?? "";
 
@@ -223,8 +237,11 @@ async function importRecipes({ rows, headers, existingProducts, existingIngredie
 
   let created = 0, updated = 0, errors = [];
   const updatedRecipes = [...existingRecipes];
+  const groupEntries = Object.entries(groups);
 
-  for (const [productName, productRows] of Object.entries(groups)) {
+  for (let gi = 0; gi < groupEntries.length; gi++) {
+    onProgress?.(gi + 1, groupEntries.length);
+    const [productName, productRows] = groupEntries[gi];
     const product = existingProducts.find(p => p.name.toLowerCase() === productName.toLowerCase());
     if (!product) {
       errors.push(`Producto no encontrado: "${productName}" — creá el producto primero.`);
@@ -425,6 +442,7 @@ export default function ImportPage({ ingredients, setIngredients, products, setP
   const [parsed, setParsed] = useState(null); // { headers, rows }
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
+  const [progress, setProgress] = useState(null); // { current, total }
 
   const tpl = TEMPLATES[activeTab];
 
@@ -448,18 +466,21 @@ export default function ImportPage({ ingredients, setIngredients, products, setP
     setParsed({ headers, rows });
   };
 
+  const onProgress = (current, total) => setProgress({ current, total });
+
   const handleImport = async () => {
     if (!parsed || parsed.rows.length === 0) { showToast("No hay datos para importar", "error"); return; }
     setLoading(true);
     setResult(null);
+    setProgress({ current: 0, total: parsed.rows.length });
     try {
       let res;
       if (activeTab === "ingredients") {
-        res = await importIngredients({ rows: parsed.rows, headers: parsed.headers, existingIngredients: ingredients, setIngredients, showToast });
+        res = await importIngredients({ rows: parsed.rows, headers: parsed.headers, existingIngredients: ingredients, setIngredients, showToast, onProgress });
       } else if (activeTab === "products") {
-        res = await importProducts({ rows: parsed.rows, headers: parsed.headers, existingProducts: products, setProducts, showToast });
+        res = await importProducts({ rows: parsed.rows, headers: parsed.headers, existingProducts: products, setProducts, showToast, onProgress });
       } else {
-        res = await importRecipes({ rows: parsed.rows, headers: parsed.headers, existingProducts: products, existingIngredients: ingredients, existingRecipes: recipes, setRecipes, showToast });
+        res = await importRecipes({ rows: parsed.rows, headers: parsed.headers, existingProducts: products, existingIngredients: ingredients, existingRecipes: recipes, setRecipes, showToast, onProgress });
       }
       setResult(res);
       if (res.created + res.updated > 0) showToast(`Importación exitosa: ${res.created} creados, ${res.updated} actualizados`);
@@ -467,6 +488,7 @@ export default function ImportPage({ ingredients, setIngredients, products, setP
       showToast(err.message, "error");
     } finally {
       setLoading(false);
+      setProgress(null);
     }
   };
 
@@ -571,6 +593,23 @@ export default function ImportPage({ ingredients, setIngredients, products, setP
               >
                 {loading ? "Importando..." : `Importar ${tpl.label}`}
               </button>
+              {loading && progress && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75em", color: "var(--t3)", marginBottom: 4 }}>
+                    <span>Procesando fila {progress.current} de {progress.total}...</span>
+                    <span>{Math.round((progress.current / progress.total) * 100)}%</span>
+                  </div>
+                  <div style={{ height: 6, borderRadius: 4, background: "var(--b2)", overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%",
+                      borderRadius: 4,
+                      background: "var(--primary)",
+                      width: `${(progress.current / progress.total) * 100}%`,
+                      transition: "width .15s ease",
+                    }} />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
