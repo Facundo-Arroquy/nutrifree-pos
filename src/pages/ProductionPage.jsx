@@ -38,12 +38,12 @@ export default function ProductionPage({ products, setProducts, recipes, setIngr
     if (!recipe) {
       logAction?.("producción", "stock", `+${q} u. de "${product.name}" — sin receta`);
       setQty(p=>({...p,[id]:""}));
-      showToast(`+${q} unidades · sin receta asociada`, "error");
+      showToast(`+${q} unidades · sin receta asociada`);
       return;
     }
     if (!Array.isArray(recipe.ingredients) || recipe.ingredients.length === 0) {
       setQty(p=>({...p,[id]:""}));
-      showToast(`+${q} unidades · la receta no tiene ingredientes`, "error");
+      showToast(`+${q} unidades · la receta no tiene ingredientes`);
       return;
     }
 
@@ -52,17 +52,13 @@ export default function ProductionPage({ products, setProducts, recipes, setIngr
     setIngredients(prev => {
       let matched = 0;
       const next = prev.map(ing => {
-        const ri = recipe.ingredients.find(r =>
-          (r.ingredientId && r.ingredientId === ing.id) ||
-          (!r.ingredientId && r.name?.toLowerCase() === ing.name?.toLowerCase())
-        );
+        const ri = recipe.ingredients.find(r => r.ingredientId === ing.id);
         if (!ri) return ing;
         matched++;
         const newStock = ing.stock - ri.qty * factor;
         ingUpdates.push({ id: ing.id, newStock });
         return {...ing, stock: newStock};
       });
-      console.log("[Producción] ingredientes descontados:", matched);
       return next;
     });
     for (const { id: ingId, newStock } of ingUpdates) {
