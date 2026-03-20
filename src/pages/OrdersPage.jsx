@@ -124,17 +124,17 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
           <tbody>
             {filtered.map(s => (
               <tr key={s.id} className="tr-click" onClick={()=>setSelected(s)}>
-                <td style={{ color:"var(--t3)", fontSize:".8em" }}>{s.id.toUpperCase()}</td>
-                <td style={{ fontWeight:600 }}>{s.customerName}</td>
-                <td style={{ color:"var(--t2)" }}>{s.items.length} ítem{s.items.length!==1?"s":""}</td>
-                <td style={{ fontWeight:700, color:"var(--green)" }}>{$(s.total)}</td>
-                <td style={{ color:"var(--t3)" }}>{PAY_LABELS[s.paymentMethod]||s.paymentMethod}</td>
-                <td>
+                <td data-label="#" style={{ color:"var(--t3)", fontSize:".8em" }}>{s.id.toUpperCase()}</td>
+                <td data-label="Cliente" style={{ fontWeight:600 }}>{s.customerName}</td>
+                <td data-label="Productos" style={{ color:"var(--t2)" }}>{s.items.length} ítem{s.items.length!==1?"s":""}</td>
+                <td data-label="Total" style={{ fontWeight:700, color:"var(--green)" }}>{$(s.total)}</td>
+                <td data-label="Pago" style={{ color:"var(--t3)" }}>{PAY_LABELS[s.paymentMethod]||s.paymentMethod}</td>
+                <td data-label="Estado">
                   <span className={`badge ${STATUS_COLORS[s.status]||"badge-gray"}`}>{STATUS_LABELS[s.status]||s.status}</span>
                   {isPendingPayment(s) && <span className="badge badge-amber" style={{ marginLeft:4 }}>Pend. pago</span>}
                 </td>
-                <td style={{ color:"var(--t3)", fontSize:".82em" }}>{fmtDT(s.createdAt)}</td>
-                <td>
+                <td data-label="Fecha" style={{ color:"var(--t3)", fontSize:".82em" }}>{fmtDT(s.createdAt)}</td>
+                <td data-label="">
                   <button className="btn btn-ghost btn-sm btn-icon" onClick={e=>{e.stopPropagation();setSelected(s);}}><Ico n="eye" s={14}/></button>
                 </td>
               </tr>

@@ -37,6 +37,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   const [deliveryDate, setDeliveryDate] = useState("");
   const [custSearch, setCustSearch] = useState("");
   const [billSale, setBillSale] = useState(false);
+  const [posTab, setPosTab] = useState("products"); // mobile: "products" | "cart"
   const [favorites, setFavorites] = useState(
     () => new Set(JSON.parse(localStorage.getItem("pos_favorites") || "[]"))
   );
@@ -90,6 +91,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
       const price = priceList==="retail" ? prod.priceRetail : prod.priceWholesale;
       return [...prev, { productId:prod.id, name:prod.name, qty:1, price, originalPrice:price, priceOverridden:false, subtotal:price, isKit, kitItems: prod.kitItems || [], includeInTicket: true, category: prod.category, frozen: false }];
     });
+    if (window.innerWidth <= 900) setPosTab("cart");
   };
 
   const updateQty = (productId, delta) => {
@@ -253,7 +255,19 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   }, [priceList]);
 
   return (
-    <div className="pos-layout">
+    <>
+    {/* TAB BAR — solo visible en mobile */}
+    <div className="pos-tab-bar">
+      <button className={`pos-tab-btn${posTab === "products" ? " active" : ""}`} onClick={() => setPosTab("products")}>
+        <Ico n="products" s={14}/> Productos
+      </button>
+      <button className={`pos-tab-btn${posTab === "cart" ? " active" : ""}`} onClick={() => setPosTab("cart")}>
+        <Ico n="cart" s={14}/> Carrito
+        {cart.length > 0 && <span className="pos-tab-badge">{cart.length}</span>}
+      </button>
+    </div>
+
+    <div className={`pos-layout${posTab === "cart" ? " mob-cart" : ""}`}>
       {/* LEFT: PRODUCTS */}
       <div className="pos-products">
         <div style={{ marginBottom:14, display:"flex", gap:10, flexWrap:"wrap" }}>
@@ -261,11 +275,13 @@ export default function POSPage({ products, setProducts, customers, setCustomers
             <div className="search-ico"><Ico n="search" s={14}/></div>
             <input placeholder="Buscar producto..." value={search} onChange={e=>setSearch(e.target.value)}/>
           </div>
-          <div style={{ display:"flex", gap:6 }}>
-            {categories.map(c => (
-              <button key={c} className={`btn btn-sm ${filterCat===c?"btn-primary":"btn-secondary"}`}
-                onClick={()=>setFilterCat(c)}>{c}</button>
-            ))}
+          <div className="pos-cat-scroll">
+            <div>
+              {categories.map(c => (
+                <button key={c} className={`btn btn-sm ${filterCat===c?"btn-primary":"btn-secondary"}`}
+                  onClick={()=>setFilterCat(c)}>{c}</button>
+              ))}
+            </div>
           </div>
         </div>
         <div className="prod-grid">
@@ -498,7 +514,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
 
       {/* PAYMENT MODAL */}
       {payModal && (
-        <Modal title={pendingStatus==="open" ? "Guardar pedido abierto" : "Completar venta"} onClose={()=>setPayModal(false)}>
+        <Modal title={pendingStatus==="open" ? "Guardar pedido abierto" : "Completar venta"} onClose={()=>{ setPayModal(false); }}>
           {discountAmt > 0 && (
             <div className="tot-row" style={{ marginBottom:4 }}>
               <span style={{ color:"var(--t3)" }}>Subtotal</span>
@@ -565,5 +581,6 @@ export default function POSPage({ products, setProducts, customers, setCustomers
         </Modal>
       )}
     </div>
+    </>
   );
 }

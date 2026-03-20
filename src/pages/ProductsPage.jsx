@@ -106,25 +106,25 @@ export default function ProductsPage({ products, setProducts, categories, showTo
           <tbody>
             {filtered.map(p => (
               <tr key={p.id} className="tr-click" onClick={()=>openEdit(p)}>
-                <td>
+                <td data-label="Nombre">
                   <div style={{ fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
                     {p.name}
                     {p.kitItems?.length > 0 && <span className="badge badge-blue" style={{ fontSize:".7em" }}>Kit</span>}
                   </div>
                   {p.description&&<div style={{ fontSize:".74em", color:"var(--t3)" }}>{p.description}</div>}
                 </td>
-                <td><span className="tag">{p.category}</span></td>
-                <td style={{ fontWeight:600, color:"var(--green)" }}>{$(p.priceRetail)}</td>
-                <td style={{ color:"var(--t2)" }}>{$(p.priceWholesale)}</td>
-                <td>
+                <td data-label="Categoría"><span className="tag">{p.category}</span></td>
+                <td data-label="P. Minorista" style={{ fontWeight:600, color:"var(--green)" }}>{$(p.priceRetail)}</td>
+                <td data-label="P. Mayorista" style={{ color:"var(--t2)" }}>{$(p.priceWholesale)}</td>
+                <td data-label="Stock">
                   <span style={{ fontWeight:600, color:p.stock<=2?"var(--red)":p.stock<=5?"var(--amber)":"var(--t1)" }}>{p.stock}</span>
                 </td>
-                <td>
+                <td data-label="Estado">
                   <button className={`badge ${p.active?"badge-green":"badge-gray"}`} onClick={e=>{e.stopPropagation();toggleActive(p.id);}}>
                     {p.active?"Activo":"Inactivo"}
                   </button>
                 </td>
-                <td>
+                <td data-label="">
                   <button className="btn btn-ghost btn-icon btn-sm" onClick={e=>{e.stopPropagation();del(p.id);}}><Ico n="trash" s={13} c="var(--red)"/></button>
                 </td>
               </tr>

@@ -133,17 +133,17 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
               const low = i.stockMin > 0 && i.stock <= i.stockMin;
               return (
                 <tr key={i.id} className="tr-click" onClick={()=>openEdit(i)}>
-                  <td style={{ fontWeight:600 }}>{i.name}</td>
-                  <td><span className="tag">{i.category}</span></td>
-                  <td style={{ color:"var(--t3)" }}>{i.unit}</td>
-                  <td>
+                  <td data-label="Nombre" style={{ fontWeight:600 }}>{i.name}</td>
+                  <td data-label="Categoría"><span className="tag">{i.category}</span></td>
+                  <td data-label="Unidad" style={{ color:"var(--t3)" }}>{i.unit}</td>
+                  <td data-label="Stock">
                     <span style={{ fontWeight:700, color:low?"var(--red)":i.stockMin>0&&i.stock<=i.stockMin*1.5?"var(--amber)":"var(--green)" }}>
                       {i.stock} {i.unit}
                     </span>
                     {low && <span style={{ fontSize:".72em", color:"var(--red)", marginLeft:6 }}>⚠ bajo</span>}
                   </td>
-                  <td style={{ color:"var(--t3)" }}>{i.stockMin} {i.unit}</td>
-                  <td onClick={e=>e.stopPropagation()}>
+                  <td data-label="Mín." style={{ color:"var(--t3)" }}>{i.stockMin} {i.unit}</td>
+                  <td data-label="Costo" onClick={e=>e.stopPropagation()}>
                     {priceEdit[i.id] !== undefined ? (
                       <div style={{ display:"flex", gap:4, alignItems:"center" }}>
                         <input type="number" min="0" step="0.01" style={{ width:80 }} autoFocus
@@ -160,8 +160,8 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
                       </span>
                     )}
                   </td>
-                  <td style={{ color:"var(--t3)", fontSize:".86em" }}>{i.supplier||"—"}</td>
-                  <td onClick={e=>e.stopPropagation()}>
+                  <td data-label="Proveedor" style={{ color:"var(--t3)", fontSize:".86em" }}>{i.supplier||"—"}</td>
+                  <td data-label="Recetas" onClick={e=>e.stopPropagation()}>
                     <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
                       {recipesForIngredient(i.id).map(r => {
                         const prod = (products||[]).find(p => p.id === r.productId);
@@ -178,13 +178,13 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
                       {recipesForIngredient(i.id).length === 0 && <span style={{ color:"var(--t4)", fontSize:".8em" }}>—</span>}
                     </div>
                   </td>
-                  <td onClick={e=>e.stopPropagation()} style={{ display:"flex", gap:6, alignItems:"center" }}>
+                  <td data-label="Agregar stock" onClick={e=>e.stopPropagation()} style={{ display:"flex", gap:6, alignItems:"center" }}>
                     <input type="number" style={{ width:80 }} placeholder="Cant." value={stockEdit[i.id]||""}
                       onChange={e=>setStockEdit(p=>({...p,[i.id]:e.target.value}))}
                       onKeyDown={e=>e.key==="Enter"&&applyStock(i.id)}/>
                     <button className="btn btn-primary btn-sm" onClick={()=>applyStock(i.id)}><Ico n="plus" s={12}/></button>
                   </td>
-                  <td onClick={e=>e.stopPropagation()}>
+                  <td data-label="" onClick={e=>e.stopPropagation()}>
                     <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>del(i.id)}><Ico n="trash" s={13} c="var(--red)"/></button>
                   </td>
                 </tr>
