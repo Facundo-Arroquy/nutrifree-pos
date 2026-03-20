@@ -27,6 +27,12 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
 
   const filtered = customers.filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search));
 
+  const totalDebt = customers.reduce((sum, c) => {
+    const b = custBal(c.id);
+    return b < 0 ? sum + Math.abs(b) : sum;
+  }, 0);
+  const debtorsCount = customers.filter(c => custBal(c.id) < 0).length;
+
   const openNew = () => { setForm({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0, discountPct:0, email:"", cuit:"" }); setExpandedSaleId(null); setModal("new"); };
   const openEdit = c => { setForm({...c}); setExpandedSaleId(null); setModal(c); };
 
@@ -90,6 +96,17 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
         <div><div className="page-title">Clientes</div><div className="page-sub">{customers.length} registrados</div></div>
         <button className="btn btn-primary" onClick={openNew}><Ico n="plus" s={14}/>Nuevo cliente</button>
       </div>
+
+      {totalDebt > 0 && (
+        <div className="card" style={{ marginBottom:16, display:"flex", alignItems:"center", gap:20, flexWrap:"wrap" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <Ico n="alert" s={16} c="var(--red)"/>
+            <span style={{ fontSize:".84em", color:"var(--t2)" }}>Total adeudado en cuentas corrientes</span>
+          </div>
+          <div style={{ fontWeight:700, fontSize:"1.2em", color:"var(--red)" }}>{$(totalDebt)}</div>
+          <div style={{ fontSize:".8em", color:"var(--t3)", marginLeft:"auto" }}>{debtorsCount} cliente{debtorsCount!==1?"s":""} con deuda</div>
+        </div>
+      )}
 
       <div className="search-wrap" style={{ marginBottom:16, maxWidth:320 }}>
         <div className="search-ico"><Ico n="search" s={14}/></div>
