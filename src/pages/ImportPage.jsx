@@ -537,7 +537,7 @@ export default function ImportPage({ ingredients, setIngredients, products, setP
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
+      <div className="import-cols" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
 
         {/* COLUMNA IZQUIERDA: instrucciones + plantilla */}
         <div className="card" style={{ padding: "20px 22px" }}>

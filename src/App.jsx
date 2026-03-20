@@ -78,6 +78,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [page, setPage] = useState("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [sales, setSales] = useState([]);
@@ -401,8 +402,11 @@ export default function App() {
     <>
       <style>{CSS}</style>
       <div className="app">
+        {/* OVERLAY MOBILE */}
+        <div className={`sidebar-overlay${sidebarOpen ? " open" : ""}`} onClick={() => setSidebarOpen(false)} />
+
         {/* SIDEBAR */}
-        <aside className="sidebar">
+        <aside className={`sidebar${sidebarOpen ? " open" : ""}`}>
           <div className="sb-logo">
             <h1><img src="/logo.jpg" alt="Nutrifree" style={{ height:28, verticalAlign:"middle", marginRight:7, borderRadius:6 }}/>Nutrifree Manager</h1>
             <p>Sistema de gestión</p>
@@ -418,6 +422,7 @@ export default function App() {
                     <button key={n.id} className={`ni${page===n.id?" active":""}`} onClick={() => {
                       if (n.id === "reports") logAction("view", "reports", "Acceso a reportes");
                       setPage(n.id);
+                      setSidebarOpen(false);
                     }}>
                       <Ico n={n.icon} s={15}/>{n.label}
                       {n.id === "reports" && marginAlertCount > 0 && (
@@ -444,6 +449,19 @@ export default function App() {
 
         {/* CONTENT */}
         <div className="content">
+          {/* HEADER MOBILE */}
+          <div className="mob-header">
+            <button className="ham-btn" onClick={() => setSidebarOpen(o => !o)} aria-label="Menú">
+              <span/><span/><span/>
+            </button>
+            <span className="mob-header-brand">Nutrifree Manager</span>
+            <button className="btn btn-ghost btn-icon btn-sm" onClick={async () => {
+              localStorage.removeItem("nutrifree_mode");
+              if (!user.isDemo) await supabase.auth.signOut();
+              setUser(null);
+            }} title="Salir"><Ico n="logout" s={13}/></button>
+          </div>
+
           {user.isDemo && (
             <div className="demo-banner">
               🧪 Entorno Demo — Los datos no afectan la base de datos real
