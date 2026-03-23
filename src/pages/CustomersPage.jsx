@@ -24,6 +24,13 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
   const [payModal, setPayModal] = useState(null); // customer object
   const [payForm, setPayForm] = useState({ amount:"", paymentMethod:"cash", notes:"" });
   const [expandedSaleId, setExpandedSaleId] = useState(null);
+  const [expandedCustomerId, setExpandedCustomerId] = useState(null);
+  const [listExpandedSaleId, setListExpandedSaleId] = useState(null);
+
+  const toggleCustomer = (id) => {
+    setExpandedCustomerId(prev => prev === id ? null : id);
+    setListExpandedSaleId(null);
+  };
 
   const filtered = customers.filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search));
 
@@ -115,27 +122,104 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
 
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Nombre</th><th>Teléfono</th><th>Lista</th><th>Descuento</th><th>Saldo</th><th>Notas</th><th></th><th></th></tr></thead>
+          <thead><tr><th></th><th>Nombre</th><th>Teléfono</th><th>Lista</th><th>Descuento</th><th>Saldo</th><th>Notas</th><th></th></tr></thead>
           <tbody>
             {filtered.map(c => {
-              const custSales = sales.filter(s=>s.customerId===c.id).length;
+              const custSalesAll = sales.filter(s=>s.customerId===c.id);
+              const isExpanded = expandedCustomerId === c.id;
               return (
-                <tr key={c.id} className="tr-click" onClick={()=>openEdit(c)}>
-                  <td data-label="Nombre"><div style={{ fontWeight:600 }}>{c.name}</div><div style={{ fontSize:".76em", color:"var(--t3)" }}>{custSales} compra{custSales!==1?"s":""}</div></td>
-                  <td data-label="Teléfono" style={{ color:"var(--t2)" }}>{c.phone||"—"}</td>
-                  <td data-label="Lista"><span className={`badge ${c.priceList==="wholesale"?"badge-blue":"badge-green"}`}>{c.priceList==="wholesale"?"Mayorista":"Minorista"}</span></td>
-                  <td data-label="Descuento">{(c.discountPct||0)>0 ? <span className="badge badge-amber">{c.discountPct}%</span> : <span style={{color:"var(--t4)"}}>—</span>}</td>
-                  <td data-label="Saldo">{(() => { const b = custBal(c.id); return <span className={b>0?"balance-pos":b<0?"balance-neg":"balance-zero"}>{$(b)}</span>; })()}</td>
-                  <td data-label="Notas" style={{ color:"var(--t3)", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.notes||"—"}</td>
-                  <td data-label="">
-                    <button className="btn btn-amber btn-sm" onClick={e=>{e.stopPropagation();setPayModal(c);setPayForm({amount:"",paymentMethod:"cash",notes:""});}}>
-                      Registrar Pago
-                    </button>
-                  </td>
-                  <td data-label="">
-                    <button className="btn btn-ghost btn-icon btn-sm" onClick={e=>{e.stopPropagation();del(c.id);}}><Ico n="trash" s={13} c="var(--red)"/></button>
-                  </td>
-                </tr>
+                <>
+                  <tr key={c.id} className="tr-click" onClick={()=>toggleCustomer(c.id)}>
+                    <td style={{ width:32, textAlign:"center" }}>
+                      <span style={{ display:"inline-block", transition:"transform .15s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
+                        <Ico n="chevron" s={13} c="var(--t3)"/>
+                      </span>
+                    </td>
+                    <td data-label="Nombre">
+                      <div style={{ fontWeight:600 }}>{c.name}</div>
+                      <div style={{ fontSize:".76em", color:"var(--t3)" }}>{custSalesAll.length} compra{custSalesAll.length!==1?"s":""}</div>
+                    </td>
+                    <td data-label="Teléfono" style={{ color:"var(--t2)" }}>{c.phone||"—"}</td>
+                    <td data-label="Lista"><span className={`badge ${c.priceList==="wholesale"?"badge-blue":"badge-green"}`}>{c.priceList==="wholesale"?"Mayorista":"Minorista"}</span></td>
+                    <td data-label="Descuento">{(c.discountPct||0)>0 ? <span className="badge badge-amber">{c.discountPct}%</span> : <span style={{color:"var(--t4)"}}>—</span>}</td>
+                    <td data-label="Saldo">{(() => { const b = custBal(c.id); return <span className={b>0?"balance-pos":b<0?"balance-neg":"balance-zero"}>{$(b)}</span>; })()}</td>
+                    <td data-label="Notas" style={{ color:"var(--t3)", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.notes||"—"}</td>
+                    <td data-label="" style={{ whiteSpace:"nowrap" }}>
+                      <button className="btn btn-ghost btn-icon btn-sm" title="Editar" onClick={e=>{e.stopPropagation();openEdit(c);}}><Ico n="edit" s={13}/></button>
+                      <button className="btn btn-amber btn-sm" style={{ marginLeft:4 }} onClick={e=>{e.stopPropagation();setPayModal(c);setPayForm({amount:"",paymentMethod:"cash",notes:""});}}>Pago</button>
+                      <button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft:4 }} onClick={e=>{e.stopPropagation();del(c.id);}}><Ico n="trash" s={13} c="var(--red)"/></button>
+                    </td>
+                  </tr>
+                  {isExpanded && (() => {
+                    const lastSales = custSalesAll.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,10);
+                    return (
+                      <tr key={c.id+"-expand"}>
+                        <td colSpan={8} style={{ padding:0, background:"var(--bg2)", borderBottom:"2px solid var(--border)" }}>
+                          <div style={{ padding:"12px 16px" }}>
+                            <div style={{ fontSize:".8em", fontWeight:600, color:"var(--t2)", marginBottom:8, textTransform:"uppercase", letterSpacing:".05em" }}>
+                              Últimos pedidos
+                            </div>
+                            {lastSales.length === 0 ? (
+                              <div style={{ fontSize:".85em", color:"var(--t4)", padding:"8px 0" }}>Sin pedidos registrados.</div>
+                            ) : (
+                              <table style={{ width:"100%", fontSize:".85em" }}>
+                                <thead>
+                                  <tr style={{ color:"var(--t3)" }}>
+                                    <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}></th>
+                                    <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Fecha</th>
+                                    <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Estado</th>
+                                    <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"right" }}>Total</th>
+                                    <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Método</th>
+                                    <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Notas</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {lastSales.map(s => (
+                                    <>
+                                      <tr key={s.id} className="tr-click" onClick={()=>setListExpandedSaleId(listExpandedSaleId===s.id?null:s.id)}
+                                        style={{ borderTop:"1px solid var(--border)" }}>
+                                        <td style={{ padding:"6px 8px", width:28, textAlign:"center" }}>
+                                          <span style={{ display:"inline-block", transition:"transform .15s", transform: listExpandedSaleId===s.id?"rotate(180deg)":"rotate(0deg)" }}>
+                                            <Ico n="chevron" s={11} c="var(--t3)"/>
+                                          </span>
+                                        </td>
+                                        <td style={{ padding:"6px 8px", color:"var(--t3)" }}>{fmtDate(s.createdAt)}</td>
+                                        <td style={{ padding:"6px 8px" }}><span className={`badge ${STATUS_COLORS[s.status]||"badge-gray"}`}>{STATUS_LABELS[s.status]||s.status}</span></td>
+                                        <td style={{ padding:"6px 8px", fontWeight:700, textAlign:"right" }}>{$(s.total)}</td>
+                                        <td style={{ padding:"6px 8px" }}>{PAY_LABELS[s.paymentMethod]||"—"}</td>
+                                        <td style={{ padding:"6px 8px", color:"var(--t3)", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.notes||"—"}</td>
+                                      </tr>
+                                      {listExpandedSaleId === s.id && (
+                                        <tr key={s.id+"-items"}>
+                                          <td colSpan={6} style={{ padding:"0 8px 10px 36px", background:"var(--bg1)" }}>
+                                            {s.items.map((item,i)=>(
+                                              <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"4px 8px", borderBottom:"1px solid var(--border)", gap:8, fontSize:".9em" }}>
+                                                <span style={{ color:"var(--t1)", flex:1 }}>{item.name}</span>
+                                                <span style={{ color:"var(--t3)", minWidth:50, textAlign:"center" }}>×{item.qty}</span>
+                                                <span style={{ color:"var(--t2)", minWidth:65, textAlign:"right" }}>{$(item.price)} c/u</span>
+                                                <span style={{ fontWeight:600, minWidth:75, textAlign:"right" }}>{$(item.subtotal)}</span>
+                                              </div>
+                                            ))}
+                                            {s.discountAmount > 0 && (
+                                              <div style={{ display:"flex", justifyContent:"space-between", padding:"4px 8px", color:"var(--amber)", fontSize:".9em" }}>
+                                                <span>Descuento</span><span>-{$(s.discountAmount)}</span>
+                                              </div>
+                                            )}
+                                            <div style={{ display:"flex", justifyContent:"flex-end", padding:"6px 8px 0", fontWeight:700 }}>Total: {$(s.total)}</div>
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })()}
+                </>
               );
             })}
             {filtered.length===0 && <tr><td colSpan={8}><div className="empty"><div className="empty-icon">👥</div><h3>Sin clientes</h3></div></td></tr>}
