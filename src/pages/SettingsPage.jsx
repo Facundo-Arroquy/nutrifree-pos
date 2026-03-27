@@ -15,7 +15,7 @@ import { useState, useRef } from "react";
 import { Ico } from "../shared.jsx";
 import { supabase } from "../supabase.js";
 
-export default function SettingsPage({ user, categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold }) {
+export default function SettingsPage({ user, categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate }) {
   const [newCat, setNewCat] = useState("");
   const [newExpCat, setNewExpCat] = useState("");
   const [newPass, setNewPass] = useState("");
@@ -25,6 +25,8 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
   const [rStart, setRStart] = useState(reminderStart);
   const [rEnd,   setREnd]   = useState(reminderEnd);
   const [balThreshold, setBalThreshold] = useState(String(alertBalanceThreshold));
+  const [frozenInput, setFrozenInput] = useState(String(frozenDiscount));
+  const [vatInput, setVatInput] = useState(String(vatRate));
 
   const changePassword = async () => {
     if (newPass.length < 6) { showToast("La contraseña debe tener al menos 6 caracteres", "error"); return; }
@@ -196,6 +198,50 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
           ? <p style={{ fontSize:".76em", color:"var(--t4)", marginTop:8 }}>Activa: alerta cuando deuda supere <strong>${alertBalanceThreshold.toLocaleString("es-AR")}</strong></p>
           : <p style={{ fontSize:".76em", color:"var(--t4)", marginTop:8 }}>Desactivada (monto en 0)</p>
         }
+      </div>
+
+      <div className="card" style={{ maxWidth:420, marginBottom:16 }}>
+        <div className="section-title">Valores comerciales</div>
+        <div style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
+          Descuento para productos freezados y porcentaje de IVA aplicado en gastos de ingredientes.
+        </div>
+        <div style={{ display:"flex", alignItems:"flex-end", gap:10, marginBottom:12, flexWrap:"wrap" }}>
+          <div className="form-group" style={{ flex:1, minWidth:120, marginBottom:0 }}>
+            <label className="lbl">Descuento freezadas (%)</label>
+            <input
+              type="text" inputMode="numeric"
+              value={frozenInput}
+              onChange={e => setFrozenInput(e.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="Ej: 15"
+            />
+          </div>
+          <div className="form-group" style={{ flex:1, minWidth:120, marginBottom:0 }}>
+            <label className="lbl">IVA (%)</label>
+            <input
+              type="text" inputMode="numeric"
+              value={vatInput}
+              onChange={e => setVatInput(e.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="Ej: 21"
+            />
+          </div>
+          <button className="btn btn-primary btn-sm" style={{ marginBottom:1 }} onClick={async () => {
+            const frozen = Math.max(0, Math.min(100, Number(frozenInput) || 0));
+            const vat    = Math.max(0, Number(vatInput) || 0);
+            const { error: e1 } = await supabase.from("app_settings")
+              .upsert({ key: "frozen_discount", value: String(frozen) }, { onConflict: "key" });
+            const { error: e2 } = await supabase.from("app_settings")
+              .upsert({ key: "vat_rate", value: String(vat) }, { onConflict: "key" });
+            if (e1 || e2) { showToast("Error al guardar: " + (e1||e2).message, "error"); return; }
+            setFrozenDiscount(frozen);
+            setVatRate(vat);
+            showToast("Valores guardados ✓");
+          }}>
+            <Ico n="check" s={13}/> Guardar
+          </button>
+        </div>
+        <p style={{ fontSize:".76em", color:"var(--t4)" }}>
+          Freezadas: <strong>-{frozenDiscount}%</strong> · IVA: <strong>+{vatRate}%</strong>
+        </p>
       </div>
 
       {user?.isDemo && (

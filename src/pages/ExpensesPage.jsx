@@ -43,7 +43,7 @@ function CloseExpenseModal({ expense, onClose, onConfirm }) {
   );
 }
 
-export default function ExpensesPage({ expenses, setExpenses, expenseCategories, ingredients, setIngredients, recipes, setRecipes, suppliers, supplierPayments, setSupplierPayments, showToast, logAction }) {
+export default function ExpensesPage({ expenses, setExpenses, expenseCategories, ingredients, setIngredients, recipes, setRecipes, suppliers, supplierPayments, setSupplierPayments, showToast, logAction, vatRate = 21 }) {
   const emptyLine = () => ({ ingredientId: "", qty: 1, unit: "", totalPaid: 0 });
   const emptyForm = { date:todayStr(), supplier:"", supplierId:null, concept:"", quantity:1, unit:"unidades", unitPrice:0, total:0, paymentMethod:"", paymentStatus:"pending", category:"Ingredientes", notes:"", ingredientLines:[emptyLine()], withVat:false };
   const [modal, setModal] = useState(null);
@@ -139,7 +139,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       if (rawLines.length===0) { showToast("Agregá al menos un ingrediente", "error"); return; }
       // Aplicar IVA y calcular unitPrice por línea
       const validLines = rawLines.map(l => {
-        const effTotal = form.withVat ? (Number(l.totalPaid)||0) * 1.21 : (Number(l.totalPaid)||0);
+        const effTotal = form.withVat ? (Number(l.totalPaid)||0) * (1 + vatRate / 100) : (Number(l.totalPaid)||0);
         const qty = Number(l.qty || 0);
         return { ...l, unitPrice: qty > 0 ? effTotal / qty : 0, subtotal: effTotal };
       });
@@ -369,16 +369,16 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
                 <div className="section-title" style={{ margin:0 }}>Ingredientes comprados</div>
                 <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                   <button className={`btn btn-sm ${!form.withVat?"btn-primary":"btn-secondary"}`} onClick={()=>setForm(p=>({...p,withVat:false}))}>Sin IVA</button>
-                  <button className={`btn btn-sm ${form.withVat?"btn-primary":"btn-secondary"}`} onClick={()=>setForm(p=>({...p,withVat:true}))}>Con IVA (+21%)</button>
+                  <button className={`btn btn-sm ${form.withVat?"btn-primary":"btn-secondary"}`} onClick={()=>setForm(p=>({...p,withVat:true}))}>Con IVA (+{vatRate}%)</button>
                   <button className="btn btn-sm btn-secondary" onClick={addLine}><Ico n="plus" s={13}/>Agregar ingrediente</button>
                 </div>
               </div>
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Total pagado</th><th>Subtotal{form.withVat?" (+IVA)":""}</th><th></th></tr></thead>
+                  <thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Total pagado</th><th>Subtotal{form.withVat?` (+${vatRate}% IVA)`:""}</th><th></th></tr></thead>
                   <tbody>
                     {(form.ingredientLines||[]).map((line, idx) => {
-                      const effTotal = form.withVat ? (Number(line.totalPaid)||0) * 1.21 : (Number(line.totalPaid)||0);
+                      const effTotal = form.withVat ? (Number(line.totalPaid)||0) * (1 + vatRate / 100) : (Number(line.totalPaid)||0);
                       return (
                         <tr key={idx}>
                           <td>
@@ -403,7 +403,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
                 </table>
               </div>
               <div style={{ textAlign:"right", fontWeight:800, fontSize:"1.1em", color:"var(--red)", marginTop:8 }}>
-                Total{form.withVat?" (con IVA)":""}: {$((form.ingredientLines||[]).reduce((a,l) => a + (form.withVat ? (Number(l.totalPaid)||0)*1.21 : (Number(l.totalPaid)||0)), 0))}
+                Total{form.withVat?" (con IVA)":""}: {$((form.ingredientLines||[]).reduce((a,l) => a + (form.withVat ? (Number(l.totalPaid)||0)*(1 + vatRate/100) : (Number(l.totalPaid)||0)), 0))}
               </div>
               <div style={{ background:"var(--bluel)", border:"1px solid var(--blueb)", borderRadius:8, padding:"8px 12px", marginTop:8, fontSize:".82em", color:"var(--blue)" }}>
                 <Ico n="refresh" s={13}/> Al guardar se actualizará el costo unitario de cada ingrediente en las recetas.

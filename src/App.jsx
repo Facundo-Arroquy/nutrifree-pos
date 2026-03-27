@@ -96,6 +96,8 @@ export default function App() {
   const [faqMissed, setFaqMissed] = useState([]);
   const [openRecipeId, setOpenRecipeId] = useState(null);
   const [alertBalanceThreshold, setAlertBalanceThreshold] = useState(0);
+  const [frozenDiscount, setFrozenDiscount] = useState(15);
+  const [vatRate, setVatRate] = useState(21);
   const [toast, setToast] = useState(null);
   const [deliveryAlerts, setDeliveryAlerts] = useState([]);
   const [showMenuReminder, setShowMenuReminder] = useState(false);
@@ -169,6 +171,10 @@ export default function App() {
       if (settings) {
         const bal = settings.find(s => s.key === "balance_alert_threshold");
         if (bal) setAlertBalanceThreshold(Number(bal.value) || 0);
+        const frozen = settings.find(s => s.key === "frozen_discount");
+        if (frozen) setFrozenDiscount(Number(frozen.value) || 15);
+        const vat = settings.find(s => s.key === "vat_rate");
+        if (vat) setVatRate(Number(vat.value) || 21);
       }
     };
     load();
@@ -467,7 +473,7 @@ export default function App() {
     window.location.reload();
   };
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, openRecipeId, setOpenRecipeId, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, openRecipeId, setOpenRecipeId, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction };
 
   return (
     <>

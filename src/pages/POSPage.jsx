@@ -14,7 +14,7 @@ import { useState, useEffect } from "react";
 import { Ico, Modal, $, PAY_ORDER_LABELS, uid, todayStr } from "../shared.jsx";
 import { supabase, saleToDb, accountPaymentToDb } from "../supabase.js";
 
-export default function POSPage({ products, setProducts, customers, setCustomers, sales, setSales, accountPayments, setAccountPayments, showToast, logAction }) {
+export default function POSPage({ products, setProducts, customers, setCustomers, sales, setSales, accountPayments, setAccountPayments, showToast, logAction, frozenDiscount = 15 }) {
   const custBal = (id) => {
     const c = customers.find(x => x.id === id);
     return (c?.balance ?? 0) + accountPayments.filter(p => p.customerId === id)
@@ -125,7 +125,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
       if (i.productId !== productId) return i;
       const newFrozen = !i.frozen;
       const newPrice = newFrozen
-        ? Math.round(i.originalPrice * 0.85 * 100) / 100
+        ? Math.round(i.originalPrice * (1 - frozenDiscount / 100) * 100) / 100
         : i.originalPrice;
       return { ...i, frozen: newFrozen, price: newPrice, priceOverridden: false, subtotal: i.qty * newPrice };
     }));
@@ -271,7 +271,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
       const prod = products.find(p => p.id === i.productId);
       if (!prod) return i;
       const basePrice = priceList==="retail" ? prod.priceRetail : prod.priceWholesale;
-      const price = i.frozen ? Math.round(basePrice * 0.85 * 100) / 100 : basePrice;
+      const price = i.frozen ? Math.round(basePrice * (1 - frozenDiscount / 100) * 100) / 100 : basePrice;
       return {...i, price, originalPrice: basePrice, subtotal: i.qty * price};
     }));
   }, [priceList]);
@@ -404,7 +404,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
                         borderColor: item.frozen ? "#3b82f6" : "var(--border)",
                         color: item.frozen ? "#1d4ed8" : "var(--t3)" }}
                       title="Aplicar descuento freezado (-15%)">
-                      {item.frozen ? "❄️ Freezado -15%" : "❄️ Freezar"}
+                      {item.frozen ? `❄️ Freezado -${frozenDiscount}%` : "❄️ Freezar"}
                     </button>
                   )}
                 </div>
