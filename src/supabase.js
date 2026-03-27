@@ -18,13 +18,15 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE;
 const _prod = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Smart client: routes to demo (localStorage) or production (Supabase) at call time.
-// auth siempre apunta al cliente real (el login no usa la DB demo).
+// auth y channel siempre apuntan al cliente real (no aplica al modo demo).
 export const supabase = {
   from: (table) => {
     const isDemo = typeof localStorage !== "undefined" && localStorage.getItem("nutrifree_mode") === "demo";
     return isDemo ? demoClient.from(table) : _prod.from(table);
   },
   auth: _prod.auth,
+  channel: (...args) => _prod.channel(...args),
+  removeChannel: (...args) => _prod.removeChannel(...args),
 };
 
 // ─── MAPPERS: DB (snake_case) ↔ App (camelCase) ───────────────────────────

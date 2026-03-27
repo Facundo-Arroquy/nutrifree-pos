@@ -19,6 +19,7 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
   const [payModal, setPayModal] = useState(null); // supplier obj
   const [form, setForm] = useState(emptyForm);
   const [payForm, setPayForm] = useState({ amount:"", paymentMethod:"cash", notes:"" });
+  const [search, setSearch] = useState("");
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -52,11 +53,20 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
   };
 
   const del = async (id) => {
-    if (!confirm("¿Eliminar proveedor?")) return;
+    const hasPayments = supplierPayments.some(p => p.supplierId === id);
+    const msg = hasPayments
+      ? "Este proveedor tiene movimientos en cuenta corriente. ¿Eliminar proveedor y todos sus movimientos?"
+      : "¿Eliminar proveedor?";
+    if (!confirm(msg)) return;
+    if (hasPayments) {
+      const { error } = await supabase.from("supplier_payments").delete().eq("supplier_id", id);
+      if (error) { showToast("Error al eliminar movimientos: " + error.message, "error"); return; }
+      setSupplierPayments(p => p.filter(x => x.supplierId !== id));
+    }
     const { error } = await supabase.from("suppliers").delete().eq("id", id);
     if (error) { showToast("Error: " + error.message, "error"); return; }
     setSuppliers(p => p.filter(s => s.id !== id));
-    showToast("Eliminado");
+    showToast("Proveedor eliminado");
   };
 
   const registerPayment = async () => {
@@ -77,7 +87,10 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
     <div className="page">
       <div className="page-header">
         <div><div className="page-title">Proveedores</div><div className="page-sub">{suppliers.length} registrados</div></div>
-        <button className="btn btn-primary" onClick={openNew}><Ico n="plus" s={14}/>Nuevo proveedor</button>
+        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar proveedor..." style={{ width:220 }}/>
+          <button className="btn btn-primary" onClick={openNew}><Ico n="plus" s={14}/>Nuevo proveedor</button>
+        </div>
       </div>
 
       <div className="stats-row" style={{ gridTemplateColumns:"repeat(2,1fr)" }}>
@@ -89,7 +102,7 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
         <table>
           <thead><tr><th>Nombre</th><th>Teléfono</th><th>Email</th><th>Saldo</th><th></th></tr></thead>
           <tbody>
-            {suppliers.map(s => {
+            {suppliers.filter(s => !search || s.name.toLowerCase().includes(search.toLowerCase()) || (s.phone||"").includes(search) || (s.email||"").toLowerCase().includes(search.toLowerCase())).map(s => {
               const bal = supplierBal(s.id);
               return (
                 <tr key={s.id} className="tr-click" onClick={()=>openEdit(s)}>
@@ -112,6 +125,7 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
               );
             })}
             {suppliers.length===0 && <tr><td colSpan={5}><div className="empty"><div className="empty-icon">🏭</div><h3>Sin proveedores</h3><p>Creá el primer proveedor</p></div></td></tr>}
+            {suppliers.length>0 && suppliers.filter(s => !search || s.name.toLowerCase().includes(search.toLowerCase()) || (s.phone||"").includes(search) || (s.email||"").toLowerCase().includes(search.toLowerCase())).length===0 && <tr><td colSpan={5}><div className="empty"><div className="empty-icon">🔍</div><h3>Sin resultados</h3><p>No hay proveedores que coincidan con "{search}"</p></div></td></tr>}
           </tbody>
         </table>
       </div>

@@ -174,6 +174,77 @@ export default function App() {
     load();
   }, [user?.email]);
 
+  // ─── Supabase Realtime: sincroniza cambios remotos por ID ──────────────────
+  const ingredientsRef = useRef([]);
+  useEffect(() => { ingredientsRef.current = ingredients; }, [ingredients]);
+
+  useEffect(() => {
+    if (!user || user.isDemo) return;
+
+    // Helper genérico: INSERT agrega al frente (sin duplicar), UPDATE reemplaza por id, DELETE filtra
+    const sub = (table, mapper, setter) =>
+      supabase.channel(`rt_${table}`)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table }, ({ new: row }) =>
+          setter(prev => prev.some(x => x.id === row.id) ? prev : [mapper(row), ...prev])
+        )
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table }, ({ new: row }) =>
+          setter(prev => prev.map(x => x.id === row.id ? mapper(row) : x))
+        )
+        .on("postgres_changes", { event: "DELETE", schema: "public", table }, ({ old: row }) =>
+          setter(prev => prev.filter(x => x.id !== row.id))
+        )
+        .subscribe();
+
+    const channels = [
+      sub("sales",             dbToSale,            setSales),
+      sub("expenses",          dbToExpense,         setExpenses),
+      sub("products",          dbToProduct,         setProducts),
+      sub("customers",         dbToCustomer,        setCustomers),
+      sub("suppliers",         dbToSupplier,        setSuppliers),
+      sub("supplier_payments", dbToSupplierPayment, setSupplierPayments),
+      sub("ingredients",       dbToIngredient,      setIngredients),
+      sub("account_payments",  dbToAccountPayment,  setAccountPayments),
+      sub("stock_movements",   dbToStockMovement,   setStockMovements),
+      sub("cash_shifts",       dbToCashShift,       setCashShifts),
+    ];
+
+    // Recetas: preserva el array local de ingredients al actualizar
+    const recipesChannel = supabase.channel("rt_recipes")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "recipes" }, ({ new: row }) =>
+        setRecipes(prev => prev.some(r => r.id === row.id) ? prev : [{ ...dbToRecipe(row), ingredients: [] }, ...prev])
+      )
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "recipes" }, ({ new: row }) =>
+        setRecipes(prev => prev.map(r => r.id === row.id ? { ...dbToRecipe(row), ingredients: r.ingredients } : r))
+      )
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "recipes" }, ({ old: row }) =>
+        setRecipes(prev => prev.filter(r => r.id !== row.id))
+      )
+      .subscribe();
+
+    // Ingredientes de receta: actualiza solo la receta afectada
+    const recIngChannel = supabase.channel("rt_recipe_ingredients")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "recipe_ingredients" }, ({ new: ri }) =>
+        setRecipes(prev => prev.map(r => r.id === ri.recipe_id
+          ? { ...r, ingredients: r.ingredients.some(i => i.id === ri.id) ? r.ingredients : [...r.ingredients, dbToRecipeIngredient(ri, ingredientsRef.current)] }
+          : r
+        ))
+      )
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "recipe_ingredients" }, ({ new: ri }) =>
+        setRecipes(prev => prev.map(r => r.id === ri.recipe_id
+          ? { ...r, ingredients: r.ingredients.map(i => i.id === ri.id ? dbToRecipeIngredient(ri, ingredientsRef.current) : i) }
+          : r
+        ))
+      )
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "recipe_ingredients" }, ({ old: ri }) =>
+        setRecipes(prev => prev.map(r => ({ ...r, ingredients: r.ingredients.filter(i => i.id !== ri.id) })))
+      )
+      .subscribe();
+
+    return () => {
+      [...channels, recipesChannel, recIngChannel].forEach(ch => supabase.removeChannel(ch));
+    };
+  }, [user?.email]);
+
   // Sincroniza costos de recipe_ingredients cuando cambia el precio de un ingrediente
   useEffect(() => {
     if (!ingredients.length || !recipes.length) return;

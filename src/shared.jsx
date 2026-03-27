@@ -69,14 +69,24 @@ const SEED_SALES = [
 const uid = () => Math.random().toString(36).slice(2, 9);
 /** Formatea un número como moneda argentina: $(1234, 2) → "$1.234,00" */
 const $ = (n, d=0) => `$${Number(n||0).toLocaleString("es-AR",{minimumFractionDigits:d,maximumFractionDigits:d})}`;
-/** Formatea una fecha ISO o Date como "dd/mm/aaaa". */
-const fmtDate = d => new Date(d).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"});
+/** Formatea una fecha ISO o Date como "dd/mm/aaaa".
+ *  Si el valor es solo fecha (YYYY-MM-DD), lo trata como hora local para evitar
+ *  el problema de UTC donde "2026-03-23" se parsea como medianoche UTC y
+ *  en Argentina (UTC-3) muestra el día anterior. */
+const fmtDate = d => {
+  if (!d) return "";
+  // Si es solo fecha (sin hora ni Z), forzar interpretación local añadiendo T12:00
+  const date = (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d))
+    ? new Date(d + "T12:00:00")
+    : new Date(d);
+  return date.toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"});
+};
 /** Formatea una fecha ISO o Date como "hh:mm". */
 const fmtTime = d => new Date(d).toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"});
 /** Formatea una fecha ISO o Date como "dd/mm/aaaa hh:mm". */
 const fmtDT = d => `${fmtDate(d)} ${fmtTime(d)}`;
-/** Devuelve la fecha de hoy como string "YYYY-MM-DD". */
-const todayStr = () => new Date().toISOString().slice(0,10);
+/** Devuelve la fecha de hoy como string "YYYY-MM-DD" en hora local. */
+const todayStr = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`; };
 /** Limita un valor entre un mínimo y un máximo. */
 const clamp = (v,mn,mx) => Math.min(Math.max(v,mn),mx);
 
@@ -130,6 +140,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ff);font-size:15px;m
 /* PAGE */
 .page{padding:28px 32px;animation:fadeIn .17s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+@keyframes spin{to{transform:rotate(360deg)}}
 .page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;gap:16px;flex-wrap:wrap}
 .page-title{font-size:1.55em;font-weight:700;color:var(--t1);letter-spacing:-.025em}
 .page-sub{font-size:.82em;color:var(--t3);margin-top:2px;font-weight:400}
