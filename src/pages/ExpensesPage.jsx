@@ -44,7 +44,7 @@ function CloseExpenseModal({ expense, onClose, onConfirm }) {
 }
 
 export default function ExpensesPage({ expenses, setExpenses, expenseCategories, ingredients, setIngredients, recipes, setRecipes, suppliers, supplierPayments, setSupplierPayments, showToast, logAction, vatRate = 21 }) {
-  const emptyLine = () => ({ ingredientId: "", qty: 1, unit: "", totalPaid: 0 });
+  const emptyLine = () => ({ ingredientId: "", qty: 1, unit: "", totalPaid: "" });
   const emptyForm = { date:todayStr(), supplier:"", supplierId:null, concept:"", quantity:1, unit:"unidades", unitPrice:0, total:0, paymentMethod:"", paymentStatus:"pending", category:"Ingredientes", notes:"", ingredientLines:[emptyLine()], withVat:false };
   const [modal, setModal] = useState(null);
   const [payModal, setPayModal] = useState(null);
@@ -76,7 +76,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       if (key==="ingredientId") {
         const ing = ingredients.find(x => x.id===value);
         upd.unit = ing ? ing.unit : "";
-        upd.totalPaid = 0;
+        upd.totalPaid = "";
       }
       return upd;
     });
@@ -389,7 +389,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
                           </td>
                           <td><input type="number" min="0" step="0.01" value={line.qty} onChange={e=>updateLine(idx,"qty",e.target.value)} style={{ width:75 }}/></td>
                           <td><input type="text" value={line.unit||""} onChange={e=>updateLine(idx,"unit",e.target.value)} style={{ width:80 }} placeholder="kg"/></td>
-                          <td><input type="number" min="0" step="0.01" value={line.totalPaid||0} onChange={e=>updateLine(idx,"totalPaid",e.target.value)} style={{ width:100 }}/></td>
+                          <td><input type="number" min="0" step="0.01" value={line.totalPaid ?? ""} onChange={e=>updateLine(idx,"totalPaid",e.target.value)} style={{ width:100 }}/></td>
                           <td style={{ fontWeight:700, color:"var(--red)" }}>{$(effTotal)}</td>
                           <td>
                             {(form.ingredientLines||[]).length>1 && (
