@@ -44,9 +44,8 @@ function CloseExpenseModal({ expense, onClose, onConfirm }) {
 }
 
 export default function ExpensesPage({ expenses, setExpenses, expenseCategories, ingredients, setIngredients, recipes, setRecipes, suppliers, supplierPayments, setSupplierPayments, showToast, logAction }) {
-  const defaultCat = expenseCategories[0] || "Ingredientes";
-  const emptyLine = () => ({ ingredientId: "", qty: 1, unit: "", unitPrice: 0, subtotal: 0 });
-  const emptyForm = { date:todayStr(), supplier:"", supplierId:null, concept:"", quantity:1, unit:"unidades", unitPrice:0, total:0, paymentMethod:"", paymentStatus:"pending", category:defaultCat, notes:"", ingredientLines:[emptyLine()] };
+  const emptyLine = () => ({ ingredientId: "", qty: 1, unit: "", totalPaid: 0 });
+  const emptyForm = { date:todayStr(), supplier:"", supplierId:null, concept:"", quantity:1, unit:"unidades", unitPrice:0, total:0, paymentMethod:"", paymentStatus:"pending", category:"Ingredientes", notes:"", ingredientLines:[emptyLine()], withVat:false };
   const [modal, setModal] = useState(null);
   const [payModal, setPayModal] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -66,10 +65,10 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
   });
 
   const addLine = () => setForm(p => ({ ...p, ingredientLines: [...(p.ingredientLines||[]), emptyLine()] }));
-  const removeLine = idx => setForm(p => {
-    const lines = (p.ingredientLines||[]).filter((_,i) => i!==idx);
-    return { ...p, ingredientLines: lines, total: lines.reduce((a,b)=>a+b.subtotal,0) };
-  });
+  const removeLine = idx => setForm(p => ({
+    ...p,
+    ingredientLines: (p.ingredientLines||[]).filter((_,i) => i!==idx),
+  }));
   const updateLine = (idx, key, value) => setForm(p => {
     const lines = (p.ingredientLines||[]).map((l, i) => {
       if (i!==idx) return l;
@@ -77,12 +76,11 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       if (key==="ingredientId") {
         const ing = ingredients.find(x => x.id===value);
         upd.unit = ing ? ing.unit : "";
-        upd.unitPrice = ing ? (ing.unitCost||0) : 0;
+        upd.totalPaid = 0;
       }
-      upd.subtotal = Number(upd.qty||0) * Number(upd.unitPrice||0);
       return upd;
     });
-    return { ...p, ingredientLines: lines, total: lines.reduce((a,b)=>a+b.subtotal,0) };
+    return { ...p, ingredientLines: lines };
   });
 
   const from = dateFrom || "0000-01-01";
@@ -101,8 +99,10 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
 
   const openNew  = () => { setForm(emptyForm); setModal("new"); };
   const openEdit = e  => {
-    const lines = e.ingredientLines?.length ? e.ingredientLines : [emptyLine()];
-    setForm({...e, ingredientLines: lines});
+    const lines = e.ingredientLines?.length
+      ? e.ingredientLines.map(l => ({ ...l, totalPaid: l.totalPaid ?? (Number(l.unitPrice||0) * Number(l.qty||0)) }))
+      : [emptyLine()];
+    setForm({...e, ingredientLines: lines, withVat: e.withVat || false});
     setModal(e);
   };
 
@@ -135,8 +135,14 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
   const save = async () => {
     // ── Gastos de Ingredientes: múltiples líneas ──────────────────────────────
     if (form.category==="Ingredientes") {
-      const validLines = (form.ingredientLines||[]).filter(l => l.ingredientId);
-      if (validLines.length===0) { showToast("Agregá al menos un ingrediente", "error"); return; }
+      const rawLines = (form.ingredientLines||[]).filter(l => l.ingredientId);
+      if (rawLines.length===0) { showToast("Agregá al menos un ingrediente", "error"); return; }
+      // Aplicar IVA y calcular unitPrice por línea
+      const validLines = rawLines.map(l => {
+        const effTotal = form.withVat ? (Number(l.totalPaid)||0) * 1.21 : (Number(l.totalPaid)||0);
+        const qty = Number(l.qty || 0);
+        return { ...l, unitPrice: qty > 0 ? effTotal / qty : 0, subtotal: effTotal };
+      });
       const concept = validLines.map(l => ingredients.find(i=>i.id===l.ingredientId)?.name||"").filter(Boolean).join(", ");
       const total   = validLines.reduce((a,b)=>a+b.subtotal, 0);
       const data = { ...form, concept, quantity: validLines.reduce((a,b)=>a+Number(b.qty||0),0), unitPrice:0, total, paymentMethod:form.paymentMethod||null };
@@ -359,38 +365,45 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
 
           {form.category==="Ingredientes" && (
             <div style={{ marginTop:16 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8, flexWrap:"wrap", gap:8 }}>
                 <div className="section-title" style={{ margin:0 }}>Ingredientes comprados</div>
-                <button className="btn btn-sm btn-secondary" onClick={addLine}><Ico n="plus" s={13}/>Agregar ingrediente</button>
+                <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                  <button className={`btn btn-sm ${!form.withVat?"btn-primary":"btn-secondary"}`} onClick={()=>setForm(p=>({...p,withVat:false}))}>Sin IVA</button>
+                  <button className={`btn btn-sm ${form.withVat?"btn-primary":"btn-secondary"}`} onClick={()=>setForm(p=>({...p,withVat:true}))}>Con IVA (+21%)</button>
+                  <button className="btn btn-sm btn-secondary" onClick={addLine}><Ico n="plus" s={13}/>Agregar ingrediente</button>
+                </div>
               </div>
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Precio unit.</th><th>Subtotal</th><th></th></tr></thead>
+                  <thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Total pagado</th><th>Subtotal{form.withVat?" (+IVA)":""}</th><th></th></tr></thead>
                   <tbody>
-                    {(form.ingredientLines||[]).map((line, idx) => (
-                      <tr key={idx}>
-                        <td>
-                          <select value={line.ingredientId} onChange={e=>updateLine(idx,"ingredientId",e.target.value)} style={{ minWidth:150 }}>
-                            <option value="">— Elegir —</option>
-                            {[...ingredients].sort((a,b)=>a.name.localeCompare(b.name)).map(i=><option key={i.id} value={i.id}>{i.name}</option>)}
-                          </select>
-                        </td>
-                        <td><input type="number" min="0" step="0.01" value={line.qty} onChange={e=>updateLine(idx,"qty",e.target.value)} style={{ width:75 }}/></td>
-                        <td style={{ color:"var(--t3)", fontSize:".85em" }}>{line.unit||"—"}</td>
-                        <td><input type="number" min="0" step="0.01" value={line.unitPrice} onChange={e=>updateLine(idx,"unitPrice",e.target.value)} style={{ width:90 }}/></td>
-                        <td style={{ fontWeight:700, color:"var(--red)" }}>{$(line.subtotal)}</td>
-                        <td>
-                          {(form.ingredientLines||[]).length>1 && (
-                            <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>removeLine(idx)}><Ico n="trash" s={13} c="var(--red)"/></button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {(form.ingredientLines||[]).map((line, idx) => {
+                      const effTotal = form.withVat ? (Number(line.totalPaid)||0) * 1.21 : (Number(line.totalPaid)||0);
+                      return (
+                        <tr key={idx}>
+                          <td>
+                            <select value={line.ingredientId} onChange={e=>updateLine(idx,"ingredientId",e.target.value)} style={{ minWidth:150 }}>
+                              <option value="">— Elegir —</option>
+                              {[...ingredients].sort((a,b)=>a.name.localeCompare(b.name)).map(i=><option key={i.id} value={i.id}>{i.name}</option>)}
+                            </select>
+                          </td>
+                          <td><input type="number" min="0" step="0.01" value={line.qty} onChange={e=>updateLine(idx,"qty",e.target.value)} style={{ width:75 }}/></td>
+                          <td><input type="text" value={line.unit||""} onChange={e=>updateLine(idx,"unit",e.target.value)} style={{ width:80 }} placeholder="kg"/></td>
+                          <td><input type="number" min="0" step="0.01" value={line.totalPaid||0} onChange={e=>updateLine(idx,"totalPaid",e.target.value)} style={{ width:100 }}/></td>
+                          <td style={{ fontWeight:700, color:"var(--red)" }}>{$(effTotal)}</td>
+                          <td>
+                            {(form.ingredientLines||[]).length>1 && (
+                              <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>removeLine(idx)}><Ico n="trash" s={13} c="var(--red)"/></button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
               <div style={{ textAlign:"right", fontWeight:800, fontSize:"1.1em", color:"var(--red)", marginTop:8 }}>
-                Total: {$(form.total)}
+                Total{form.withVat?" (con IVA)":""}: {$((form.ingredientLines||[]).reduce((a,l) => a + (form.withVat ? (Number(l.totalPaid)||0)*1.21 : (Number(l.totalPaid)||0)), 0))}
               </div>
               <div style={{ background:"var(--bluel)", border:"1px solid var(--blueb)", borderRadius:8, padding:"8px 12px", marginTop:8, fontSize:".82em", color:"var(--blue)" }}>
                 <Ico n="refresh" s={13}/> Al guardar se actualizará el costo unitario de cada ingrediente en las recetas.

@@ -180,7 +180,7 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
           </div>
           {selected.notes && <div style={{ background:"var(--amberl)", border:"1px solid var(--amberlb)", borderRadius:8, padding:"8px 12px", marginBottom:14, fontSize:".84em" }}>📝 {selected.notes}</div>}
           <div className="section-title">Items</div>
-          <div className="table-wrap" style={{ marginBottom:16 }}>
+          <div className="table-wrap" style={{ marginBottom:16, maxHeight:260, overflowY:"auto" }}>
             <table>
               <thead><tr><th>Producto</th><th>Cant.</th><th>P. Unit.</th><th>Subtotal</th></tr></thead>
               <tbody>
