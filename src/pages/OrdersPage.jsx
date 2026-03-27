@@ -19,9 +19,18 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
 
   const statuses = ["all","open","ready","delivered","closed","cancelled"];
 
-  const isPendingPayment = (s) =>
-    !["closed","cancelled"].includes(s.status) ||
-    (s.status === "closed" && s.paymentMethod === "account");
+  const isPendingPayment = (s) => {
+    if (s.status === "cancelled") return false;
+    if (s.status !== "closed") return true;
+    if (s.paymentMethod !== "account") return false;
+    // Cerrado en cuenta: pendiente si el saldo restante es mayor a 0
+    const charge = accountPayments.find(p => p.saleId === s.id && p.type === "charge");
+    if (!charge) return false;
+    const paid = accountPayments
+      .filter(p => p.saleId === s.id && p.type === "payment")
+      .reduce((sum, p) => sum + p.amount, 0);
+    return paid < charge.amount;
+  };
   const filtered = sales
     .filter(s => filter==="all" || s.status===filter)
     .filter(s => filterPay==="all" || s.paymentMethod===filterPay)

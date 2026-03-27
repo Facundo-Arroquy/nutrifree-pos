@@ -3,7 +3,7 @@
  *
  * Lista clientes con su saldo calculado en tiempo real a partir de
  * account_payments (charges - payments). Permite registrar pagos manuales
- * contra la deuda de un cliente y ver el historial de movimientos.
+ * vinculados a pedidos específicos o como pago genérico.
  *
  * Props: customers, setCustomers, sales, accountPayments, setAccountPayments, showToast, logAction
  */
@@ -17,12 +17,55 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
     return (c?.balance ?? 0) + accountPayments.filter(p => p.customerId === id)
       .reduce((sum, p) => p.type === "payment" ? sum + p.amount : sum - p.amount, 0);
   };
+
+  // Saldo pendiente de un pedido: lo que queda por pagar (charge - sum de payments parciales)
+  const getOrderBalance = (saleId) => {
+    const charge = accountPayments.find(p => p.saleId === saleId && p.type === "charge");
+    if (!charge) return 0;
+    const paid = accountPayments
+      .filter(p => p.saleId === saleId && p.type === "payment")
+      .reduce((sum, p) => sum + p.amount, 0);
+    return Math.max(0, charge.amount - paid);
+  };
+
+  // Pedidos en cuenta con saldo pendiente > 0 (incluye parcialmente pagados)
+  const getUnpaidOrders = (customerId) =>
+    sales
+      .filter(s =>
+        s.customerId === customerId &&
+        s.paymentMethod === "account" &&
+        s.status === "closed" &&
+        getOrderBalance(s.id) > 0
+      )
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+  // Calcula cómo se aplica el crédito disponible a cada pedido pendiente (de más antiguo a más nuevo).
+  // Fuentes de crédito separadas para no mezclar customer.balance con las cargas de account_payments:
+  //   1. customer.balance (crédito pre-existente guardado en la tabla customers)
+  //   2. excedente positivo de account_payments (pagos > cargos, p.ej. pago en exceso anterior)
+  const computeAllocations = (customerId) => {
+    const unpaid = getUnpaidOrders(customerId);
+    const customer = customers.find(c => c.id === customerId);
+    const storedCredit = Math.max(0, customer?.balance ?? 0);
+    const netApBalance = accountPayments
+      .filter(p => p.customerId === customerId)
+      .reduce((sum, p) => p.type === "payment" ? sum + p.amount : sum - p.amount, 0);
+    let creditLeft = storedCredit + Math.max(0, netApBalance);
+    return unpaid.map(sale => {
+      const orderBal = getOrderBalance(sale.id);
+      const creditApplied = Math.min(creditLeft, orderBal);
+      creditLeft -= creditApplied;
+      return { sale, orderBal, creditApplied, remaining: orderBal - creditApplied };
+    });
+  };
+
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState(null); // null | "new" | customer
   const [form, setForm] = useState({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0, discountPct:0, email:"", cuit:"" });
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
   const [payModal, setPayModal] = useState(null); // customer object
   const [payForm, setPayForm] = useState({ amount:"", paymentMethod:"cash", notes:"" });
+  const [cashSelectedIds, setCashSelectedIds] = useState(new Set()); // pedidos seleccionados para pago adicional en cash
   const [expandedSaleId, setExpandedSaleId] = useState(null);
   const [expandedCustomerId, setExpandedCustomerId] = useState(null);
   const [listExpandedSaleId, setListExpandedSaleId] = useState(null);
@@ -30,6 +73,28 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
   const toggleCustomer = (id) => {
     setExpandedCustomerId(prev => prev === id ? null : id);
     setListExpandedSaleId(null);
+  };
+
+  const openPayModal = (customer) => {
+    const allocations = computeAllocations(customer.id);
+    const withRemaining = allocations.filter(a => a.remaining > 0);
+    setCashSelectedIds(new Set(withRemaining.map(a => a.sale.id)));
+    const cashTotal = withRemaining.reduce((sum, a) => sum + a.remaining, 0);
+    setPayForm({ amount: cashTotal > 0 ? String(cashTotal) : "", paymentMethod: "cash", notes: "" });
+    setPayModal(customer);
+  };
+
+  const toggleCashSelection = (saleId, remaining) => {
+    const next = new Set(cashSelectedIds);
+    if (next.has(saleId)) next.delete(saleId);
+    else next.add(saleId);
+    setCashSelectedIds(next);
+    // Recalcular monto sugerido con los seleccionados
+    const allocations = computeAllocations(payModal.id);
+    const newTotal = allocations
+      .filter(a => a.remaining > 0 && next.has(a.sale.id))
+      .reduce((sum, a) => sum + a.remaining, 0);
+    setPayForm(p => ({ ...p, amount: newTotal > 0 ? String(newTotal) : "" }));
   };
 
   const filtered = customers.filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search));
@@ -85,14 +150,79 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
   };
 
   const registerPayment = async () => {
-    const amount = Number(payForm.amount);
-    if (!amount || amount <= 0) { showToast("Monto inválido", "error"); return; }
-    const payment = { id: crypto.randomUUID(), customerId: payModal.id, saleId: null,
-      amount, type: "payment", paymentMethod: payForm.paymentMethod, date: todayStr(), notes: payForm.notes };
-    const { error: payErr } = await supabase.from("account_payments").insert(accountPaymentToDb(payment));
-    if (payErr) { showToast("Error al registrar pago: " + payErr.message, "error"); return; }
-    setAccountPayments(prev => [...prev, payment]);
-    logAction?.("pago", "cuenta_corriente", `"${payModal.name}" — $${amount} — ${PAY_LABELS[payForm.paymentMethod]||payForm.paymentMethod}`);
+    const allocations = computeAllocations(payModal.id);
+    const creditAllocs = allocations.filter(a => a.creditApplied > 0);
+    const totalCreditUsed = creditAllocs.reduce((sum, a) => sum + a.creditApplied, 0);
+
+    const cashAmount = Number(payForm.amount) || 0;
+    const cashOrders = allocations.filter(a => a.remaining > 0 && cashSelectedIds.has(a.sale.id));
+
+    if (totalCreditUsed === 0 && cashAmount === 0) {
+      showToast("No hay saldo a favor ni monto ingresado", "error"); return;
+    }
+
+    const newPayments = [];
+
+    // 1. Payments de crédito (uno por pedido, monto = creditApplied)
+    for (const { sale, creditApplied } of creditAllocs) {
+      const p = {
+        id: crypto.randomUUID(), customerId: payModal.id, saleId: sale.id,
+        amount: creditApplied, type: "payment", paymentMethod: "balance",
+        date: todayStr(), notes: "Saldo a favor aplicado",
+      };
+      const { error } = await supabase.from("account_payments").insert(accountPaymentToDb(p));
+      if (error) { showToast("Error al registrar pago con saldo: " + error.message, "error"); return; }
+      newPayments.push(p);
+    }
+
+    // 2. Ajustar customer.balance para compensar el crédito consumido
+    if (totalCreditUsed > 0) {
+      const customer = customers.find(c => c.id === payModal.id);
+      const newBalance = (customer?.balance ?? 0) - totalCreditUsed;
+      const { error } = await supabase.from("customers").update({ balance: newBalance }).eq("id", payModal.id);
+      if (error) { showToast("Error al actualizar saldo: " + error.message, "error"); return; }
+      setCustomers(prev => prev.map(c => c.id === payModal.id ? { ...c, balance: newBalance } : c));
+      // Sincronizar pagos de crédito al estado local inmediatamente, para que si el paso 3
+      // falla el estado local quede consistente con la DB.
+      setAccountPayments(prev => [...prev, ...newPayments]);
+    }
+
+    // 3. Payments adicionales en efectivo/transferencia para los restantes seleccionados
+    const cashPayments = [];
+    if (cashAmount > 0) {
+      let cashLeft = cashAmount;
+      for (const { sale, remaining } of cashOrders) {
+        const applied = Math.min(cashLeft, remaining);
+        if (applied <= 0) break;
+        const p = {
+          id: crypto.randomUUID(), customerId: payModal.id, saleId: sale.id,
+          amount: applied, type: "payment", paymentMethod: payForm.paymentMethod,
+          date: todayStr(), notes: payForm.notes,
+        };
+        const { error } = await supabase.from("account_payments").insert(accountPaymentToDb(p));
+        if (error) { showToast("Error al registrar pago: " + error.message, "error"); return; }
+        cashPayments.push(p);
+        cashLeft -= applied;
+      }
+      // Excedente → crédito genérico sin saleId
+      if (cashLeft > 0) {
+        const p = {
+          id: crypto.randomUUID(), customerId: payModal.id, saleId: null,
+          amount: cashLeft, type: "payment", paymentMethod: payForm.paymentMethod,
+          date: todayStr(), notes: payForm.notes,
+        };
+        const { error } = await supabase.from("account_payments").insert(accountPaymentToDb(p));
+        if (error) { showToast("Error al registrar excedente: " + error.message, "error"); return; }
+        cashPayments.push(p);
+      }
+    }
+
+    if (cashPayments.length > 0) setAccountPayments(prev => [...prev, ...cashPayments]);
+    const desc = [
+      totalCreditUsed > 0 ? `saldo $${totalCreditUsed}` : "",
+      cashAmount > 0 ? `${PAY_LABELS[payForm.paymentMethod]||""} $${cashAmount}` : "",
+    ].filter(Boolean).join(" + ");
+    logAction?.("pago", "cuenta_corriente", `"${payModal.name}" — ${desc}`);
     setPayModal(null);
     showToast("Pago registrado");
   };
@@ -146,7 +276,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
                     <td data-label="Notas" style={{ color:"var(--t3)", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.notes||"—"}</td>
                     <td data-label="" style={{ whiteSpace:"nowrap" }}>
                       <button className="btn btn-ghost btn-icon btn-sm" title="Editar" onClick={e=>{e.stopPropagation();openEdit(c);}}><Ico n="edit" s={13}/></button>
-                      <button className="btn btn-amber btn-sm" style={{ marginLeft:4 }} onClick={e=>{e.stopPropagation();setPayModal(c);setPayForm({amount:"",paymentMethod:"cash",notes:""});}}>Pago</button>
+                      <button className="btn btn-amber btn-sm" style={{ marginLeft:4 }} onClick={e=>{e.stopPropagation();openPayModal(c);}}>Pago</button>
                       <button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft:4 }} onClick={e=>{e.stopPropagation();del(c.id);}}><Ico n="trash" s={13} c="var(--red)"/></button>
                     </td>
                   </tr>
@@ -170,11 +300,23 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
                                     <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Estado</th>
                                     <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"right" }}>Total</th>
                                     <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Método</th>
-                                    <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Notas</th>
+                                    <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Pago</th>
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {lastSales.map(s => (
+                                  {lastSales.map(s => {
+                                    const charge = accountPayments.find(p => p.saleId === s.id && p.type === "charge");
+                                    const ps = (() => {
+                                      if (s.status === "cancelled") return null;
+                                      if (s.status !== "closed") return { label: "Sin cobrar", cls: "badge-gray" };
+                                      if (s.paymentMethod !== "account") return { label: "Pagado", cls: "badge-green" };
+                                      if (!charge) return { label: "Pagado", cls: "badge-green" };
+                                      const paid = accountPayments.filter(p => p.saleId === s.id && p.type === "payment").reduce((sum, p) => sum + p.amount, 0);
+                                      if (paid >= charge.amount) return { label: "Pagado", cls: "badge-green" };
+                                      if (paid > 0) return { label: `Parcial — debe ${$(charge.amount - paid)}`, cls: "badge-amber" };
+                                      return { label: `Pendiente ${$(charge.amount)}`, cls: "badge-red" };
+                                    })();
+                                    return (
                                     <>
                                       <tr key={s.id} className="tr-click" onClick={()=>setListExpandedSaleId(listExpandedSaleId===s.id?null:s.id)}
                                         style={{ borderTop:"1px solid var(--border)" }}>
@@ -187,7 +329,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
                                         <td style={{ padding:"6px 8px" }}><span className={`badge ${STATUS_COLORS[s.status]||"badge-gray"}`}>{STATUS_LABELS[s.status]||s.status}</span></td>
                                         <td style={{ padding:"6px 8px", fontWeight:700, textAlign:"right" }}>{$(s.total)}</td>
                                         <td style={{ padding:"6px 8px" }}>{PAY_LABELS[s.paymentMethod]||"—"}</td>
-                                        <td style={{ padding:"6px 8px", color:"var(--t3)", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.notes||"—"}</td>
+                                        <td style={{ padding:"6px 8px" }}>{ps ? <span className={`badge ${ps.cls}`}>{ps.label}</span> : <span style={{ color:"var(--t4)" }}>—</span>}</td>
                                       </tr>
                                       {listExpandedSaleId === s.id && (
                                         <tr key={s.id+"-items"}>
@@ -210,7 +352,8 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
                                         </tr>
                                       )}
                                     </>
-                                  ))}
+                                    );
+                                  })}
                                 </tbody>
                               </table>
                             )}
@@ -291,23 +434,38 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
               .filter(s => s.customerId === modal.id)
               .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
             if (!custSales.length) return null;
+
+            const payStatus = (s) => {
+              if (s.status === "cancelled") return null;
+              if (s.status !== "closed") return { label: "Sin cobrar", cls: "badge-gray" };
+              if (s.paymentMethod !== "account") return { label: "Pagado", cls: "badge-green" };
+              const charge = accountPayments.find(p => p.saleId === s.id && p.type === "charge");
+              if (!charge) return { label: "Pagado", cls: "badge-green" };
+              const paid = accountPayments.filter(p => p.saleId === s.id && p.type === "payment").reduce((sum, p) => sum + p.amount, 0);
+              if (paid >= charge.amount) return { label: "Pagado", cls: "badge-green" };
+              if (paid > 0) return { label: `Parcial — debe ${$(charge.amount - paid)}`, cls: "badge-amber" };
+              return { label: `Pendiente ${$(charge.amount)}`, cls: "badge-red" };
+            };
+
             return (
               <div style={{ marginBottom:14 }}>
                 <div className="section-title">Historial de pedidos</div>
                 <div className="table-wrap">
                   <table>
                     <thead>
-                      <tr><th>Fecha</th><th>Estado</th><th>Total</th><th>Método</th><th>Notas</th><th></th></tr>
+                      <tr><th>Fecha</th><th>Estado</th><th>Total</th><th>Método</th><th>Pago</th><th></th></tr>
                     </thead>
                     <tbody>
-                      {custSales.map(s => (
+                      {custSales.map(s => {
+                        const ps = payStatus(s);
+                        return (
                         <>
                           <tr key={s.id} className="tr-click" onClick={() => setExpandedSaleId(expandedSaleId === s.id ? null : s.id)}>
                             <td style={{ fontSize:".82em", color:"var(--t3)" }}>{fmtDate(s.createdAt)}</td>
                             <td><span className={`badge ${STATUS_COLORS[s.status]||"badge-gray"}`}>{STATUS_LABELS[s.status]||s.status}</span></td>
                             <td style={{ fontWeight:700 }}>{$(s.total)}</td>
                             <td style={{ fontSize:".84em" }}>{PAY_LABELS[s.paymentMethod]||"—"}</td>
-                            <td style={{ fontSize:".82em", color:"var(--t3)", maxWidth:140, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.notes||"—"}</td>
+                            <td>{ps ? <span className={`badge ${ps.cls}`}>{ps.label}</span> : <span style={{ color:"var(--t4)" }}>—</span>}</td>
                             <td style={{ textAlign:"center" }}>
                               <span style={{ display:"inline-block", transition:"transform .15s", transform: expandedSaleId===s.id ? "rotate(180deg)" : "rotate(0deg)" }}>
                                 <Ico n="chevron" s={13} c="var(--t3)"/>
@@ -340,7 +498,8 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
                             </tr>
                           )}
                         </>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -354,46 +513,154 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
         </Modal>
       )}
 
-      {payModal && (
-        <Modal title={`Registrar pago — ${payModal.name}`} onClose={()=>setPayModal(null)}>
-          <div style={{ background:"var(--redl)", border:"1px solid var(--redlb)", borderRadius:8, padding:"10px 14px", marginBottom:16, fontSize:".9em" }}>
-            Deuda actual: <strong className="balance-neg">{$(custBal(payModal.id))}</strong>
-          </div>
-          <div className="form-grid" style={{ marginBottom:14 }}>
-            <div className="form-group full">
-              <label className="lbl">Monto a pagar ($) *</label>
-              <input type="number" min="0" value={payForm.amount} onChange={e=>setPayForm(p=>({...p,amount:e.target.value}))} autoFocus placeholder="0"/>
-            </div>
-            <div className="form-group full">
-              <label className="lbl">Método de pago</label>
-              <div style={{ display:"flex", gap:8, marginTop:4 }}>
-                {[["cash","Efectivo"],["transfer","Transferencia"]].map(([k,v]) => (
-                  <button key={k} className={`btn btn-sm ${payForm.paymentMethod===k?"btn-primary":"btn-secondary"}`}
-                    onClick={()=>setPayForm(p=>({...p,paymentMethod:k}))}>
-                    {payForm.paymentMethod===k && <Ico n="check" s={12}/>}{v}
-                  </button>
-                ))}
+      {payModal && (() => {
+        const bal = custBal(payModal.id);
+        const allocations = computeAllocations(payModal.id);
+        const totalCreditUsed = allocations.reduce((sum, a) => sum + a.creditApplied, 0);
+        const ordersWithRemaining = allocations.filter(a => a.remaining > 0);
+        const cashSelectedOrders = ordersWithRemaining.filter(a => cashSelectedIds.has(a.sale.id));
+        const cashTotal = cashSelectedOrders.reduce((sum, a) => sum + a.remaining, 0);
+        const enteredAmount = Number(payForm.amount) || 0;
+        // La aplicación de crédito tiene efecto neto 0 en custBal (el ajuste de balance lo cancela),
+        // así que finalBal solo cambia por el monto en efectivo/transferencia ingresado.
+        const finalBal = bal + enteredAmount;
+        const hasOrders = allocations.length > 0;
+        return (
+          <Modal title={`Registrar pago — ${payModal.name}`} onClose={()=>setPayModal(null)} lg>
+            {/* Saldos */}
+            <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:16 }}>
+              <div style={{ background: bal < 0 ? "var(--redl)" : bal > 0 ? "var(--greenl)" : "var(--s1)", border:`1px solid ${bal < 0 ? "var(--redlb)" : bal > 0 ? "var(--greenlb)" : "var(--border)"}`, borderRadius:8, padding:"10px 16px", flex:1, minWidth:140, fontSize:".88em" }}>
+                <div style={{ color:"var(--t3)", marginBottom:2 }}>Saldo actual</div>
+                <div style={{ fontWeight:700, fontSize:"1.1em" }}>
+                  <span className={bal > 0 ? "balance-pos" : bal < 0 ? "balance-neg" : "balance-zero"}>{$(bal)}</span>
+                </div>
               </div>
+              {(totalCreditUsed > 0 || enteredAmount > 0) && (
+                <div style={{ background:"var(--s1)", border:"1px solid var(--border)", borderRadius:8, padding:"10px 16px", flex:1, minWidth:140, fontSize:".88em" }}>
+                  <div style={{ color:"var(--t3)", marginBottom:2 }}>Saldo resultante</div>
+                  <div style={{ fontWeight:700, fontSize:"1.1em" }}>
+                    <span className={finalBal > 0 ? "balance-pos" : finalBal < 0 ? "balance-neg" : "balance-zero"}>{$(finalBal)}</span>
+                  </div>
+                </div>
+              )}
             </div>
-            {payForm.amount > 0 && (
-              <div className="form-group full">
-                <label className="lbl">Saldo resultante</label>
-                <div style={{ marginTop:4, fontWeight:700, fontSize:"1.05em" }}>
-                  {(() => { const r = custBal(payModal.id) + Number(payForm.amount); return <span className={r >= 0 ? "balance-pos" : "balance-neg"}>{$(r)}</span>; })()}
+
+            {/* Sin pedidos pendientes */}
+            {!hasOrders && (
+              <div style={{ background:"var(--s1)", border:"1px solid var(--border)", borderRadius:8, padding:"12px 16px", marginBottom:16, fontSize:".87em", color:"var(--t3)" }}>
+                No hay pedidos en cuenta pendientes. Podés ingresar un monto como crédito a favor.
+              </div>
+            )}
+
+            {/* Lista unificada de pedidos */}
+            {hasOrders && (
+              <div style={{ marginBottom:16 }}>
+                <div className="section-title" style={{ marginBottom:8 }}>Pedidos en cuenta</div>
+                <div style={{ border:"1px solid var(--border)", borderRadius:8, overflow:"hidden" }}>
+                  {allocations.map(({ sale, orderBal, creditApplied, remaining }, i) => {
+                    const fullyCovered = remaining === 0 && creditApplied > 0;
+                    const checked = cashSelectedIds.has(sale.id);
+                    return (
+                      <div key={sale.id}
+                        onClick={!fullyCovered ? () => toggleCashSelection(sale.id, remaining) : undefined}
+                        style={{
+                          display:"flex", alignItems:"center", gap:12,
+                          padding: checked ? "10px 14px 10px 11px" : "10px 14px",
+                          cursor: fullyCovered ? "default" : "pointer",
+                          borderBottom: i < allocations.length - 1 ? "1px solid var(--border)" : "none",
+                          borderLeft: checked ? "4px solid var(--t3)" : fullyCovered ? "4px solid var(--green)" : "4px solid transparent",
+                          background: fullyCovered ? "var(--greenl)" : checked ? "var(--s2, #e5e7eb)" : "var(--s0)",
+                          transition:"background .15s, border-left-color .15s",
+                        }}>
+                        {/* Checkbox o check icono */}
+                        {fullyCovered
+                          ? <div style={{ width:18, height:18, borderRadius:4, background:"var(--green)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                              <Ico n="check" s={11} c="white"/>
+                            </div>
+                          : <div style={{ width:18, height:18, borderRadius:4, border:`2px solid ${checked ? "var(--t2)" : "var(--border)"}`, background: checked ? "var(--t2)" : "var(--s0)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, transition:"background .13s, border-color .13s" }}>
+                              {checked && <Ico n="check" s={11} c="white"/>}
+                            </div>
+                        }
+                        {/* Info del pedido */}
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontWeight:600, fontSize:".88em" }}>
+                            {fmtDate(sale.createdAt)}
+                            <span style={{ marginLeft:8, fontWeight:400, color:"var(--t3)", fontSize:".9em" }}>
+                              {sale.items.length} ítem{sale.items.length!==1?"s":""}
+                            </span>
+                          </div>
+                          <div style={{ fontSize:".75em", color:"var(--t3)", marginTop:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                            {sale.items.map(it => it.name).join(", ")}
+                          </div>
+                          {creditApplied > 0 && (
+                            <div style={{ fontSize:".75em", color:"var(--green)", marginTop:2, fontWeight:600 }}>
+                              💰 {$(creditApplied)} de saldo aplicado
+                              {orderBal > creditApplied ? ` (total del pedido: ${$(orderBal)})` : ""}
+                            </div>
+                          )}
+                        </div>
+                        {/* Monto principal: lo que falta pagar */}
+                        <div style={{ textAlign:"right", minWidth:70 }}>
+                          {fullyCovered
+                            ? <div style={{ fontWeight:700, fontSize:".9em", color:"var(--green)" }}>Cubierto</div>
+                            : <div style={{ fontWeight:700, fontSize:".95em", color:"var(--t1)" }}>{$(remaining)}</div>
+                          }
+                          {!fullyCovered && creditApplied === 0 && (
+                            <div style={{ fontSize:".72em", color:"var(--t3)" }}>Total: {$(orderBal)}</div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {totalCreditUsed > 0 && (
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 14px", background:"var(--greenlb)", fontSize:".83em", fontWeight:700 }}>
+                      <span style={{ color:"var(--green)" }}>💰 Saldo a favor aplicado automáticamente</span>
+                      <span style={{ color:"var(--green)" }}>{$(totalCreditUsed)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
-            <div className="form-group full">
+
+            {/* Método y monto (si hay pedidos con restante o sin pedidos) */}
+            {(ordersWithRemaining.length > 0 || !hasOrders) && (
+              <div className="form-grid" style={{ marginBottom:14 }}>
+                <div className="form-group full">
+                  <label className="lbl">Método de pago</label>
+                  <div style={{ display:"flex", gap:8, marginTop:4 }}>
+                    {[["cash","Efectivo"],["transfer","Transferencia"]].map(([k,v]) => (
+                      <button key={k} className={`btn btn-sm ${payForm.paymentMethod===k?"btn-primary":"btn-secondary"}`}
+                        onClick={()=>setPayForm(p=>({...p,paymentMethod:k}))}>
+                        {payForm.paymentMethod===k && <Ico n="check" s={12}/>}{v}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="form-group full">
+                  <label className="lbl">{ordersWithRemaining.length > 0 ? "Monto a pagar ($)" : "Monto ($) *"}</label>
+                  <input type="number" min="0" value={payForm.amount}
+                    onChange={e=>setPayForm(p=>({...p,amount:e.target.value}))}
+                    autoFocus={!hasOrders} placeholder="0"/>
+                  {enteredAmount > cashTotal && cashTotal > 0 && (
+                    <div style={{ fontSize:".78em", color:"var(--t3)", marginTop:4 }}>
+                      El excedente de {$(enteredAmount - cashTotal)} quedará como crédito a favor.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="form-group full" style={{ marginBottom:14 }}>
               <label className="lbl">Notas</label>
               <textarea value={payForm.notes} onChange={e=>setPayForm(p=>({...p,notes:e.target.value}))} placeholder="Observaciones opcionales..."/>
             </div>
-          </div>
-          <div className="modal-footer">
-            <button className="btn btn-secondary" onClick={()=>setPayModal(null)}>Cancelar</button>
-            <button className="btn btn-primary" onClick={registerPayment}><Ico n="check" s={13}/>Confirmar pago</button>
-          </div>
-        </Modal>
-      )}
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={()=>setPayModal(null)}>Cancelar</button>
+              <button className="btn btn-primary" onClick={registerPayment}><Ico n="check" s={13}/>Confirmar pago</button>
+            </div>
+          </Modal>
+        );
+      })()}
     </div>
   );
 }

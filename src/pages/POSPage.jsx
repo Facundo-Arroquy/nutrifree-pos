@@ -38,6 +38,8 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   const [custSearch, setCustSearch] = useState("");
   const [billSale, setBillSale] = useState(false);
   const [posTab, setPosTab] = useState("products"); // mobile: "products" | "cart"
+  const [applyCredit, setApplyCredit] = useState(null); // null | true | false
+  const [submitting, setSubmitting] = useState(false);
   const [favorites, setFavorites] = useState(
     () => new Set(JSON.parse(localStorage.getItem("pos_favorites") || "[]"))
   );
@@ -146,18 +148,20 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   const clearCart = () => {
     setCart([]); setSelectedCustomer(null); setOrderNotes("");
     setPriceList("retail"); setDiscountType("pct"); setDiscountValue(""); setEditingPrice(null);
-    setBillSale(false);
+    setBillSale(false); setApplyCredit(null);
   };
 
   const completeSale = async (status="closed") => {
+    if (submitting) return;
     if (cart.length === 0) { showToast("El carrito está vacío", "error"); return; }
+    setSubmitting(true);
     for (const item of cart) {
       const prod = products.find(p => p.id === item.productId);
       if (!prod) continue;
       const maxStock = getKitMaxStock(prod);
       if (item.qty > maxStock) {
         showToast(`Stock insuficiente para "${item.name}" (disponible: ${maxStock})`, "error");
-        return;
+        setSubmitting(false); return;
       }
     }
     const sale = {
@@ -211,20 +215,38 @@ export default function POSPage({ products, setProducts, customers, setCustomers
       return upd ? {...p, stock: upd.newStock} : p;
     }));
     const { error: saleErr } = await supabase.from("sales").insert(saleToDb(sale));
-    if (saleErr) { showToast("Error al guardar venta: " + saleErr.message, "error"); return; }
+    if (saleErr) { showToast("Error al guardar venta: " + saleErr.message, "error"); setSubmitting(false); return; }
     // if closed sale with account payment → record charge in account_payments
     if (status === "closed" && payMethod === "account" && selectedCustomer) {
       const charge = { id: crypto.randomUUID(), customerId: selectedCustomer.id, saleId: sale.id,
         amount: total, type: "charge", paymentMethod: null, date: todayStr(), notes: "" };
       const { error: payErr } = await supabase.from("account_payments").insert(accountPaymentToDb(charge));
-      if (payErr) { showToast("Error al registrar movimiento: " + payErr.message, "error"); return; }
+      if (payErr) { showToast("Error al registrar movimiento: " + payErr.message, "error"); setSubmitting(false); return; }
       setAccountPayments(prev => [...prev, charge]);
+
+      // Si el usuario eligió aplicar su saldo a favor: marcar el pedido como pagado
+      if (applyCredit === true) {
+        const linkedPayment = {
+          id: crypto.randomUUID(), customerId: selectedCustomer.id, saleId: sale.id,
+          amount: total, type: "payment", paymentMethod: "balance",
+          date: todayStr(), notes: "Saldo a favor aplicado",
+        };
+        const { error: credErr } = await supabase.from("account_payments").insert(accountPaymentToDb(linkedPayment));
+        if (credErr) { showToast("Error al aplicar crédito: " + credErr.message, "error"); setSubmitting(false); return; }
+        setAccountPayments(prev => [...prev, linkedPayment]);
+        // Ajustar customer.balance para compensar (el linked payment no debe inflar el saldo)
+        const newBalance = (selectedCustomer.balance ?? 0) - total;
+        const { error: balErr } = await supabase.from("customers").update({ balance: newBalance }).eq("id", selectedCustomer.id);
+        if (balErr) { showToast("Error al actualizar saldo: " + balErr.message, "error"); setSubmitting(false); return; }
+        setCustomers(prev => prev.map(c => c.id === selectedCustomer.id ? { ...c, balance: newBalance } : c));
+      }
     }
     setSales(prev => [sale, ...prev]);
     const cliente = selectedCustomer?.name || "Anónimo";
     const metodo = PAY_ORDER_LABELS?.[payMethod] || payMethod;
     logAction?.(status === "closed" ? "venta" : "pedido", "pos",
       `$${total} — ${cliente} — ${metodo}${discountAmt > 0 ? ` (desc. $${discountAmt})` : ""}`);
+    setSubmitting(false);
     setPayModal(false);
     clearCart();
     showToast(status==="closed" ? "Venta registrada ✓" : "Pedido guardado ✓");
@@ -462,6 +484,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
                   setSelectedCustomer(c);
                   setPriceList(c.priceList);
                   if ((c.discountPct||0) > 0) { setDiscountType("pct"); setDiscountValue(String(c.discountPct)); }
+                  setApplyCredit(null);
                   setCustModal(false);
                   setCustSearch("");
                 }}>
@@ -549,12 +572,43 @@ export default function POSPage({ products, setProducts, customers, setCustomers
             {Object.entries(PAY_ORDER_LABELS).map(([k,v]) => (
               (k !== "account" || selectedCustomer) && (
                 <button key={k} className={`btn ${payMethod===k?"btn-primary":"btn-secondary"}`}
-                  onClick={()=>setPayMethod(k)}>
+                  onClick={()=>{ setPayMethod(k); setApplyCredit(null); }}>
                   {payMethod===k && <Ico n="check" s={13}/>}{v}
                 </button>
               )
             ))}
           </div>
+          {/* Banner: saldo a favor del cliente */}
+          {payMethod === "account" && selectedCustomer && custBal(selectedCustomer.id) >= total && total > 0 && (
+            <div style={{ background:"var(--amberl)", border:"1px solid var(--amberlb)", borderRadius:8, padding:"12px 14px", marginBottom:16 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                <span style={{ fontSize:"1.1em" }}>💰</span>
+                <div style={{ fontSize:".88em", fontWeight:600, color:"var(--t1)" }}>
+                  Este cliente tiene <span style={{ color:"var(--green)" }}>{$(custBal(selectedCustomer.id))}</span> a favor.
+                  ¿Aplicar al pedido?
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <button
+                  className={`btn btn-sm ${applyCredit===true?"btn-primary":"btn-secondary"}`}
+                  onClick={()=>setApplyCredit(true)}>
+                  {applyCredit===true && <Ico n="check" s={12}/>}Sí, aplicar saldo
+                </button>
+                <button
+                  className={`btn btn-sm ${applyCredit===false?"btn-secondary":"btn-ghost"}`}
+                  style={applyCredit===false?{opacity:.7}:{}}
+                  onClick={()=>setApplyCredit(false)}>
+                  No, anotar en cuenta
+                </button>
+              </div>
+              {applyCredit===true && (
+                <div style={{ marginTop:8, fontSize:".78em", color:"var(--t3)" }}>
+                  El pedido se anotará en cuenta y se marcará como pagado con el saldo a favor.
+                  Saldo resultante: <strong>{$(custBal(selectedCustomer.id) - total)}</strong>
+                </div>
+              )}
+            </div>
+          )}
           <div className="form-group" style={{ marginBottom:16 }}>
             <label className="lbl">Notas del pedido</label>
             <textarea value={orderNotes} onChange={e=>setOrderNotes(e.target.value)} placeholder="Instrucciones especiales..."/>
@@ -574,8 +628,12 @@ export default function POSPage({ products, setProducts, customers, setCustomers
           </button>
           <div className="modal-footer" style={{ paddingTop:0, borderTop:"none", marginTop:0, gap:10 }}>
             <button className="btn btn-secondary" onClick={()=>setPayModal(false)}>Cancelar</button>
-            <button className="btn btn-primary btn-lg" onClick={()=>completeSale(pendingStatus)}>
-              <Ico n="check" s={16}/>{pendingStatus==="open" ? "Guardar pedido" : "Confirmar venta"}
+            <button className="btn btn-primary btn-lg" onClick={()=>completeSale(pendingStatus)} disabled={submitting}
+              style={{ opacity: submitting ? .7 : 1, cursor: submitting ? "not-allowed" : "pointer" }}>
+              {submitting
+                ? <><span style={{ display:"inline-block", width:15, height:15, border:"2px solid rgba(255,255,255,.4)", borderTopColor:"#fff", borderRadius:"50%", animation:"spin .7s linear infinite", marginRight:6 }}/>Procesando...</>
+                : <><Ico n="check" s={16}/>{pendingStatus==="open" ? "Guardar pedido" : "Confirmar venta"}</>
+              }
             </button>
           </div>
         </Modal>
