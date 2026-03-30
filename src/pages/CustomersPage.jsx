@@ -44,19 +44,28 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
   //   1. customer.balance (crédito pre-existente guardado en la tabla customers)
   //   2. excedente positivo de account_payments (pagos > cargos, p.ej. pago en exceso anterior)
   const computeAllocations = (customerId) => {
-    const unpaid = getUnpaidOrders(customerId);
     const customer = customers.find(c => c.id === customerId);
-    const storedCredit = Math.max(0, customer?.balance ?? 0);
+    const balance = customer?.balance ?? 0;
+    const storedCredit = Math.max(0, balance);
+    const initialDebt = Math.max(0, -balance);
     const netApBalance = accountPayments
       .filter(p => p.customerId === customerId)
       .reduce((sum, p) => p.type === "payment" ? sum + p.amount : sum - p.amount, 0);
     let creditLeft = storedCredit + Math.max(0, netApBalance);
-    return unpaid.map(sale => {
+    const result = [];
+    if (initialDebt > 0) {
+      const creditApplied = Math.min(creditLeft, initialDebt);
+      creditLeft -= creditApplied;
+      result.push({ isInitialDebt: true, sale: { id: "__initial__" }, orderBal: initialDebt, creditApplied, remaining: initialDebt - creditApplied });
+    }
+    const unpaid = getUnpaidOrders(customerId);
+    for (const sale of unpaid) {
       const orderBal = getOrderBalance(sale.id);
       const creditApplied = Math.min(creditLeft, orderBal);
       creditLeft -= creditApplied;
-      return { sale, orderBal, creditApplied, remaining: orderBal - creditApplied };
-    });
+      result.push({ isInitialDebt: false, sale, orderBal, creditApplied, remaining: orderBal - creditApplied });
+    }
+    return result;
   };
 
   const [search, setSearch] = useState("");
@@ -151,20 +160,24 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
 
   const registerPayment = async () => {
     const allocations = computeAllocations(payModal.id);
-    const creditAllocs = allocations.filter(a => a.creditApplied > 0);
-    const totalCreditUsed = creditAllocs.reduce((sum, a) => sum + a.creditApplied, 0);
+
+    const initialDebtAlloc = allocations.find(a => a.isInitialDebt);
+    const creditForOrders = allocations.filter(a => !a.isInitialDebt && a.creditApplied > 0);
+    const creditForInitial = initialDebtAlloc?.creditApplied ?? 0;
+    const totalCreditUsed = creditForOrders.reduce((sum, a) => sum + a.creditApplied, 0) + creditForInitial;
 
     const cashAmount = Number(payForm.amount) || 0;
-    const cashOrders = allocations.filter(a => a.remaining > 0 && cashSelectedIds.has(a.sale.id));
+    const cashSelected = allocations.filter(a => a.remaining > 0 && cashSelectedIds.has(a.sale.id));
 
     if (totalCreditUsed === 0 && cashAmount === 0) {
       showToast("No hay saldo a favor ni monto ingresado", "error"); return;
     }
 
-    const newPayments = [];
+    const allNewPayments = [];
+    let balanceDelta = 0; // cambio acumulado en customers.balance
 
-    // 1. Payments de crédito (uno por pedido, monto = creditApplied)
-    for (const { sale, creditApplied } of creditAllocs) {
+    // 1. Crédito → pedidos: crear AP payment por pedido, consume saldo positivo
+    for (const { sale, creditApplied } of creditForOrders) {
       const p = {
         id: crypto.randomUUID(), customerId: payModal.id, saleId: sale.id,
         amount: creditApplied, type: "payment", paymentMethod: "balance",
@@ -172,28 +185,33 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
       };
       const { error } = await supabase.from("account_payments").insert(accountPaymentToDb(p));
       if (error) { showToast("Error al registrar pago con saldo: " + error.message, "error"); return; }
-      newPayments.push(p);
+      allNewPayments.push(p);
+      balanceDelta -= creditApplied;
     }
 
-    // 2. Ajustar customer.balance para compensar el crédito consumido
-    if (totalCreditUsed > 0) {
-      const customer = customers.find(c => c.id === payModal.id);
-      const newBalance = (customer?.balance ?? 0) - totalCreditUsed;
-      const { error } = await supabase.from("customers").update({ balance: newBalance }).eq("id", payModal.id);
-      if (error) { showToast("Error al actualizar saldo: " + error.message, "error"); return; }
-      setCustomers(prev => prev.map(c => c.id === payModal.id ? { ...c, balance: newBalance } : c));
-      // Sincronizar pagos de crédito al estado local inmediatamente, para que si el paso 3
-      // falla el estado local quede consistente con la DB.
-      setAccountPayments(prev => [...prev, ...newPayments]);
+    // 2. Crédito → deuda inicial: crear AP charge para consumir el excedente AP, reduce la deuda
+    if (creditForInitial > 0) {
+      const p = {
+        id: crypto.randomUUID(), customerId: payModal.id, saleId: null,
+        amount: creditForInitial, type: "charge", paymentMethod: "balance",
+        date: todayStr(), notes: "Deuda inicial cubierta con crédito",
+      };
+      const { error } = await supabase.from("account_payments").insert(accountPaymentToDb(p));
+      if (error) { showToast("Error al aplicar crédito a deuda inicial: " + error.message, "error"); return; }
+      allNewPayments.push(p);
+      balanceDelta += creditForInitial;
     }
 
-    // 3. Payments adicionales en efectivo/transferencia para los restantes seleccionados
-    const cashPayments = [];
-    if (cashAmount > 0) {
-      let cashLeft = cashAmount;
-      for (const { sale, remaining } of cashOrders) {
-        const applied = Math.min(cashLeft, remaining);
-        if (applied <= 0) break;
+    // 3. Efectivo/transferencia por cada ítem seleccionado
+    let cashLeft = cashAmount;
+    for (const { isInitialDebt, sale, remaining } of cashSelected) {
+      const applied = Math.min(cashLeft, remaining);
+      if (applied <= 0) break;
+      cashLeft -= applied;
+      if (isInitialDebt) {
+        // Pago de deuda inicial: solo ajustar customers.balance, sin entrada AP
+        balanceDelta += applied;
+      } else {
         const p = {
           id: crypto.randomUUID(), customerId: payModal.id, saleId: sale.id,
           amount: applied, type: "payment", paymentMethod: payForm.paymentMethod,
@@ -201,23 +219,33 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
         };
         const { error } = await supabase.from("account_payments").insert(accountPaymentToDb(p));
         if (error) { showToast("Error al registrar pago: " + error.message, "error"); return; }
-        cashPayments.push(p);
-        cashLeft -= applied;
-      }
-      // Excedente → crédito genérico sin saleId
-      if (cashLeft > 0) {
-        const p = {
-          id: crypto.randomUUID(), customerId: payModal.id, saleId: null,
-          amount: cashLeft, type: "payment", paymentMethod: payForm.paymentMethod,
-          date: todayStr(), notes: payForm.notes,
-        };
-        const { error } = await supabase.from("account_payments").insert(accountPaymentToDb(p));
-        if (error) { showToast("Error al registrar excedente: " + error.message, "error"); return; }
-        cashPayments.push(p);
+        allNewPayments.push(p);
       }
     }
 
-    if (cashPayments.length > 0) setAccountPayments(prev => [...prev, ...cashPayments]);
+    // Excedente de efectivo → crédito genérico sin saleId
+    if (cashLeft > 0) {
+      const p = {
+        id: crypto.randomUUID(), customerId: payModal.id, saleId: null,
+        amount: cashLeft, type: "payment", paymentMethod: payForm.paymentMethod,
+        date: todayStr(), notes: payForm.notes,
+      };
+      const { error } = await supabase.from("account_payments").insert(accountPaymentToDb(p));
+      if (error) { showToast("Error al registrar excedente: " + error.message, "error"); return; }
+      allNewPayments.push(p);
+    }
+
+    // 4. Actualizar customers.balance en un solo paso
+    if (balanceDelta !== 0) {
+      const customer = customers.find(c => c.id === payModal.id);
+      const newBalance = (customer?.balance ?? 0) + balanceDelta;
+      const { error } = await supabase.from("customers").update({ balance: newBalance }).eq("id", payModal.id);
+      if (error) { showToast("Error al actualizar saldo: " + error.message, "error"); return; }
+      setCustomers(prev => prev.map(c => c.id === payModal.id ? { ...c, balance: newBalance } : c));
+    }
+
+    if (allNewPayments.length > 0) setAccountPayments(prev => [...prev, ...allNewPayments]);
+
     const desc = [
       totalCreditUsed > 0 ? `saldo $${totalCreditUsed}` : "",
       cashAmount > 0 ? `${PAY_LABELS[payForm.paymentMethod]||""} $${cashAmount}` : "",
@@ -552,12 +580,12 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
               </div>
             )}
 
-            {/* Lista unificada de pedidos */}
+            {/* Lista unificada de deudas */}
             {hasOrders && (
               <div style={{ marginBottom:16 }}>
-                <div className="section-title" style={{ marginBottom:8 }}>Pedidos en cuenta</div>
+                <div className="section-title" style={{ marginBottom:8 }}>Deudas pendientes</div>
                 <div style={{ border:"1px solid var(--border)", borderRadius:8, overflow:"hidden" }}>
-                  {allocations.map(({ sale, orderBal, creditApplied, remaining }, i) => {
+                  {allocations.map(({ isInitialDebt, sale, orderBal, creditApplied, remaining }, i) => {
                     const fullyCovered = remaining === 0 && creditApplied > 0;
                     const checked = cashSelectedIds.has(sale.id);
                     return (
@@ -581,21 +609,27 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
                               {checked && <Ico n="check" s={11} c="white"/>}
                             </div>
                         }
-                        {/* Info del pedido */}
+                        {/* Info del ítem */}
                         <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontWeight:600, fontSize:".88em" }}>
-                            {fmtDate(sale.createdAt)}
-                            <span style={{ marginLeft:8, fontWeight:400, color:"var(--t3)", fontSize:".9em" }}>
-                              {sale.items.length} ítem{sale.items.length!==1?"s":""}
-                            </span>
-                          </div>
-                          <div style={{ fontSize:".75em", color:"var(--t3)", marginTop:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                            {sale.items.map(it => it.name).join(", ")}
-                          </div>
+                          {isInitialDebt ? (
+                            <div style={{ fontWeight:600, fontSize:".88em" }}>Deuda inicial</div>
+                          ) : (
+                            <>
+                              <div style={{ fontWeight:600, fontSize:".88em" }}>
+                                {fmtDate(sale.createdAt)}
+                                <span style={{ marginLeft:8, fontWeight:400, color:"var(--t3)", fontSize:".9em" }}>
+                                  {sale.items.length} ítem{sale.items.length!==1?"s":""}
+                                </span>
+                              </div>
+                              <div style={{ fontSize:".75em", color:"var(--t3)", marginTop:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                                {sale.items.map(it => it.name).join(", ")}
+                              </div>
+                            </>
+                          )}
                           {creditApplied > 0 && (
                             <div style={{ fontSize:".75em", color:"var(--green)", marginTop:2, fontWeight:600 }}>
-                              💰 {$(creditApplied)} de saldo aplicado
-                              {orderBal > creditApplied ? ` (total del pedido: ${$(orderBal)})` : ""}
+                              Crédito aplicado: {$(creditApplied)}
+                              {orderBal > creditApplied ? ` (total: ${$(orderBal)})` : ""}
                             </div>
                           )}
                         </div>
