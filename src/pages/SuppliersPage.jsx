@@ -117,9 +117,11 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
                         : <span className="badge" style={{ background:"var(--bluel)", color:"var(--blue)", fontWeight:700 }}>A favor {$(bal)}</span>
                     }
                   </td>
-                  <td onClick={ev=>ev.stopPropagation()} style={{ display:"flex", gap:4 }}>
-                    <button className="btn btn-sm btn-secondary" onClick={()=>{ setAccountModal(s); }}>Ver cuenta</button>
-                    <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>del(s.id)}><Ico n="trash" s={13} c="var(--red)"/></button>
+                  <td onClick={ev=>ev.stopPropagation()} style={{ whiteSpace:"nowrap" }}>
+                    <div style={{ display:"flex", gap:4, alignItems:"center", justifyContent:"flex-end" }}>
+                      <button className="btn btn-sm btn-secondary" onClick={()=>{ setAccountModal(s); }}>Ver cuenta</button>
+                      <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>del(s.id)}><Ico n="trash" s={13} c="var(--red)"/></button>
+                    </div>
                   </td>
                 </tr>
               );

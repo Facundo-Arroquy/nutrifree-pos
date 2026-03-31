@@ -124,7 +124,7 @@ export default function ProductsPage({ products, setProducts, categories, showTo
                     {p.active?"Activo":"Inactivo"}
                   </button>
                 </td>
-                <td data-label="">
+                <td data-label="" style={{ whiteSpace:"nowrap", textAlign:"right" }}>
                   <button className="btn btn-ghost btn-icon btn-sm" onClick={e=>{e.stopPropagation();del(p.id);}}><Ico n="trash" s={13} c="var(--red)"/></button>
                 </td>
               </tr>

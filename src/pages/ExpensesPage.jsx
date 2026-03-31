@@ -150,7 +150,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
         const newExp = {...data, id:uid()};
         const { error } = await supabase.from("expenses").insert(expenseToDb(newExp));
         if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
-        setExpenses(p => [newExp, ...p]);
+        setExpenses(p => p.some(x => x.id === newExp.id) ? p : [newExp, ...p]);
         if (newExp.supplierId && newExp.paymentStatus==="pending") {
           const charge = { id:crypto.randomUUID(), supplierId:newExp.supplierId, expenseId:newExp.id, amount:newExp.total, type:"charge", paymentMethod:null, date:newExp.date, notes:newExp.concept };
           await supabase.from("supplier_payments").insert(supplierPaymentToDb(charge));
@@ -204,7 +204,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       const newExp = {...data, id:uid()};
       const { error } = await supabase.from("expenses").insert(expenseToDb(newExp));
       if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
-      setExpenses(p => [newExp, ...p]);
+      setExpenses(p => p.some(x => x.id === newExp.id) ? p : [newExp, ...p]);
       if (newExp.supplierId && newExp.paymentStatus==="pending") {
         const charge = { id:crypto.randomUUID(), supplierId:newExp.supplierId, expenseId:newExp.id, amount:newExp.total, type:"charge", paymentMethod:null, date:newExp.date, notes:newExp.concept };
         await supabase.from("supplier_payments").insert(supplierPaymentToDb(charge));
@@ -301,13 +301,15 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
                     ? <span className="badge badge-green">Pagado</span>
                     : <span className="badge badge-amber">Pendiente</span>}
                 </td>
-                <td onClick={ev=>ev.stopPropagation()} style={{ display:"flex", gap:4, alignItems:"center" }}>
-                  {e.paymentStatus==="pending" && (
-                    <button className="btn btn-sm btn-primary" style={{ fontSize:".76em", padding:"4px 9px" }} onClick={()=>setPayModal(e)}>
-                      <Ico n="check" s={12}/>Cerrar
-                    </button>
-                  )}
-                  <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>del(e.id)}><Ico n="trash" s={13} c="var(--red)"/></button>
+                <td onClick={ev=>ev.stopPropagation()} style={{ whiteSpace:"nowrap" }}>
+                  <div style={{ display:"flex", gap:4, alignItems:"center", justifyContent:"flex-end" }}>
+                    {e.paymentStatus==="pending" && (
+                      <button className="btn btn-sm btn-primary" style={{ fontSize:".76em", padding:"4px 9px" }} onClick={()=>setPayModal(e)}>
+                        <Ico n="check" s={12}/>Cerrar
+                      </button>
+                    )}
+                    <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>del(e.id)}><Ico n="trash" s={13} c="var(--red)"/></button>
+                  </div>
                 </td>
               </tr>
             ))}

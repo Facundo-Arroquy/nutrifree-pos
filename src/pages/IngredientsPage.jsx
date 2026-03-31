@@ -178,11 +178,13 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
                       {recipesForIngredient(i.id).length === 0 && <span style={{ color:"var(--t4)", fontSize:".8em" }}>—</span>}
                     </div>
                   </td>
-                  <td data-label="Agregar stock" onClick={e=>e.stopPropagation()} style={{ display:"flex", gap:6, alignItems:"center" }}>
-                    <input type="number" style={{ width:80 }} placeholder="Cant." value={stockEdit[i.id]||""}
-                      onChange={e=>setStockEdit(p=>({...p,[i.id]:e.target.value}))}
-                      onKeyDown={e=>e.key==="Enter"&&applyStock(i.id)}/>
-                    <button className="btn btn-primary btn-sm" onClick={()=>applyStock(i.id)}><Ico n="plus" s={12}/></button>
+                  <td data-label="Agregar stock" onClick={e=>e.stopPropagation()}>
+                    <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                      <input type="number" style={{ width:80 }} placeholder="Cant." value={stockEdit[i.id]||""}
+                        onChange={e=>setStockEdit(p=>({...p,[i.id]:e.target.value}))}
+                        onKeyDown={e=>e.key==="Enter"&&applyStock(i.id)}/>
+                      <button className="btn btn-primary btn-sm" onClick={()=>applyStock(i.id)}><Ico n="plus" s={12}/></button>
+                    </div>
                   </td>
                   <td data-label="" onClick={e=>e.stopPropagation()}>
                     <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>del(i.id)}><Ico n="trash" s={13} c="var(--red)"/></button>
