@@ -67,7 +67,7 @@ function MarginBar({ pct }) {
   );
 }
 
-export default function ReportsPage({ sales, products, recipes, expenses, expenseCategories, accountPayments, stockMovements }) {
+export default function ReportsPage({ sales, products, recipes, expenses, expenseCategories, accountPayments, stockMovements, setPage, setOpenRecipeId }) {
   const presets = useMemo(() => {
     const now = new Date();
     const t = now.toISOString().slice(0,10);
@@ -693,17 +693,26 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
         {marginAlert.length===0
           ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>✅ Todos los productos superan su margen mínimo configurado</div>
           : <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:10 }}>
-              {marginAlert.map(p => (
-                <div key={p.id} style={{ background:"var(--redl)", border:"1px solid var(--redlb)", borderRadius:8, padding:"10px 12px" }}>
-                  <div style={{ fontWeight:600, fontSize:".88em" }}>{p.name}</div>
-                  <div style={{ fontSize:".8em", color:"var(--red)", fontWeight:700, marginTop:4 }}>
-                    Margen: {p.margin.toFixed(1)}% <span style={{ fontWeight:400, color:"var(--t3)" }}>(mín. {p.minMargin}%)</span>
+              {marginAlert.map(p => {
+                const recipe = recipes.find(r => r.productId === p.id);
+                const canNav = !!(recipe && setPage && setOpenRecipeId);
+                return (
+                  <div key={p.id}
+                    onClick={canNav ? () => { setOpenRecipeId(recipe.id); setPage("recipes"); } : undefined}
+                    style={{ background:"var(--redl)", border:"1px solid var(--redlb)", borderRadius:8, padding:"10px 12px", cursor: canNav ? "pointer" : "default" }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:6 }}>
+                      <div style={{ fontWeight:600, fontSize:".88em" }}>{p.name}</div>
+                      {canNav && <span style={{ fontSize:".72em", color:"var(--t3)" }}>Ver receta →</span>}
+                    </div>
+                    <div style={{ fontSize:".8em", color:"var(--red)", fontWeight:700, marginTop:4 }}>
+                      Margen: {p.margin.toFixed(1)}% <span style={{ fontWeight:400, color:"var(--t3)" }}>(mín. {p.minMargin}%)</span>
+                    </div>
+                    <div style={{ fontSize:".76em", color:"var(--t3)", marginTop:2 }}>
+                      Costo/u: {$(p.costPerUnit)} · Precio: {$(p.price)}
+                    </div>
                   </div>
-                  <div style={{ fontSize:".76em", color:"var(--t3)", marginTop:2 }}>
-                    Costo/u: {$(p.costPerUnit)} · Precio: {$(p.price)}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
         }
       </div>
