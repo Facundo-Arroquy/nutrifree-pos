@@ -141,6 +141,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ff);font-size:15px;m
 .page{padding:28px 32px;animation:fadeIn .17s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 @keyframes spin{to{transform:rotate(360deg)}}
+@keyframes recipe-highlight-pulse{0%,100%{box-shadow:0 0 0 4px color-mix(in srgb,var(--blue) 20%,transparent)}50%{box-shadow:0 0 0 8px color-mix(in srgb,var(--blue) 35%,transparent)}}
 .page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;gap:16px;flex-wrap:wrap}
 .page-title{font-size:1.55em;font-weight:700;color:var(--t1);letter-spacing:-.025em}
 .page-sub{font-size:.82em;color:var(--t3);margin-top:2px;font-weight:400}

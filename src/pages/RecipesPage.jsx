@@ -8,11 +8,11 @@
  *
  * Props: recipes, setRecipes, products, ingredients, showToast
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Ico, Modal, $ } from "../shared.jsx";
 import { supabase, recipeToDb, recipeIngredientToDb } from "../supabase.js";
 
-export default function RecipesPage({ recipes, setRecipes, products, ingredients, openRecipeId, setOpenRecipeId, showToast }) {
+export default function RecipesPage({ recipes, setRecipes, products, ingredients, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast }) {
   const [modal, setModal] = useState(null);
   const [viewModal, setViewModal] = useState(null);
 
@@ -22,6 +22,16 @@ export default function RecipesPage({ recipes, setRecipes, products, ingredients
     if (r) setViewModal(r);
     setOpenRecipeId(null);
   }, [openRecipeId, recipes]);
+
+  useEffect(() => {
+    if (!highlightRecipeId) return;
+    // Scroll a la card destacada
+    const el = document.querySelector(`[data-recipe-id="${highlightRecipeId}"]`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Auto-limpiar después de 4 segundos
+    const t = setTimeout(() => setHighlightRecipeId?.(null), 4000);
+    return () => clearTimeout(t);
+  }, [highlightRecipeId]);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState({ productId:"", prepTime:0, cookTime:0, yield:1, notes:"", ingredients:[], steps:[] });
   const [newIngr, setNewIngr] = useState({ ingredientId:"", qty:"" });
@@ -243,9 +253,17 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
           const cpu = costPerUnit(r);
           const margin = prod?.priceRetail > 0 ? ((prod.priceRetail - cpu)/prod.priceRetail*100) : 0;
           const marginW = prod?.priceWholesale > 0 ? ((prod.priceWholesale - cpu)/prod.priceWholesale*100) : null;
+          const isHighlighted = highlightRecipeId === r.id;
           return (
-            <div key={r.id} className="card card-hover" onClick={()=>setViewModal(r)}
-              style={r.needsReview ? { border:"1px solid var(--amberlb)" } : {}}>
+            <div key={r.id} data-recipe-id={r.id} className="card card-hover" onClick={()=>setViewModal(r)}
+              style={{
+                ...(r.needsReview ? { border:"1px solid var(--amberlb)" } : {}),
+                ...(isHighlighted ? {
+                  border:"2px solid var(--blue)",
+                  boxShadow:"0 0 0 4px color-mix(in srgb, var(--blue) 20%, transparent)",
+                  animation:"recipe-highlight-pulse 0.6s ease-in-out 3",
+                } : {}),
+              }}>
               <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8, marginBottom:4 }}>
                 <div style={{ fontWeight:700, fontSize:".95em" }}>{prod?.name||"Producto eliminado"}</div>
                 {r.needsReview && (

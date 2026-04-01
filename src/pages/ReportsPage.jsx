@@ -67,7 +67,7 @@ function MarginBar({ pct }) {
   );
 }
 
-export default function ReportsPage({ sales, products, recipes, expenses, expenseCategories, accountPayments, stockMovements, setPage, setOpenRecipeId }) {
+export default function ReportsPage({ sales, products, recipes, expenses, expenseCategories, accountPayments, stockMovements, setPage, setHighlightRecipeId }) {
   const presets = useMemo(() => {
     const now = new Date();
     const t = now.toISOString().slice(0,10);
@@ -695,10 +695,10 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
           : <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:10 }}>
               {marginAlert.map(p => {
                 const recipe = recipes.find(r => r.productId === p.id);
-                const canNav = !!(recipe && setPage && setOpenRecipeId);
+                const canNav = !!(recipe && setPage && setHighlightRecipeId);
                 return (
                   <div key={p.id}
-                    onClick={canNav ? () => { setOpenRecipeId(recipe.id); setPage("recipes"); } : undefined}
+                    onClick={canNav ? () => { setHighlightRecipeId(recipe.id); setPage("recipes"); } : undefined}
                     style={{ background:"var(--redl)", border:"1px solid var(--redlb)", borderRadius:8, padding:"10px 12px", cursor: canNav ? "pointer" : "default" }}>
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:6 }}>
                       <div style={{ fontWeight:600, fontSize:".88em" }}>{p.name}</div>
