@@ -78,6 +78,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
   const [expandedSaleId, setExpandedSaleId] = useState(null);
   const [expandedCustomerId, setExpandedCustomerId] = useState(null);
   const [listExpandedSaleId, setListExpandedSaleId] = useState(null);
+  const [expandedMovId, setExpandedMovId] = useState(null);
 
   const toggleCustomer = (id) => {
     setExpandedCustomerId(prev => prev === id ? null : id);
@@ -397,6 +398,90 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
           </tbody>
         </table>
       </div>
+
+      {/* Historial global de movimientos C/C */}
+      {accountPayments.length > 0 && (() => {
+        const allMovs = [...accountPayments].sort((a,b) => new Date(b.createdAt||b.date) - new Date(a.createdAt||a.date));
+        return (
+          <div className="card" style={{ marginTop:24 }}>
+            <div style={{ fontSize:".95em", fontWeight:700, marginBottom:14 }}>Historial de movimientos C/C</div>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width:32 }}></th>
+                    <th>Fecha</th>
+                    <th>Cliente</th>
+                    <th>Tipo</th>
+                    <th>Método</th>
+                    <th style={{ textAlign:"right" }}>Monto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allMovs.map(p => {
+                    const cust = customers.find(c => c.id === p.customerId);
+                    const linkedSale = p.saleId ? sales.find(s => s.id === p.saleId) : null;
+                    const isOpen = expandedMovId === p.id;
+                    return (
+                      <>
+                        <tr key={p.id} className="tr-click" onClick={() => setExpandedMovId(isOpen ? null : p.id)}>
+                          <td style={{ textAlign:"center" }}>
+                            <span style={{ display:"inline-block", transition:"transform .15s", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+                              <Ico n="chevron" s={13} c="var(--t3)"/>
+                            </span>
+                          </td>
+                          <td style={{ color:"var(--t3)", fontSize:".88em", whiteSpace:"nowrap" }}>{fmtDate(p.date)}</td>
+                          <td style={{ fontWeight:600 }}>{cust?.name || "—"}</td>
+                          <td>
+                            <span className={`badge ${p.type==="charge"?"badge-red":"badge-green"}`}>
+                              {p.type==="charge"?"Cargo":"Pago"}
+                            </span>
+                          </td>
+                          <td style={{ fontSize:".88em" }}>{PAY_LABELS[p.paymentMethod]||"—"}</td>
+                          <td style={{ fontWeight:700, textAlign:"right", color: p.type==="charge"?"var(--red)":"var(--green)" }}>
+                            {p.type==="charge"?"-":"+"}{$(p.amount)}
+                          </td>
+                        </tr>
+                        {isOpen && (
+                          <tr key={p.id+"-detail"}>
+                            <td colSpan={6} style={{ padding:"0 16px 12px 48px", background:"var(--bg2)" }}>
+                              <div style={{ display:"flex", gap:32, flexWrap:"wrap", paddingTop:10, fontSize:".87em" }}>
+                                {p.notes && (
+                                  <div>
+                                    <div style={{ color:"var(--t3)", marginBottom:2, fontSize:".82em", textTransform:"uppercase", fontWeight:600 }}>Notas</div>
+                                    <div>{p.notes}</div>
+                                  </div>
+                                )}
+                                {linkedSale && (
+                                  <div style={{ flex:1, minWidth:200 }}>
+                                    <div style={{ color:"var(--t3)", marginBottom:6, fontSize:".82em", textTransform:"uppercase", fontWeight:600 }}>
+                                      Pedido vinculado — {fmtDate(linkedSale.createdAt)} — {$(linkedSale.total)}
+                                    </div>
+                                    {linkedSale.items.map((item, i) => (
+                                      <div key={i} style={{ display:"flex", justifyContent:"space-between", gap:8, padding:"3px 0", borderBottom:"1px solid var(--border)" }}>
+                                        <span style={{ color:"var(--t1)", flex:1 }}>{item.name}</span>
+                                        <span style={{ color:"var(--t3)" }}>×{item.qty}</span>
+                                        <span style={{ fontWeight:600 }}>{$(item.subtotal)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {!p.notes && !linkedSale && (
+                                  <div style={{ color:"var(--t4)" }}>Sin detalles adicionales.</div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
 
       {modal && (
         <Modal title={modal==="new"?"Nuevo cliente":form.name} onClose={()=>setModal(null)}>
