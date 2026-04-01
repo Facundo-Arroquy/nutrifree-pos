@@ -38,8 +38,16 @@ export default function DashboardPage({ sales, products, cashShifts, customers, 
 
   const rangeSales = sales.filter(s => inRange(s) && ["closed","delivered"].includes(s.status));
   const rangeTotal    = rangeSales.reduce((sum, s) => sum + s.total, 0);
-  const rangeCash     = rangeSales.filter(s => s.paymentMethod === "cash").reduce((sum, s) => sum + s.total, 0);
-  const rangeTransfer = rangeSales.filter(s => s.paymentMethod === "transfer").reduce((sum, s) => sum + s.total, 0);
+
+  // Cobros de cuenta corriente en el período
+  const rangeAccPayments = (accountPayments || []).filter(p =>
+    p.type === "payment" && p.date >= from && p.date <= to
+  );
+  const accCash     = rangeAccPayments.filter(p => p.paymentMethod === "cash").reduce((sum, p) => sum + p.amount, 0);
+  const accTransfer = rangeAccPayments.filter(p => p.paymentMethod === "transfer").reduce((sum, p) => sum + p.amount, 0);
+
+  const rangeCash     = rangeSales.filter(s => s.paymentMethod === "cash").reduce((sum, s) => sum + s.total, 0) + accCash;
+  const rangeTransfer = rangeSales.filter(s => s.paymentMethod === "transfer").reduce((sum, s) => sum + s.total, 0) + accTransfer;
 
   const pendingOrders = sales.filter(s => ["pending","confirmed","ready"].includes(s.status)).length;
 
