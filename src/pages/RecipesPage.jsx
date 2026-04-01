@@ -185,6 +185,17 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
     }
   };
 
+  const markReviewed = async (recipeId) => {
+    const { error } = await supabase.from("recipes")
+      .update({ needs_review: false, review_reason: null })
+      .eq("id", recipeId);
+    if (error) { showToast("Error al marcar revisión: " + error.message, "error"); return; }
+    setRecipes(prev => prev.map(r =>
+      r.id === recipeId ? { ...r, needsReview: false, reviewReason: null } : r
+    ));
+    showToast("Receta marcada como revisada");
+  };
+
   return (
     <div className="page">
       <div className="page-header">
@@ -199,6 +210,32 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
         </div>
       </div>
 
+      {/* Banner de revisión pendiente */}
+      {(() => {
+        const pending = recipes.filter(r => r.needsReview);
+        if (!pending.length) return null;
+        return (
+          <div style={{ background:"var(--amberl)", border:"1px solid var(--amberlb)", borderRadius:"var(--rl)", padding:"12px 16px", marginBottom:16, display:"flex", gap:12, alignItems:"flex-start" }}>
+            <Ico n="alert" s={16} c="var(--amber)" style={{ marginTop:2, flexShrink:0 }}/>
+            <div>
+              <div style={{ fontWeight:700, fontSize:".9em", color:"var(--amber)", marginBottom:4 }}>
+                {pending.length} receta{pending.length !== 1 ? "s" : ""} requieren revisión por cambio de unidad
+              </div>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                {pending.map(r => {
+                  const prod = products.find(p => p.id === r.productId);
+                  return (
+                    <span key={r.id} style={{ fontSize:".82em", background:"var(--bg1)", border:"1px solid var(--amberlb)", borderRadius:4, padding:"2px 8px", color:"var(--t2)" }}>
+                      {prod?.name || "Sin producto"} — <span style={{ color:"var(--t3)" }}>{r.reviewReason}</span>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:14 }}>
         {recipes.filter(r => !search || (products.find(p=>p.id===r.productId)?.name||"").toLowerCase().includes(search.toLowerCase())).map(r => {
           const prod = products.find(p=>p.id===r.productId);
@@ -207,8 +244,16 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
           const margin = prod?.priceRetail > 0 ? ((prod.priceRetail - cpu)/prod.priceRetail*100) : 0;
           const marginW = prod?.priceWholesale > 0 ? ((prod.priceWholesale - cpu)/prod.priceWholesale*100) : null;
           return (
-            <div key={r.id} className="card card-hover" onClick={()=>setViewModal(r)}>
-              <div style={{ fontWeight:700, fontSize:".95em", marginBottom:4 }}>{prod?.name||"Producto eliminado"}</div>
+            <div key={r.id} className="card card-hover" onClick={()=>setViewModal(r)}
+              style={r.needsReview ? { border:"1px solid var(--amberlb)" } : {}}>
+              <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8, marginBottom:4 }}>
+                <div style={{ fontWeight:700, fontSize:".95em" }}>{prod?.name||"Producto eliminado"}</div>
+                {r.needsReview && (
+                  <span style={{ fontSize:".72em", background:"var(--amberl)", color:"var(--amber)", border:"1px solid var(--amberlb)", borderRadius:4, padding:"2px 6px", fontWeight:700, whiteSpace:"nowrap", flexShrink:0 }}>
+                    ⚠ Revisar
+                  </span>
+                )}
+              </div>
               <div style={{ fontSize:".78em", color:"var(--t3)", marginBottom:10 }}>
                 ⏱ {r.prepTime}min prep · {r.cookTime}min cocción · Rinde {r.yield} unid.
               </div>
@@ -233,9 +278,17 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
                   </div>}
                 </div>}
               </div>
+              {r.needsReview && (
+                <div style={{ fontSize:".78em", color:"var(--amber)", background:"var(--amberl)", border:"1px solid var(--amberlb)", borderRadius:4, padding:"5px 8px", marginTop:10 }}>
+                  {r.reviewReason}
+                </div>
+              )}
               <div style={{ display:"flex", gap:6, marginTop:12 }}>
                 <button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();openEdit(r);}}><Ico n="edit" s={12}/>Editar</button>
                 <button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();exportRecipePDF(r);}} title="Exportar PDF"><Ico n="download" s={12}/>PDF</button>
+                {r.needsReview && (
+                  <button className="btn btn-amber btn-sm" onClick={e=>{e.stopPropagation();markReviewed(r.id);}}><Ico n="check" s={12}/>Revisado</button>
+                )}
                 <button className="btn btn-danger btn-sm" onClick={e=>{e.stopPropagation();del(r.id);}}><Ico n="trash" s={12}/></button>
               </div>
             </div>

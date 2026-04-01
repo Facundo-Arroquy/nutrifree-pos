@@ -9,12 +9,12 @@
  */
 import { useState } from "react";
 import { Ico, Modal, $ } from "../shared.jsx";
-import { supabase, ingredientToDb } from "../supabase.js";
+import { supabase, ingredientToDb, recipeToDb } from "../supabase.js";
 
 const INGR_CATS = ["Harinas","Lácteos","Grasas/Aceites","Endulzantes","Frutas/Verduras","Especias","Proteínas","Otros"];
 const INGR_UNITS = ["g","kg","ml","l","unidad","unidades","cdas","ctas"];
 
-export default function IngredientsPage({ ingredients, setIngredients, recipes, products, setPage, setOpenRecipeId, showToast }) {
+export default function IngredientsPage({ ingredients, setIngredients, recipes, setRecipes, products, setPage, setOpenRecipeId, showToast }) {
   const emptyForm = { name:"", category:"Harinas", unit:"g", stock:0, stockMin:0, unitCost:0, supplier:"", notes:"", calories:"", protein:"", carbs:"", fat:"", fiber:"", sugar:"", sodium:"" };
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -59,9 +59,51 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
       if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
       setIngredients(p=>[...p, newIngr]);
     } else {
+      const oldIngr = ingredients.find(i => i.id === modal.id);
+      const unitChanged = oldIngr && oldIngr.unit !== data.unit;
+
       const { error } = await supabase.from("ingredients").update(ingredientToDb(data)).eq("id", modal.id);
       if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
       setIngredients(p=>p.map(i=>i.id===modal.id?{...i,...data}:i));
+
+      // Si cambió la unidad, marcar recetas afectadas y actualizar recipe_ingredients
+      if (unitChanged && recipes?.length) {
+        const affectedRecipes = recipes.filter(r =>
+          r.ingredients.some(ri => ri.ingredientId === modal.id)
+        );
+        for (const recipe of affectedRecipes) {
+          // Actualizar unit y cost en cada recipe_ingredient afectado
+          for (const ri of recipe.ingredients.filter(ri => ri.ingredientId === modal.id)) {
+            const newCost = ri.qty * data.unitCost;
+            await supabase.from("recipe_ingredients")
+              .update({ unit: data.unit, cost: newCost })
+              .eq("id", ri.id);
+          }
+          // Marcar la receta como "necesita revisión"
+          const reason = `Unidad de "${data.name}" cambió de ${oldIngr.unit} → ${data.unit}`;
+          await supabase.from("recipes")
+            .update({ needs_review: true, review_reason: reason })
+            .eq("id", recipe.id);
+        }
+        if (affectedRecipes.length > 0) {
+          // Actualizar estado local de recetas
+          setRecipes(prev => prev.map(r => {
+            if (!affectedRecipes.find(ar => ar.id === r.id)) return r;
+            const reason = `Unidad de "${data.name}" cambió de ${oldIngr.unit} → ${data.unit}`;
+            return {
+              ...r,
+              needsReview: true,
+              reviewReason: reason,
+              ingredients: r.ingredients.map(ri =>
+                ri.ingredientId === modal.id
+                  ? { ...ri, unit: data.unit, cost: ri.qty * data.unitCost }
+                  : ri
+              ),
+            };
+          }));
+          showToast(`${affectedRecipes.length} receta${affectedRecipes.length !== 1 ? "s" : ""} marcada${affectedRecipes.length !== 1 ? "s" : ""} para revisión`);
+        }
+      }
     }
     setModal(null);
     showToast("Ingrediente guardado");
