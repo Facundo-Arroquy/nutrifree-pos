@@ -10,7 +10,7 @@
  */
 import { useState } from "react";
 import { Ico, Modal, $, fmtDT, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, PAY_ORDER_LABELS, todayStr } from "../shared.jsx";
-import { supabase, accountPaymentToDb, stockMovementToDb } from "../supabase.js";
+import { supabase, accountPaymentToDb } from "../supabase.js";
 
 export default function OrdersPage({ sales, setSales, products, setProducts, customers, setCustomers, accountPayments, setAccountPayments, setStockMovements, showToast }) {
   const [filter, setFilter] = useState("all");
@@ -90,16 +90,28 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
           restoreMap[item.productId] = (restoreMap[item.productId] || 0) + item.qty;
         }
       }
-      for (const [productId, qty] of Object.entries(restoreMap)) {
-        const prod = products.find(x => x.id === productId);
-        if (!prod) continue;
-        const newStock = prod.stock + qty;
-        await supabase.from("products").update({ stock: newStock }).eq("id", productId);
-        setProducts(prev => prev.map(x => x.id===productId ? {...x, stock: newStock} : x));
-        const movement = { id: crypto.randomUUID(), productId, productName: prod.name, qty, type: "cancelación", notes: `Pedido ${sale.id}` };
-        const { error: movErr } = await supabase.from("stock_movements").insert(stockMovementToDb(movement));
-        if (!movErr) setStockMovements(prev => [movement, ...prev]);
-      }
+      const restoreDeltas = Object.entries(restoreMap).map(([productId, qty]) => ({
+        id: productId,
+        delta: qty,
+        name: products.find(x => x.id === productId)?.name || productId,
+      }));
+      const { data: stockResults, error: stockErr } = await supabase.rpc("cancel_order_stocks", {
+        p_restore_deltas: restoreDeltas,
+        p_sale_id: sale.id,
+      });
+      if (stockErr) { showToast("Error al restaurar stock: " + stockErr.message, "error"); return; }
+      setProducts(prev => prev.map(p => {
+        const upd = (stockResults || []).find(r => r.id === p.id);
+        return upd ? { ...p, stock: upd.stock } : p;
+      }));
+      setStockMovements(prev => [
+        ...restoreDeltas.map(d => ({
+          id: crypto.randomUUID(), productId: d.id, productName: d.name,
+          qty: d.delta, type: "cancelación", notes: `Pedido ${sale.id}`,
+          createdAt: new Date().toISOString(),
+        })),
+        ...prev,
+      ]);
       // reverse charge if was closed with account
       if (sale.status === "closed" && sale.paymentMethod === "account" && sale.customerId) {
         const reversal = { id: crypto.randomUUID(), customerId: sale.customerId, saleId: sale.id,

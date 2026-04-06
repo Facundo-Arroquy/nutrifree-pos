@@ -102,6 +102,105 @@ class DemoQueryBuilder {
   }
 }
 
+// ─── Demo RPC implementations (simula las funciones SQL en localStorage) ──────
+
+function demoApplyProduction({ p_product_id, p_qty, p_movement_id, p_movement_name, p_ing_deltas }) {
+  // Incrementar stock del producto
+  const products = getRows("products");
+  let product_stock = null;
+  setRows("products", products.map(p => {
+    if (p.id !== p_product_id) return p;
+    product_stock = (p.stock || 0) + p_qty;
+    return { ...p, stock: product_stock };
+  }));
+
+  // Registrar movimiento
+  const movements = getRows("stock_movements");
+  movements.unshift({ id: p_movement_id, product_id: p_product_id, product_name: p_movement_name, qty: p_qty, type: "production", notes: "", created_at: new Date().toISOString() });
+  setRows("stock_movements", movements);
+
+  // Decrementar stock de ingredientes
+  const ingredients = getRows("ingredients");
+  const ingredient_stocks = [];
+  setRows("ingredients", ingredients.map(ing => {
+    const delta = (p_ing_deltas || []).find(d => d.id === ing.id);
+    if (!delta) return ing;
+    const newStock = (ing.stock || 0) - delta.delta;
+    ingredient_stocks.push({ id: ing.id, stock: newStock });
+    return { ...ing, stock: newStock };
+  }));
+
+  return { data: { product_stock, ingredient_stocks }, error: null };
+}
+
+function demoCompleteSaleStocks({ p_stock_deltas }) {
+  const products = getRows("products");
+  const results = [];
+  setRows("products", products.map(p => {
+    const delta = (p_stock_deltas || []).find(d => d.id === p.id);
+    if (!delta) return p;
+    const newStock = Math.max(0, (p.stock || 0) - delta.delta);
+    results.push({ id: p.id, stock: newStock });
+    return { ...p, stock: newStock };
+  }));
+  return { data: results, error: null };
+}
+
+function demoCancelOrderStocks({ p_restore_deltas, p_sale_id }) {
+  const products = getRows("products");
+  const results = [];
+  setRows("products", products.map(p => {
+    const delta = (p_restore_deltas || []).find(d => d.id === p.id);
+    if (!delta) return p;
+    const newStock = (p.stock || 0) + delta.delta;
+    results.push({ id: p.id, stock: newStock });
+    return { ...p, stock: newStock };
+  }));
+
+  const movements = getRows("stock_movements");
+  for (const d of (p_restore_deltas || [])) {
+    movements.unshift({ id: crypto.randomUUID(), product_id: d.id, product_name: d.name, qty: d.delta, type: "cancelación", notes: "Pedido " + p_sale_id, created_at: new Date().toISOString() });
+  }
+  setRows("stock_movements", movements);
+
+  return { data: results, error: null };
+}
+
+function demoAdjustIngredientStock({ p_id, p_delta, p_unit_cost }) {
+  const ingredients = getRows("ingredients");
+  let newStock = null;
+  setRows("ingredients", ingredients.map(ing => {
+    if (ing.id !== p_id) return ing;
+    newStock = (ing.stock || 0) + p_delta;
+    return { ...ing, stock: newStock, ...(p_unit_cost != null ? { unit_cost: p_unit_cost } : {}) };
+  }));
+  return { data: newStock, error: null };
+}
+
+function demoAdjustCustomerBalance({ p_id, p_delta }) {
+  const customers = getRows("customers");
+  let newBalance = null;
+  setRows("customers", customers.map(c => {
+    if (c.id !== p_id) return c;
+    newBalance = (c.balance || 0) + p_delta;
+    return { ...c, balance: newBalance };
+  }));
+  return { data: newBalance, error: null };
+}
+
+const DEMO_RPCS = {
+  apply_production:       demoApplyProduction,
+  complete_sale_stocks:   demoCompleteSaleStocks,
+  cancel_order_stocks:    demoCancelOrderStocks,
+  adjust_ingredient_stock: demoAdjustIngredientStock,
+  adjust_customer_balance: demoAdjustCustomerBalance,
+};
+
 export const demoClient = {
   from: (table) => new DemoQueryBuilder(table),
+  rpc: (fn, args) => {
+    const handler = DEMO_RPCS[fn];
+    if (handler) return Promise.resolve(handler(args));
+    return Promise.resolve({ data: null, error: { message: `RPC demo no implementado: ${fn}` } });
+  },
 };

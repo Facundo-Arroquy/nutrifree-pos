@@ -173,16 +173,20 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
         if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
         setExpenses(p => p.map(e => e.id===modal.id ? {...e,...data} : e));
       }
-      // Actualizar unit_cost + stock de cada ingrediente y sincronizar recetas
+      // Actualizar stock (relativo+atómico) y unit_cost de cada ingrediente
       for (const line of validLines) {
         const price = Number(line.unitPrice);
         const qty   = Number(line.qty || 0);
-        const currentStock = ingredients.find(i => i.id===line.ingredientId)?.stock || 0;
-        const newStock = currentStock + qty;
-        const updates = { stock: newStock };
-        if (price) updates.unit_cost = price;
-        await supabase.from("ingredients").update(updates).eq("id", line.ingredientId);
-        setIngredients(prev => prev.map(i => i.id===line.ingredientId ? {...i, unitCost: price||i.unitCost, stock: newStock} : i));
+        const { data: newStock, error: stockErr } = await supabase.rpc("adjust_ingredient_stock", {
+          p_id:        line.ingredientId,
+          p_delta:     qty,
+          p_unit_cost: price || null,
+        });
+        if (stockErr) showToast("Error al actualizar stock: " + stockErr.message, "error");
+        setIngredients(prev => prev.map(i => i.id === line.ingredientId
+          ? { ...i, unitCost: price || i.unitCost, stock: newStock ?? (i.stock + qty) }
+          : i
+        ));
         if (price) await supabase.from("recipe_ingredients").update({ cost: price }).eq("ingredient_id", line.ingredientId);
       }
       // Actualizar estado local de recetas (batch)

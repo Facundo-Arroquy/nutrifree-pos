@@ -24,6 +24,10 @@ export const supabase = {
     const isDemo = typeof localStorage !== "undefined" && localStorage.getItem("nutrifree_mode") === "demo";
     return isDemo ? demoClient.from(table) : _prod.from(table);
   },
+  rpc: (fn, args) => {
+    const isDemo = typeof localStorage !== "undefined" && localStorage.getItem("nutrifree_mode") === "demo";
+    return isDemo ? demoClient.rpc(fn, args) : _prod.rpc(fn, args);
+  },
   auth: _prod.auth,
   channel: (...args) => _prod.channel(...args),
   removeChannel: (...args) => _prod.removeChannel(...args),

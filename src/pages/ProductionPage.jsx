@@ -11,7 +11,7 @@
  */
 import { useState } from "react";
 import { Ico } from "../shared.jsx";
-import { supabase, stockMovementToDb } from "../supabase.js";
+import { supabase } from "../supabase.js";
 
 export default function ProductionPage({ products, setProducts, recipes, setIngredients, setStockMovements, showToast, logAction }) {
   const [qty, setQty] = useState({});
@@ -29,50 +29,38 @@ export default function ProductionPage({ products, setProducts, recipes, setIngr
     if (!product) return;
     setSubmitting(p => ({...p, [id]: true}));
     try {
-    const newProductStock = product.stock + q;
-    const { error: prodErr } = await supabase.from("products").update({ stock: newProductStock }).eq("id", id);
-    if (prodErr) { showToast("Error al actualizar stock: " + prodErr.message, "error"); return; }
-    setProducts(p => p.map(x => x.id===id ? {...x, stock: newProductStock} : x));
-
-    const movement = { id: crypto.randomUUID(), productId: id, productName: product.name, qty: q, type: "production", notes: "" };
-    const { error: movErr } = await supabase.from("stock_movements").insert(stockMovementToDb(movement));
-    if (!movErr) setStockMovements(prev => [movement, ...prev]);
-
     const recipe = recipes.find(r => r.productId === id);
-    if (!recipe) {
-      logAction?.("producción", "stock", `+${q} u. de "${product.name}" — sin receta`);
-      setQty(p=>({...p,[id]:""}));
-      showToast(`+${q} unidades · sin receta asociada`);
-      return;
-    }
-    if (!Array.isArray(recipe.ingredients) || recipe.ingredients.length === 0) {
-      setQty(p=>({...p,[id]:""}));
-      showToast(`+${q} unidades · la receta no tiene ingredientes`);
-      return;
-    }
+    const factor = recipe && recipe.yield > 0 ? q / recipe.yield : q;
+    const ingDeltas = (recipe?.ingredients?.length)
+      ? recipe.ingredients.map(ri => ({ id: ri.ingredientId, delta: ri.qty * factor }))
+      : [];
 
-    const factor = q / (recipe.yield > 0 ? recipe.yield : 1);
-    const ingUpdates = [];
-    setIngredients(prev => {
-      let matched = 0;
-      const next = prev.map(ing => {
-        const ri = recipe.ingredients.find(r => r.ingredientId === ing.id);
-        if (!ri) return ing;
-        matched++;
-        const newStock = ing.stock - ri.qty * factor;
-        ingUpdates.push({ id: ing.id, newStock });
-        return {...ing, stock: newStock};
-      });
-      return next;
+    const { data, error: rpcErr } = await supabase.rpc("apply_production", {
+      p_product_id:    id,
+      p_qty:           q,
+      p_movement_id:   crypto.randomUUID(),
+      p_movement_name: product.name,
+      p_ing_deltas:    ingDeltas,
     });
-    for (const { id: ingId, newStock } of ingUpdates) {
-      const { error } = await supabase.from("ingredients").update({ stock: newStock }).eq("id", ingId);
-      if (error) showToast("Error al descontar ingrediente: " + error.message, "error");
+    if (rpcErr) { showToast("Error al registrar producción: " + rpcErr.message, "error"); return; }
+
+    setProducts(prev => prev.map(x => x.id === id ? { ...x, stock: data.product_stock } : x));
+    setStockMovements(prev => [{
+      id: crypto.randomUUID(), productId: id, productName: product.name,
+      qty: q, type: "production", notes: "", createdAt: new Date().toISOString(),
+    }, ...prev]);
+
+    if (ingDeltas.length > 0) {
+      setIngredients(prev => prev.map(ing => {
+        const updated = (data.ingredient_stocks || []).find(s => s.id === ing.id);
+        return updated ? { ...ing, stock: updated.stock } : ing;
+      }));
     }
 
-    logAction?.("producción", "stock", `+${q} u. de "${product.name}" — ingredientes descontados`);
-    setQty(p=>({...p,[id]:""}));
-    showToast(`+${q} unidades registradas · ingredientes descontados`);
+    const hasRecipe = recipe && ingDeltas.length > 0;
+    logAction?.("producción", "stock", `+${q} u. de "${product.name}"${hasRecipe ? " — ingredientes descontados" : " — sin receta"}`);
+    setQty(p => ({ ...p, [id]: "" }));
+    showToast(`+${q} unidades registradas${hasRecipe ? " · ingredientes descontados" : " · sin receta asociada"}`);
     } finally {
       setSubmitting(p => ({...p, [id]: false}));
     }

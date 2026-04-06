@@ -181,38 +181,25 @@ export default function POSPage({ products, setProducts, customers, setCustomers
       needsBilling: billSale,
       billingStatus: billSale ? "pending" : null,
     };
-    // deduct stock — productos normales (no kits)
-    const stockUpdates = cart
-      .filter(ci => !ci.isKit)
-      .map(ci => {
-        const p = products.find(x => x.id === ci.productId);
-        if (!p) return null;
-        return { id: p.id, newStock: Math.max(0, p.stock - ci.qty) };
-      }).filter(Boolean);
-    // deduct stock — componentes de kits
-    const kitStockMap = {};
+    // deduct stock — construir mapa de deltas relativos (productos normales + componentes de kits)
+    const stockDeltas = [];
+    for (const ci of cart.filter(c => !c.isKit)) {
+      const ex = stockDeltas.find(d => d.id === ci.productId);
+      if (ex) ex.delta += ci.qty;
+      else stockDeltas.push({ id: ci.productId, delta: ci.qty });
+    }
     for (const ci of cart.filter(c => c.isKit)) {
       for (const comp of (ci.kitItems || [])) {
-        kitStockMap[comp.productId] = (kitStockMap[comp.productId] || 0) + comp.qty * ci.qty;
+        const ex = stockDeltas.find(d => d.id === comp.productId);
+        if (ex) ex.delta += comp.qty * ci.qty;
+        else stockDeltas.push({ id: comp.productId, delta: comp.qty * ci.qty });
       }
     }
-    for (const [compId, totalQty] of Object.entries(kitStockMap)) {
-      const p = products.find(x => x.id === compId);
-      if (!p) continue;
-      const existing = stockUpdates.find(u => u.id === compId);
-      if (existing) {
-        existing.newStock = Math.max(0, existing.newStock - totalQty);
-      } else {
-        stockUpdates.push({ id: compId, newStock: Math.max(0, p.stock - totalQty) });
-      }
-    }
-    for (const { id, newStock } of stockUpdates) {
-      const { error } = await supabase.from("products").update({ stock: newStock }).eq("id", id);
-      if (error) showToast("Error al descontar stock: " + error.message, "error");
-    }
+    const { data: stockResults, error: stockErr } = await supabase.rpc("complete_sale_stocks", { p_stock_deltas: stockDeltas });
+    if (stockErr) { showToast("Error al descontar stock: " + stockErr.message, "error"); setSubmitting(false); return; }
     setProducts(prev => prev.map(p => {
-      const upd = stockUpdates.find(u => u.id === p.id);
-      return upd ? {...p, stock: upd.newStock} : p;
+      const upd = (stockResults || []).find(r => r.id === p.id);
+      return upd ? { ...p, stock: upd.stock } : p;
     }));
     const { error: saleErr } = await supabase.from("sales").insert(saleToDb(sale));
     if (saleErr) { showToast("Error al guardar venta: " + saleErr.message, "error"); setSubmitting(false); return; }
@@ -235,10 +222,9 @@ export default function POSPage({ products, setProducts, customers, setCustomers
         if (credErr) { showToast("Error al aplicar crédito: " + credErr.message, "error"); setSubmitting(false); return; }
         setAccountPayments(prev => [...prev, linkedPayment]);
         // Ajustar customer.balance para compensar (el linked payment no debe inflar el saldo)
-        const newBalance = (selectedCustomer.balance ?? 0) - total;
-        const { error: balErr } = await supabase.from("customers").update({ balance: newBalance }).eq("id", selectedCustomer.id);
+        const { data: newBalance, error: balErr } = await supabase.rpc("adjust_customer_balance", { p_id: selectedCustomer.id, p_delta: -total });
         if (balErr) { showToast("Error al actualizar saldo: " + balErr.message, "error"); setSubmitting(false); return; }
-        setCustomers(prev => prev.map(c => c.id === selectedCustomer.id ? { ...c, balance: newBalance } : c));
+        setCustomers(prev => prev.map(c => c.id === selectedCustomer.id ? { ...c, balance: newBalance ?? ((c.balance ?? 0) - total) } : c));
       }
     }
     setSales(prev => [sale, ...prev]);
