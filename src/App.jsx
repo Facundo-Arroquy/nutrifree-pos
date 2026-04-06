@@ -109,6 +109,7 @@ export default function App() {
   const [reminderEnd,   setReminderEnd]   = useState(() => localStorage.getItem("reminderEnd")   || "11:00");
   const alertsChecked = useRef(false);
   const deliveryChecked = useRef(false);
+  const loadDataRef = useRef(null);
 
   // ─── Supabase Auth: restaurar sesión y escuchar cambios ───────────────────
   useEffect(() => {
@@ -146,14 +147,14 @@ export default function App() {
         supabase.from("app_settings").select("*"),
       ]);
       if (accPaysErr) console.error("[account_payments] Error al cargar:", accPaysErr);
-      if (cats && cats.length > 0) setCategories(cats.map(c => c.name));
+      if (cats) setCategories(cats.map(c => c.name));
       if (expCats && expCats.length > 0) setExpenseCategories(expCats.map(c => c.name));
-      if (prods && prods.length > 0) setProducts(prods.map(dbToProduct));
-      if (custs && custs.length > 0) setCustomers(custs.map(dbToCustomer));
-      if (sls && sls.length > 0) setSales(sls.map(dbToSale));
-      if (exps && exps.length > 0) setExpenses(exps.map(dbToExpense));
-      if (ingrs && ingrs.length > 0) setIngredients(ingrs.map(dbToIngredient));
-      if (recs && recs.length > 0) {
+      if (prods) setProducts(prods.map(dbToProduct));
+      if (custs) setCustomers(custs.map(dbToCustomer));
+      if (sls) setSales(sls.map(dbToSale));
+      if (exps) setExpenses(exps.map(dbToExpense));
+      if (ingrs) setIngredients(ingrs.map(dbToIngredient));
+      if (recs) {
         const ingredientsCatalog = ingrs || [];
         setRecipes(recs.map(r => ({
           ...dbToRecipe(r),
@@ -162,13 +163,13 @@ export default function App() {
             .map(ri => dbToRecipeIngredient(ri, ingredientsCatalog)),
         })));
       }
-      if (accPays && accPays.length > 0) setAccountPayments(accPays.map(dbToAccountPayment));
-      if (stockMovs && stockMovs.length > 0) setStockMovements(stockMovs.map(dbToStockMovement));
-      if (supps && supps.length > 0) setSuppliers(supps.map(dbToSupplier));
-      if (suppPays && suppPays.length > 0) setSupplierPayments(suppPays.map(dbToSupplierPayment));
-      if (shifts && shifts.length > 0) setCashShifts(shifts.map(dbToCashShift));
-      if (faqs && faqs.length > 0) setFaqEntries(faqs.map(dbToFaqEntry));
-      if (faqsMissed && faqsMissed.length > 0) setFaqMissed(faqsMissed.map(dbToFaqMissed));
+      if (accPays) setAccountPayments(accPays.map(dbToAccountPayment));
+      if (stockMovs) setStockMovements(stockMovs.map(dbToStockMovement));
+      if (supps) setSuppliers(supps.map(dbToSupplier));
+      if (suppPays) setSupplierPayments(suppPays.map(dbToSupplierPayment));
+      if (shifts) setCashShifts(shifts.map(dbToCashShift));
+      if (faqs) setFaqEntries(faqs.map(dbToFaqEntry));
+      if (faqsMissed) setFaqMissed(faqsMissed.map(dbToFaqMissed));
       if (settings) {
         const bal = settings.find(s => s.key === "balance_alert_threshold");
         if (bal) setAlertBalanceThreshold(Number(bal.value) || 0);
@@ -178,7 +179,18 @@ export default function App() {
         if (vat) setVatRate(Number(vat.value) || 21);
       }
     };
+    loadDataRef.current = load;
     load();
+  }, [user?.email]);
+
+  // ─── Re-fetch al volver a la tab (visibilitychange) ────────────────────────
+  useEffect(() => {
+    if (!user || user.isDemo) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") loadDataRef.current?.();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [user?.email]);
 
   // ─── Supabase Realtime: sincroniza cambios remotos por ID ──────────────────
