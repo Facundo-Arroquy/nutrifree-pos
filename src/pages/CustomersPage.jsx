@@ -75,6 +75,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
   const [payModal, setPayModal] = useState(null); // customer object
   const [payForm, setPayForm] = useState({ amount:"", paymentMethod:"cash", notes:"" });
   const [cashSelectedIds, setCashSelectedIds] = useState(new Set()); // pedidos seleccionados para pago adicional en cash
+  const [submitting, setSubmitting] = useState(false);
   const [expandedSaleId, setExpandedSaleId] = useState(null);
   const [expandedCustomerId, setExpandedCustomerId] = useState(null);
   const [listExpandedSaleId, setListExpandedSaleId] = useState(null);
@@ -119,22 +120,28 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
   const openEdit = c => { setForm({...c}); setExpandedSaleId(null); setModal(c); };
 
   const save = async () => {
+    if (submitting) return;
     if (!form.name) { showToast("El nombre es obligatorio", "error"); return; }
-    if (modal==="new") {
-      const newCustomer = {...form, id:uid(), balance:Number(form.balance)||0};
-      const { error } = await supabase.from("customers").insert(customerToDb(newCustomer));
-      if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
-      setCustomers(p => [...p, newCustomer]);
-      logAction?.("crear", "cliente", `Creó "${newCustomer.name}" — lista ${newCustomer.priceList}`);
-    } else {
-      const updated = {...form, balance:Number(form.balance)||0};
-      const { error } = await supabase.from("customers").update(customerToDb(updated)).eq("id", modal.id);
-      if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
-      setCustomers(p => p.map(c => c.id===modal.id ? {...c,...updated} : c));
-      logAction?.("editar", "cliente", `Editó "${updated.name}"`);
+    setSubmitting(true);
+    try {
+      if (modal==="new") {
+        const newCustomer = {...form, id:uid(), balance:Number(form.balance)||0};
+        const { error } = await supabase.from("customers").insert(customerToDb(newCustomer));
+        if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
+        setCustomers(p => [...p, newCustomer]);
+        logAction?.("crear", "cliente", `Creó "${newCustomer.name}" — lista ${newCustomer.priceList}`);
+      } else {
+        const updated = {...form, balance:Number(form.balance)||0};
+        const { error } = await supabase.from("customers").update(customerToDb(updated)).eq("id", modal.id);
+        if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
+        setCustomers(p => p.map(c => c.id===modal.id ? {...c,...updated} : c));
+        logAction?.("editar", "cliente", `Editó "${updated.name}"`);
+      }
+      setModal(null);
+      showToast("Cliente guardado");
+    } finally {
+      setSubmitting(false);
     }
-    setModal(null);
-    showToast("Cliente guardado");
   };
 
   const del = async (id) => {
@@ -160,6 +167,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
   };
 
   const registerPayment = async () => {
+    if (submitting) return;
     const allocations = computeAllocations(payModal.id);
 
     const initialDebtAlloc = allocations.find(a => a.isInitialDebt);
@@ -173,6 +181,8 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
     if (totalCreditUsed === 0 && cashAmount === 0) {
       showToast("No hay saldo a favor ni monto ingresado", "error"); return;
     }
+    setSubmitting(true);
+    try {
 
     const allNewPayments = [];
     let balanceDelta = 0; // cambio acumulado en customers.balance
@@ -251,9 +261,12 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
       totalCreditUsed > 0 ? `saldo $${totalCreditUsed}` : "",
       cashAmount > 0 ? `${PAY_LABELS[payForm.paymentMethod]||""} $${cashAmount}` : "",
     ].filter(Boolean).join(" + ");
-    logAction?.("pago", "cuenta_corriente", `"${payModal.name}" — ${desc}`);
-    setPayModal(null);
-    showToast("Pago registrado");
+      logAction?.("pago", "cuenta_corriente", `"${payModal.name}" — ${desc}`);
+      setPayModal(null);
+      showToast("Pago registrado");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -621,7 +634,9 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
           })()}
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={()=>setModal(null)}>Cancelar</button>
-            <button className="btn btn-primary" onClick={save}><Ico n="check" s={13}/>Guardar</button>
+            <button className="btn btn-primary" onClick={save} disabled={submitting}>
+              <Ico n="check" s={13}/>{submitting ? "Guardando..." : "Guardar"}
+            </button>
           </div>
         </Modal>
       )}
@@ -775,7 +790,9 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={()=>setPayModal(null)}>Cancelar</button>
-              <button className="btn btn-primary" onClick={registerPayment}><Ico n="check" s={13}/>Confirmar pago</button>
+              <button className="btn btn-primary" onClick={registerPayment} disabled={submitting}>
+                <Ico n="check" s={13}/>{submitting ? "Registrando..." : "Confirmar pago"}
+              </button>
             </div>
           </Modal>
         );

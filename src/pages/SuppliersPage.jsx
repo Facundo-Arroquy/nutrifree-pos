@@ -20,6 +20,7 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
   const [form, setForm] = useState(emptyForm);
   const [payForm, setPayForm] = useState({ amount:"", paymentMethod:"cash", notes:"" });
   const [search, setSearch] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -36,20 +37,26 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
   const openEdit = (s) => { setForm({ name:s.name, phone:s.phone||"", email:s.email||"", address:s.address||"", notes:s.notes||"" }); setModal(s); };
 
   const save = async () => {
+    if (submitting) return;
     if (!form.name.trim()) { showToast("El nombre es obligatorio", "error"); return; }
-    if (modal === "new") {
-      const newSup = { ...form, id: crypto.randomUUID() };
-      const { error } = await supabase.from("suppliers").insert(supplierToDb(newSup));
-      if (error) { showToast("Error: " + error.message, "error"); return; }
-      setSuppliers(p => [...p, newSup].sort((a,b) => a.name.localeCompare(b.name)));
-    } else {
-      const updated = { ...modal, ...form };
-      const { error } = await supabase.from("suppliers").update(supplierToDb(updated)).eq("id", modal.id);
-      if (error) { showToast("Error: " + error.message, "error"); return; }
-      setSuppliers(p => p.map(s => s.id === modal.id ? updated : s));
+    setSubmitting(true);
+    try {
+      if (modal === "new") {
+        const newSup = { ...form, id: crypto.randomUUID() };
+        const { error } = await supabase.from("suppliers").insert(supplierToDb(newSup));
+        if (error) { showToast("Error: " + error.message, "error"); return; }
+        setSuppliers(p => [...p, newSup].sort((a,b) => a.name.localeCompare(b.name)));
+      } else {
+        const updated = { ...modal, ...form };
+        const { error } = await supabase.from("suppliers").update(supplierToDb(updated)).eq("id", modal.id);
+        if (error) { showToast("Error: " + error.message, "error"); return; }
+        setSuppliers(p => p.map(s => s.id === modal.id ? updated : s));
+      }
+      showToast(modal === "new" ? "Proveedor creado" : "Proveedor actualizado");
+      setModal(null);
+    } finally {
+      setSubmitting(false);
     }
-    showToast(modal === "new" ? "Proveedor creado" : "Proveedor actualizado");
-    setModal(null);
   };
 
   const del = async (id) => {
@@ -70,15 +77,21 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
   };
 
   const registerPayment = async () => {
+    if (submitting) return;
     const amount = Number(payForm.amount);
     if (!amount || amount <= 0) { showToast("Ingresá un monto válido", "error"); return; }
-    const payment = { id: crypto.randomUUID(), supplierId: payModal.id, expenseId: null, amount, type: "payment", paymentMethod: payForm.paymentMethod, date: todayStr(), notes: payForm.notes || "Pago manual" };
-    const { error } = await supabase.from("supplier_payments").insert(supplierPaymentToDb(payment));
-    if (error) { showToast("Error: " + error.message, "error"); return; }
-    setSupplierPayments(prev => [...prev, payment]);
-    setPayForm({ amount:"", paymentMethod:"cash", notes:"" });
-    setPayModal(null);
-    showToast("Pago registrado ✓");
+    setSubmitting(true);
+    try {
+      const payment = { id: crypto.randomUUID(), supplierId: payModal.id, expenseId: null, amount, type: "payment", paymentMethod: payForm.paymentMethod, date: todayStr(), notes: payForm.notes || "Pago manual" };
+      const { error } = await supabase.from("supplier_payments").insert(supplierPaymentToDb(payment));
+      if (error) { showToast("Error: " + error.message, "error"); return; }
+      setSupplierPayments(prev => [...prev, payment]);
+      setPayForm({ amount:"", paymentMethod:"cash", notes:"" });
+      setPayModal(null);
+      showToast("Pago registrado ✓");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const PAY_OPTS = [["cash","Efectivo"],["transfer","Transferencia"],["card","Tarjeta"],["check","Cheque"]];
@@ -144,7 +157,9 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
           </div>
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={()=>setModal(null)}>Cancelar</button>
-            <button className="btn btn-primary" onClick={save}><Ico n="check" s={13}/>Guardar</button>
+            <button className="btn btn-primary" onClick={save} disabled={submitting}>
+              <Ico n="check" s={13}/>{submitting ? "Guardando..." : "Guardar"}
+            </button>
           </div>
         </Modal>
       )}
@@ -215,7 +230,9 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
           </div>
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={()=>{ setPayModal(null); setAccountModal(payModal); }}>Cancelar</button>
-            <button className="btn btn-primary" onClick={registerPayment}><Ico n="check" s={13}/>Registrar pago</button>
+            <button className="btn btn-primary" onClick={registerPayment} disabled={submitting}>
+              <Ico n="check" s={13}/>{submitting ? "Registrando..." : "Registrar pago"}
+            </button>
           </div>
         </Modal>
       )}

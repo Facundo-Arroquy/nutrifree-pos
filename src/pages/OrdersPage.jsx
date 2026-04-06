@@ -16,6 +16,7 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
   const [filter, setFilter] = useState("all");
   const [filterPay, setFilterPay] = useState("all");
   const [selected, setSelected] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const statuses = ["all","open","ready","delivered","closed","cancelled"];
 
@@ -53,56 +54,67 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
   };
 
   const closeOrder = async (sale) => {
+    if (submitting) return;
     if (!sale.paymentMethod) { showToast("Seleccioná un método de pago", "error"); return; }
-    const { error: saleErr } = await supabase.from("sales").update({ status: "closed" }).eq("id", sale.id);
-    if (saleErr) { showToast("Error al cerrar: " + saleErr.message, "error"); return; }
-    setSales(prev => prev.map(s => s.id===sale.id ? {...s, status:"closed"} : s));
-    setSelected(prev => prev ? {...prev, status:"closed"} : prev);
-    if (sale.paymentMethod === "account" && sale.customerId) {
-      const charge = { id: crypto.randomUUID(), customerId: sale.customerId, saleId: sale.id,
-        amount: sale.total, type: "charge", paymentMethod: null, date: todayStr(), notes: "" };
-      const { error: payErr } = await supabase.from("account_payments").insert(accountPaymentToDb(charge));
-      if (payErr) { showToast("Error al registrar movimiento: " + payErr.message, "error"); return; }
-      setAccountPayments(prev => [...prev, charge]);
+    setSubmitting(true);
+    try {
+      const { error: saleErr } = await supabase.from("sales").update({ status: "closed" }).eq("id", sale.id);
+      if (saleErr) { showToast("Error al cerrar: " + saleErr.message, "error"); return; }
+      setSales(prev => prev.map(s => s.id===sale.id ? {...s, status:"closed"} : s));
+      setSelected(prev => prev ? {...prev, status:"closed"} : prev);
+      if (sale.paymentMethod === "account" && sale.customerId) {
+        const charge = { id: crypto.randomUUID(), customerId: sale.customerId, saleId: sale.id,
+          amount: sale.total, type: "charge", paymentMethod: null, date: todayStr(), notes: "" };
+        const { error: payErr } = await supabase.from("account_payments").insert(accountPaymentToDb(charge));
+        if (payErr) { showToast("Error al registrar movimiento: " + payErr.message, "error"); return; }
+        setAccountPayments(prev => [...prev, charge]);
+      }
+      showToast("Pedido cerrado");
+    } finally {
+      setSubmitting(false);
     }
-    showToast("Pedido cerrado");
   };
 
   const cancelOrder = async (sale) => {
-    // restore stock — build map of productId → qty to restore
-    const restoreMap = {};
-    for (const item of sale.items) {
-      if (item.kitItems?.length) {
-        // kit: restore each component
-        for (const comp of item.kitItems) {
-          restoreMap[comp.productId] = (restoreMap[comp.productId] || 0) + comp.qty * item.qty;
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      // restore stock — build map of productId → qty to restore
+      const restoreMap = {};
+      for (const item of sale.items) {
+        if (item.kitItems?.length) {
+          for (const comp of item.kitItems) {
+            restoreMap[comp.productId] = (restoreMap[comp.productId] || 0) + comp.qty * item.qty;
+          }
+        } else {
+          restoreMap[item.productId] = (restoreMap[item.productId] || 0) + item.qty;
         }
-      } else {
-        restoreMap[item.productId] = (restoreMap[item.productId] || 0) + item.qty;
       }
+      for (const [productId, qty] of Object.entries(restoreMap)) {
+        const prod = products.find(x => x.id === productId);
+        if (!prod) continue;
+        const newStock = prod.stock + qty;
+        await supabase.from("products").update({ stock: newStock }).eq("id", productId);
+        setProducts(prev => prev.map(x => x.id===productId ? {...x, stock: newStock} : x));
+        const movement = { id: crypto.randomUUID(), productId, productName: prod.name, qty, type: "cancelación", notes: `Pedido ${sale.id}` };
+        const { error: movErr } = await supabase.from("stock_movements").insert(stockMovementToDb(movement));
+        if (!movErr) setStockMovements(prev => [movement, ...prev]);
+      }
+      // reverse charge if was closed with account
+      if (sale.status === "closed" && sale.paymentMethod === "account" && sale.customerId) {
+        const reversal = { id: crypto.randomUUID(), customerId: sale.customerId, saleId: sale.id,
+          amount: sale.total, type: "payment", paymentMethod: null, date: todayStr(), notes: "Reverso por cancelación" };
+        const { error: payErr } = await supabase.from("account_payments").insert(accountPaymentToDb(reversal));
+        if (payErr) { showToast("Error al registrar reverso: " + payErr.message, "error"); return; }
+        setAccountPayments(prev => [...prev, reversal]);
+      }
+      await supabase.from("sales").update({ status: "cancelled" }).eq("id", sale.id);
+      setSales(prev => prev.map(s => s.id===sale.id ? {...s,status:"cancelled"} : s));
+      if (selected?.id===sale.id) setSelected(prev=>({...prev,status:"cancelled"}));
+      showToast("Pedido cancelado");
+    } finally {
+      setSubmitting(false);
     }
-    for (const [productId, qty] of Object.entries(restoreMap)) {
-      const prod = products.find(x => x.id === productId);
-      if (!prod) continue;
-      const newStock = prod.stock + qty;
-      await supabase.from("products").update({ stock: newStock }).eq("id", productId);
-      setProducts(prev => prev.map(x => x.id===productId ? {...x, stock: newStock} : x));
-      const movement = { id: crypto.randomUUID(), productId, productName: prod.name, qty, type: "cancelación", notes: `Pedido ${sale.id}` };
-      const { error: movErr } = await supabase.from("stock_movements").insert(stockMovementToDb(movement));
-      if (!movErr) setStockMovements(prev => [movement, ...prev]);
-    }
-    // reverse charge if was closed with account
-    if (sale.status === "closed" && sale.paymentMethod === "account" && sale.customerId) {
-      const reversal = { id: crypto.randomUUID(), customerId: sale.customerId, saleId: sale.id,
-        amount: sale.total, type: "payment", paymentMethod: null, date: todayStr(), notes: "Reverso por cancelación" };
-      const { error: payErr } = await supabase.from("account_payments").insert(accountPaymentToDb(reversal));
-      if (payErr) { showToast("Error al registrar reverso: " + payErr.message, "error"); return; }
-      setAccountPayments(prev => [...prev, reversal]);
-    }
-    await supabase.from("sales").update({ status: "cancelled" }).eq("id", sale.id);
-    setSales(prev => prev.map(s => s.id===sale.id ? {...s,status:"cancelled"} : s));
-    if (selected?.id===sale.id) setSelected(prev=>({...prev,status:"cancelled"}));
-    showToast("Pedido cancelado");
   };
 
   return (
@@ -196,13 +208,19 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
             <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:16 }}>
               {selected.status==="open" && <button className="btn btn-blue" onClick={()=>changeStatus(selected.id,"ready")}><Ico n="box" s={13}/>Listo</button>}
               {selected.status==="ready" && <button className="btn btn-primary" onClick={()=>changeStatus(selected.id,"delivered")}><Ico n="check" s={13}/>Entregado</button>}
-              <button className="btn btn-secondary" onClick={()=>closeOrder(selected)}><Ico n="check" s={13}/>Cerrar</button>
-              <button className="btn btn-danger" onClick={()=>cancelOrder(selected)}><Ico n="x" s={13}/>Cancelar</button>
+              <button className="btn btn-secondary" onClick={()=>closeOrder(selected)} disabled={submitting}>
+                <Ico n="check" s={13}/>{submitting ? "Guardando..." : "Cerrar"}
+              </button>
+              <button className="btn btn-danger" onClick={()=>cancelOrder(selected)} disabled={submitting}>
+                <Ico n="x" s={13}/>{submitting ? "Cancelando..." : "Cancelar"}
+              </button>
             </div>
           )}
           {selected.status === "closed" && (
             <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:16 }}>
-              <button className="btn btn-danger" onClick={()=>cancelOrder(selected)}><Ico n="x" s={13}/>Cancelar pedido</button>
+              <button className="btn btn-danger" onClick={()=>cancelOrder(selected)} disabled={submitting}>
+                <Ico n="x" s={13}/>{submitting ? "Cancelando..." : "Cancelar pedido"}
+              </button>
             </div>
           )}
         </Modal>

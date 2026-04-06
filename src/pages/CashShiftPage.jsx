@@ -22,6 +22,7 @@ export default function CashShiftPage({ sales, expenses, accountPayments, user, 
   const [historyOpen, setHistoryOpen] = useState(false);
   const [openForm, setOpenForm] = useState({ initialCash: "" });
   const [closeForm, setCloseForm] = useState({ countedCash: "", notes: "" });
+  const [submitting, setSubmitting] = useState(false);
 
   const openShift = cashShifts.find(s => s.status === "open") || null;
   const shiftStart = openShift ? new Date(openShift.openedAt) : null;
@@ -58,40 +59,52 @@ export default function CashShiftPage({ sales, expenses, accountPayments, user, 
   const diff = countedCash - expectedCash;
 
   const doOpenShift = async () => {
-    const initial = Number(openForm.initialCash) || 0;
-    const shift = {
-      id: crypto.randomUUID(), openedBy: user.name,
-      openedAt: new Date().toISOString(), closedAt: null,
-      status: "open", initialCash: initial,
-      salesCash: 0, salesTransfer: 0, salesCard: 0, salesAccount: 0,
-      expensesCash: 0, expectedCash: initial, countedCash: 0, difference: 0, notes: null,
-    };
-    const { error } = await supabase.from("cash_shifts").insert(cashShiftToDb(shift));
-    if (error) { showToast("Error: " + error.message, "error"); return; }
-    setCashShifts(prev => [shift, ...prev]);
-    setOpenModal(false);
-    setOpenForm({ initialCash: "" });
-    showToast("Turno abierto ✓");
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const initial = Number(openForm.initialCash) || 0;
+      const shift = {
+        id: crypto.randomUUID(), openedBy: user.name,
+        openedAt: new Date().toISOString(), closedAt: null,
+        status: "open", initialCash: initial,
+        salesCash: 0, salesTransfer: 0, salesCard: 0, salesAccount: 0,
+        expensesCash: 0, expectedCash: initial, countedCash: 0, difference: 0, notes: null,
+      };
+      const { error } = await supabase.from("cash_shifts").insert(cashShiftToDb(shift));
+      if (error) { showToast("Error: " + error.message, "error"); return; }
+      setCashShifts(prev => [shift, ...prev]);
+      setOpenModal(false);
+      setOpenForm({ initialCash: "" });
+      showToast("Turno abierto ✓");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const doCloseShift = async () => {
+    if (submitting) return;
     if (closeForm.countedCash === "") { showToast("Ingresá el efectivo contado", "error"); return; }
-    const counted = Number(closeForm.countedCash);
-    const updated = {
-      ...openShift, closedAt: new Date().toISOString(), status: "closed",
-      salesCash: sCash + apCash,
-      salesTransfer: sTransfer + apTransfer,
-      salesCard: sCard + apCard,
-      salesAccount: sAccount,
-      expensesCash: eCash, expectedCash, countedCash: counted,
-      difference: counted - expectedCash, notes: closeForm.notes || null,
-    };
-    const { error } = await supabase.from("cash_shifts").update(cashShiftToDb(updated)).eq("id", openShift.id);
-    if (error) { showToast("Error: " + error.message, "error"); return; }
-    setCashShifts(prev => prev.map(s => s.id === openShift.id ? updated : s));
-    setCloseModal(false);
-    setCloseForm({ countedCash: "", notes: "" });
-    showToast("Turno cerrado ✓");
+    setSubmitting(true);
+    try {
+      const counted = Number(closeForm.countedCash);
+      const updated = {
+        ...openShift, closedAt: new Date().toISOString(), status: "closed",
+        salesCash: sCash + apCash,
+        salesTransfer: sTransfer + apTransfer,
+        salesCard: sCard + apCard,
+        salesAccount: sAccount,
+        expensesCash: eCash, expectedCash, countedCash: counted,
+        difference: counted - expectedCash, notes: closeForm.notes || null,
+      };
+      const { error } = await supabase.from("cash_shifts").update(cashShiftToDb(updated)).eq("id", openShift.id);
+      if (error) { showToast("Error: " + error.message, "error"); return; }
+      setCashShifts(prev => prev.map(s => s.id === openShift.id ? updated : s));
+      setCloseModal(false);
+      setCloseForm({ countedCash: "", notes: "" });
+      showToast("Turno cerrado ✓");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const closedShifts = cashShifts.filter(s => s.status === "closed");
@@ -320,7 +333,9 @@ export default function CashShiftPage({ sales, expenses, accountPayments, user, 
           </div>
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={() => setOpenModal(false)}>Cancelar</button>
-            <button className="btn btn-primary" onClick={doOpenShift}><Ico n="check" s={13}/>Abrir turno</button>
+            <button className="btn btn-primary" onClick={doOpenShift} disabled={submitting}>
+              <Ico n="check" s={13}/>{submitting ? "Abriendo..." : "Abrir turno"}
+            </button>
           </div>
         </Modal>
       )}
@@ -389,7 +404,9 @@ export default function CashShiftPage({ sales, expenses, accountPayments, user, 
           </div>
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={() => setCloseModal(false)}>Cancelar</button>
-            <button className="btn btn-danger" onClick={doCloseShift}><Ico n="check" s={13}/>Confirmar cierre</button>
+            <button className="btn btn-danger" onClick={doCloseShift} disabled={submitting}>
+              <Ico n="check" s={13}/>{submitting ? "Cerrando..." : "Confirmar cierre"}
+            </button>
           </div>
         </Modal>
       )}

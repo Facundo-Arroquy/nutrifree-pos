@@ -19,6 +19,7 @@ export default function ProductsPage({ products, setProducts, categories, showTo
   const [form, setForm] = useState(emptyForm);
   const [kitProductId, setKitProductId] = useState("");
   const [kitQty, setKitQty] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
 
   const cats = ["Todos", ...categories];
@@ -39,26 +40,32 @@ export default function ProductsPage({ products, setProducts, categories, showTo
   };
 
   const save = async () => {
+    if (submitting) return;
     if (!form.name) { showToast("El nombre es obligatorio", "error"); return; }
-    if (modal==="new") {
-      const newProduct = {...form, id:uid(), priceRetail:Number(form.priceRetail), priceWholesale:Number(form.priceWholesale), stock:Number(form.stock)};
-      const { error } = await supabase.from("products").insert(productToDb(newProduct));
-      if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
-      setProducts(p => [...p, newProduct]);
-      logAction?.("crear", "producto", `Creó "${newProduct.name}" — precio $${newProduct.priceRetail}/$${newProduct.priceWholesale}, stock ${newProduct.stock}`);
-    } else {
-      const updated = {...form, priceRetail:Number(form.priceRetail), priceWholesale:Number(form.priceWholesale), stock:Number(form.stock)};
-      const { error } = await supabase.from("products").update(productToDb(updated)).eq("id", modal.id);
-      if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
-      setProducts(p => p.map(x => x.id===modal.id ? {...x,...updated} : x));
-      const changes = [];
-      if (modal.priceRetail !== updated.priceRetail) changes.push(`precio retail $${modal.priceRetail}→$${updated.priceRetail}`);
-      if (modal.priceWholesale !== updated.priceWholesale) changes.push(`precio mayor $${modal.priceWholesale}→$${updated.priceWholesale}`);
-      if (modal.stock !== updated.stock) changes.push(`stock ${modal.stock}→${updated.stock}`);
-      logAction?.("editar", "producto", `"${updated.name}"${changes.length ? ` — ${changes.join(", ")}` : ""}`);
+    setSubmitting(true);
+    try {
+      if (modal==="new") {
+        const newProduct = {...form, id:uid(), priceRetail:Number(form.priceRetail), priceWholesale:Number(form.priceWholesale), stock:Number(form.stock)};
+        const { error } = await supabase.from("products").insert(productToDb(newProduct));
+        if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
+        setProducts(p => [...p, newProduct]);
+        logAction?.("crear", "producto", `Creó "${newProduct.name}" — precio $${newProduct.priceRetail}/$${newProduct.priceWholesale}, stock ${newProduct.stock}`);
+      } else {
+        const updated = {...form, priceRetail:Number(form.priceRetail), priceWholesale:Number(form.priceWholesale), stock:Number(form.stock)};
+        const { error } = await supabase.from("products").update(productToDb(updated)).eq("id", modal.id);
+        if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
+        setProducts(p => p.map(x => x.id===modal.id ? {...x,...updated} : x));
+        const changes = [];
+        if (modal.priceRetail !== updated.priceRetail) changes.push(`precio retail $${modal.priceRetail}→$${updated.priceRetail}`);
+        if (modal.priceWholesale !== updated.priceWholesale) changes.push(`precio mayor $${modal.priceWholesale}→$${updated.priceWholesale}`);
+        if (modal.stock !== updated.stock) changes.push(`stock ${modal.stock}→${updated.stock}`);
+        logAction?.("editar", "producto", `"${updated.name}"${changes.length ? ` — ${changes.join(", ")}` : ""}`);
+      }
+      setModal(null);
+      showToast("Producto guardado");
+    } finally {
+      setSubmitting(false);
     }
-    setModal(null);
-    showToast("Producto guardado");
   };
 
   const del = async (id) => {
@@ -206,7 +213,9 @@ export default function ProductsPage({ products, setProducts, categories, showTo
           </div>
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={()=>setModal(null)}>Cancelar</button>
-            <button className="btn btn-primary" onClick={save}><Ico n="check" s={13}/>Guardar</button>
+            <button className="btn btn-primary" onClick={save} disabled={submitting}>
+              <Ico n="check" s={13}/>{submitting ? "Guardando..." : "Guardar"}
+            </button>
           </div>
         </Modal>
       )}

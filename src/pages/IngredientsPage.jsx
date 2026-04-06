@@ -22,6 +22,7 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
   const [search, setSearch] = useState("");
   const [stockEdit, setStockEdit] = useState({});
   const [priceEdit, setPriceEdit] = useState({});
+  const [submitting, setSubmitting] = useState(false);
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
 
   const recipesForIngredient = (ingredientId) =>
@@ -51,62 +52,68 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
   };
 
   const save = async () => {
+    if (submitting) return;
     if (!form.name) { showToast("El nombre es obligatorio", "error"); return; }
-    const data = { ...form, stock:Number(form.stock)||0, stockMin:Number(form.stockMin)||0, unitCost:Number(form.unitCost)||0 };
-    if (modal==="new") {
-      const newIngr = { ...data, id: crypto.randomUUID() };
-      const { error } = await supabase.from("ingredients").insert(ingredientToDb(newIngr));
-      if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
-      setIngredients(p=>[...p, newIngr]);
-    } else {
-      const oldIngr = ingredients.find(i => i.id === modal.id);
-      const unitChanged = oldIngr && oldIngr.unit !== data.unit;
+    setSubmitting(true);
+    try {
+      const data = { ...form, stock:Number(form.stock)||0, stockMin:Number(form.stockMin)||0, unitCost:Number(form.unitCost)||0 };
+      if (modal==="new") {
+        const newIngr = { ...data, id: crypto.randomUUID() };
+        const { error } = await supabase.from("ingredients").insert(ingredientToDb(newIngr));
+        if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
+        setIngredients(p=>[...p, newIngr]);
+      } else {
+        const oldIngr = ingredients.find(i => i.id === modal.id);
+        const unitChanged = oldIngr && oldIngr.unit !== data.unit;
 
-      const { error } = await supabase.from("ingredients").update(ingredientToDb(data)).eq("id", modal.id);
-      if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
-      setIngredients(p=>p.map(i=>i.id===modal.id?{...i,...data}:i));
+        const { error } = await supabase.from("ingredients").update(ingredientToDb(data)).eq("id", modal.id);
+        if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
+        setIngredients(p=>p.map(i=>i.id===modal.id?{...i,...data}:i));
 
-      // Si cambió la unidad, marcar recetas afectadas y actualizar recipe_ingredients
-      if (unitChanged && recipes?.length) {
-        const affectedRecipes = recipes.filter(r =>
-          r.ingredients.some(ri => ri.ingredientId === modal.id)
-        );
-        for (const recipe of affectedRecipes) {
-          // Actualizar unit y cost en cada recipe_ingredient afectado
-          for (const ri of recipe.ingredients.filter(ri => ri.ingredientId === modal.id)) {
-            const newCost = ri.qty * data.unitCost;
-            await supabase.from("recipe_ingredients")
-              .update({ unit: data.unit, cost: newCost })
-              .eq("id", ri.id);
-          }
-          // Marcar la receta como "necesita revisión"
-          const reason = `Unidad de "${data.name}" cambió de ${oldIngr.unit} → ${data.unit}`;
-          await supabase.from("recipes")
-            .update({ needs_review: true, review_reason: reason })
-            .eq("id", recipe.id);
-        }
-        if (affectedRecipes.length > 0) {
-          // Actualizar estado local de recetas
-          setRecipes(prev => prev.map(r => {
-            if (!affectedRecipes.find(ar => ar.id === r.id)) return r;
+        // Si cambió la unidad, marcar recetas afectadas y actualizar recipe_ingredients
+        if (unitChanged && recipes?.length) {
+          const affectedRecipes = recipes.filter(r =>
+            r.ingredients.some(ri => ri.ingredientId === modal.id)
+          );
+          for (const recipe of affectedRecipes) {
+            // Actualizar unit y cost en cada recipe_ingredient afectado
+            for (const ri of recipe.ingredients.filter(ri => ri.ingredientId === modal.id)) {
+              const newCost = ri.qty * data.unitCost;
+              await supabase.from("recipe_ingredients")
+                .update({ unit: data.unit, cost: newCost })
+                .eq("id", ri.id);
+            }
+            // Marcar la receta como "necesita revisión"
             const reason = `Unidad de "${data.name}" cambió de ${oldIngr.unit} → ${data.unit}`;
-            return {
-              ...r,
-              needsReview: true,
-              reviewReason: reason,
-              ingredients: r.ingredients.map(ri =>
-                ri.ingredientId === modal.id
-                  ? { ...ri, unit: data.unit, cost: ri.qty * data.unitCost }
-                  : ri
-              ),
-            };
-          }));
-          showToast(`${affectedRecipes.length} receta${affectedRecipes.length !== 1 ? "s" : ""} marcada${affectedRecipes.length !== 1 ? "s" : ""} para revisión`);
+            await supabase.from("recipes")
+              .update({ needs_review: true, review_reason: reason })
+              .eq("id", recipe.id);
+          }
+          if (affectedRecipes.length > 0) {
+            // Actualizar estado local de recetas
+            setRecipes(prev => prev.map(r => {
+              if (!affectedRecipes.find(ar => ar.id === r.id)) return r;
+              const reason = `Unidad de "${data.name}" cambió de ${oldIngr.unit} → ${data.unit}`;
+              return {
+                ...r,
+                needsReview: true,
+                reviewReason: reason,
+                ingredients: r.ingredients.map(ri =>
+                  ri.ingredientId === modal.id
+                    ? { ...ri, unit: data.unit, cost: ri.qty * data.unitCost }
+                    : ri
+                ),
+              };
+            }));
+            showToast(`${affectedRecipes.length} receta${affectedRecipes.length !== 1 ? "s" : ""} marcada${affectedRecipes.length !== 1 ? "s" : ""} para revisión`);
+          }
         }
       }
+      setModal(null);
+      showToast("Ingrediente guardado");
+    } finally {
+      setSubmitting(false);
     }
-    setModal(null);
-    showToast("Ingrediente guardado");
   };
 
   const del = async (id) => {
@@ -296,7 +303,9 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
 
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={()=>setModal(null)}>Cancelar</button>
-            <button className="btn btn-primary" onClick={save}><Ico n="check" s={13}/>Guardar</button>
+            <button className="btn btn-primary" onClick={save} disabled={submitting}>
+              <Ico n="check" s={13}/>{submitting ? "Guardando..." : "Guardar"}
+            </button>
           </div>
         </Modal>
       )}

@@ -16,15 +16,19 @@ import { supabase, stockMovementToDb } from "../supabase.js";
 export default function ProductionPage({ products, setProducts, recipes, setIngredients, setStockMovements, showToast, logAction }) {
   const [qty, setQty] = useState({});
   const [search, setSearch] = useState("");
+  const [submitting, setSubmitting] = useState({});
 
   const setQ = (id,v) => setQty(p=>({...p,[id]:v}));
 
   const applyProduction = async (id) => {
+    if (submitting[id]) return;
     const q = Number(qty[id]);
     if (!q || q<=0) { showToast("Ingresá una cantidad válida", "error"); return; }
 
     const product = products.find(x => x.id === id);
     if (!product) return;
+    setSubmitting(p => ({...p, [id]: true}));
+    try {
     const newProductStock = product.stock + q;
     const { error: prodErr } = await supabase.from("products").update({ stock: newProductStock }).eq("id", id);
     if (prodErr) { showToast("Error al actualizar stock: " + prodErr.message, "error"); return; }
@@ -69,6 +73,9 @@ export default function ProductionPage({ products, setProducts, recipes, setIngr
     logAction?.("producción", "stock", `+${q} u. de "${product.name}" — ingredientes descontados`);
     setQty(p=>({...p,[id]:""}));
     showToast(`+${q} unidades registradas · ingredientes descontados`);
+    } finally {
+      setSubmitting(p => ({...p, [id]: false}));
+    }
   };
 
   return (
@@ -110,8 +117,8 @@ export default function ProductionPage({ products, setProducts, recipes, setIngr
                     onChange={e=>setQ(p.id,e.target.value)} style={{ width:"100%" }}/>
                 </td>
                 <td>
-                  <button className="btn btn-primary btn-sm" onClick={()=>applyProduction(p.id)}>
-                    <Ico n="plus" s={12}/>Agregar
+                  <button className="btn btn-primary btn-sm" onClick={()=>applyProduction(p.id)} disabled={!!submitting[p.id]}>
+                    <Ico n="plus" s={12}/>{submitting[p.id] ? "..." : "Agregar"}
                   </button>
                 </td>
               </tr>

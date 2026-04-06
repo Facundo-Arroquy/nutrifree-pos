@@ -33,11 +33,25 @@ export default function RecipesPage({ recipes, setRecipes, products, ingredients
     return () => clearTimeout(t);
   }, [highlightRecipeId]);
   const [search, setSearch] = useState("");
+  const [favorites, setFavorites] = useState(
+    () => new Set(JSON.parse(localStorage.getItem("recipes_favorites") || "[]"))
+  );
   const [form, setForm] = useState({ productId:"", prepTime:0, cookTime:0, yield:1, notes:"", ingredients:[], steps:[] });
+  const [submitting, setSubmitting] = useState(false);
   const [newIngr, setNewIngr] = useState({ ingredientId:"", qty:"" });
   const [newStep, setNewStep] = useState("");
   const [prodSearch, setProdSearch] = useState("");
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
+
+  const toggleFav = (e, id) => {
+    e.stopPropagation();
+    setFavorites(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      localStorage.setItem("recipes_favorites", JSON.stringify([...next]));
+      return next;
+    });
+  };
 
   const NUTR_FIELDS = [
     { key:"calories", label:"Calorías", unit:"kcal" },
@@ -157,33 +171,39 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
   const removeStep = i => setForm(p=>({...p,steps:p.steps.filter((_,idx)=>idx!==i)}));
 
   const save = async () => {
+    if (submitting) return;
     if (!form.productId) { showToast("Seleccioná un producto", "error"); return; }
-    const recipeId = modal === "new" ? crypto.randomUUID() : modal.id;
-    const recipeData = {...form, id: recipeId};
+    setSubmitting(true);
+    try {
+      const recipeId = modal === "new" ? crypto.randomUUID() : modal.id;
+      const recipeData = {...form, id: recipeId};
 
-    if (modal === "new") {
-      const { error } = await supabase.from("recipes").insert(recipeToDb(recipeData));
-      if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
-    } else {
-      const { error } = await supabase.from("recipes").update(recipeToDb(recipeData)).eq("id", recipeId);
-      if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
-      await supabase.from("recipe_ingredients").delete().eq("recipe_id", recipeId);
-    }
+      if (modal === "new") {
+        const { error } = await supabase.from("recipes").insert(recipeToDb(recipeData));
+        if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
+      } else {
+        const { error } = await supabase.from("recipes").update(recipeToDb(recipeData)).eq("id", recipeId);
+        if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
+        await supabase.from("recipe_ingredients").delete().eq("recipe_id", recipeId);
+      }
 
-    if (form.ingredients.length > 0) {
-      const rows = form.ingredients.map(i => recipeIngredientToDb({...i, id: crypto.randomUUID()}, recipeId));
-      const { error: riErr } = await supabase.from("recipe_ingredients").insert(rows);
-      if (riErr) { showToast("Error al guardar ingredientes: " + riErr.message, "error"); return; }
-    }
+      if (form.ingredients.length > 0) {
+        const rows = form.ingredients.map(i => recipeIngredientToDb({...i, id: crypto.randomUUID()}, recipeId));
+        const { error: riErr } = await supabase.from("recipe_ingredients").insert(rows);
+        if (riErr) { showToast("Error al guardar ingredientes: " + riErr.message, "error"); return; }
+      }
 
-    const savedRecipe = {...recipeData, ingredients: form.ingredients};
-    if (modal === "new") {
-      setRecipes(p => [...p, savedRecipe]);
-    } else {
-      setRecipes(p => p.map(r => r.id === recipeId ? savedRecipe : r));
+      const savedRecipe = {...recipeData, ingredients: form.ingredients};
+      if (modal === "new") {
+        setRecipes(p => [...p, savedRecipe]);
+      } else {
+        setRecipes(p => p.map(r => r.id === recipeId ? savedRecipe : r));
+      }
+      setModal(null);
+      showToast("Receta guardada");
+    } finally {
+      setSubmitting(false);
     }
-    setModal(null);
-    showToast("Receta guardada");
   };
 
   const del = async (id) => {
@@ -247,7 +267,17 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
       })()}
 
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:14 }}>
-        {recipes.filter(r => !search || (products.find(p=>p.id===r.productId)?.name||"").toLowerCase().includes(search.toLowerCase())).map(r => {
+        {recipes
+          .filter(r => !search || (products.find(p=>p.id===r.productId)?.name||"").toLowerCase().includes(search.toLowerCase()))
+          .sort((a, b) => {
+            const af = favorites.has(a.id) ? 0 : 1;
+            const bf = favorites.has(b.id) ? 0 : 1;
+            if (af !== bf) return af - bf;
+            const an = products.find(p=>p.id===a.productId)?.name || "";
+            const bn = products.find(p=>p.id===b.productId)?.name || "";
+            return an.localeCompare(bn);
+          })
+          .map(r => {
           const prod = products.find(p=>p.id===r.productId);
           const cost = totalCost(r.ingredients);
           const cpu = costPerUnit(r);
@@ -266,11 +296,19 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
               }}>
               <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8, marginBottom:4 }}>
                 <div style={{ fontWeight:700, fontSize:".95em" }}>{prod?.name||"Producto eliminado"}</div>
-                {r.needsReview && (
-                  <span style={{ fontSize:".72em", background:"var(--amberl)", color:"var(--amber)", border:"1px solid var(--amberlb)", borderRadius:4, padding:"2px 6px", fontWeight:700, whiteSpace:"nowrap", flexShrink:0 }}>
-                    ⚠ Revisar
-                  </span>
-                )}
+                <div style={{ display:"flex", gap:4, alignItems:"center", flexShrink:0 }}>
+                  {r.needsReview && (
+                    <span style={{ fontSize:".72em", background:"var(--amberl)", color:"var(--amber)", border:"1px solid var(--amberlb)", borderRadius:4, padding:"2px 6px", fontWeight:700, whiteSpace:"nowrap" }}>
+                      ⚠ Revisar
+                    </span>
+                  )}
+                  <button
+                    onClick={e => toggleFav(e, r.id)}
+                    title={favorites.has(r.id) ? "Quitar de favoritos" : "Agregar a favoritos"}
+                    style={{ background:"none", border:"none", cursor:"pointer", fontSize:"1.1em", lineHeight:1, padding:"2px 4px", color: favorites.has(r.id) ? "var(--amber)" : "var(--t4)" }}>
+                    {favorites.has(r.id) ? "★" : "☆"}
+                  </button>
+                </div>
               </div>
               <div style={{ fontSize:".78em", color:"var(--t3)", marginBottom:10 }}>
                 ⏱ {r.prepTime}min prep · {r.cookTime}min cocción · Rinde {r.yield} unid.
@@ -446,7 +484,9 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
 
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={()=>setModal(null)}>Cancelar</button>
-            <button className="btn btn-primary" onClick={save}><Ico n="check" s={13}/>Guardar receta</button>
+            <button className="btn btn-primary" onClick={save} disabled={submitting}>
+              <Ico n="check" s={13}/>{submitting ? "Guardando..." : "Guardar receta"}
+            </button>
           </div>
         </Modal>
       )}

@@ -20,6 +20,12 @@ const EXPENSE_UNITS = ["unidades", "kg", "g", "litros", "porciones"];
 
 function CloseExpenseModal({ expense, onClose, onConfirm }) {
   const [payMethod, setPayMethod] = useState(expense.paymentMethod||"cash");
+  const [submitting, setSubmitting] = useState(false);
+  const handleConfirm = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try { await onConfirm(expense, payMethod); } finally { setSubmitting(false); }
+  };
   return (
     <Modal title="Cerrar gasto" onClose={onClose}>
       <div style={{ background:"var(--s2)", borderRadius:8, padding:"12px 14px", marginBottom:16 }}>
@@ -37,7 +43,9 @@ function CloseExpenseModal({ expense, onClose, onConfirm }) {
       </div>
       <div className="modal-footer">
         <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-        <button className="btn btn-primary" onClick={()=>onConfirm(expense, payMethod)}><Ico n="check" s={14}/>Confirmar pago</button>
+        <button className="btn btn-primary" onClick={handleConfirm} disabled={submitting}>
+          <Ico n="check" s={14}/>{submitting ? "Guardando..." : "Confirmar pago"}
+        </button>
       </div>
     </Modal>
   );
@@ -49,6 +57,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
   const [modal, setModal] = useState(null);
   const [payModal, setPayModal] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCat, setFilterCat] = useState("Todos");
   const today = todayStr();
@@ -133,6 +142,9 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
   };
 
   const save = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
     // ── Gastos de Ingredientes: múltiples líneas ──────────────────────────────
     if (form.category==="Ingredientes") {
       const rawLines = (form.ingredientLines||[]).filter(l => l.ingredientId);
@@ -224,6 +236,9 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       showToast("Gasto guardado");
     }
     setModal(null);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const del = async (id) => {
@@ -420,7 +435,9 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
           )}
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={()=>setModal(null)}>Cancelar</button>
-            <button className="btn btn-primary" onClick={save}><Ico n="check" s={13}/>Guardar</button>
+            <button className="btn btn-primary" onClick={save} disabled={submitting}>
+              <Ico n="check" s={13}/>{submitting ? "Guardando..." : "Guardar"}
+            </button>
           </div>
         </Modal>
       )}
