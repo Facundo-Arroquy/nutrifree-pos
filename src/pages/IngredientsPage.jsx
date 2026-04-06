@@ -14,6 +14,23 @@ import { supabase, ingredientToDb, recipeToDb } from "../supabase.js";
 const INGR_CATS = ["Harinas","Lácteos","Grasas/Aceites","Endulzantes","Frutas/Verduras","Especias","Proteínas","Otros"];
 const INGR_UNITS = ["g","kg","ml","l","unidad","unidades","cdas","ctas"];
 
+// Factor de conversión entre unidades. null = no convertible.
+// Asume densidad 1 para conversiones volumen↔peso (1L = 1000g).
+const UNIT_BASE = { g: 1, kg: 1000, ml: 1, l: 1000 }; // bases en g/ml
+const VOLUME_UNITS = new Set(["ml", "l"]);
+const WEIGHT_UNITS = new Set(["g", "kg"]);
+
+function getConversion(from, to) {
+  if (from === to) return { factor: 1, crossType: false };
+  const fromBase = UNIT_BASE[from];
+  const toBase = UNIT_BASE[to];
+  if (!fromBase || !toBase) return null; // unidad/unidades/cdas/ctas → incompatible
+  const factor = fromBase / toBase;
+  const crossType = (VOLUME_UNITS.has(from) && WEIGHT_UNITS.has(to)) ||
+                    (WEIGHT_UNITS.has(from) && VOLUME_UNITS.has(to));
+  return { factor, crossType };
+}
+
 export default function IngredientsPage({ ingredients, setIngredients, recipes, setRecipes, products, setPage, setOpenRecipeId, showToast }) {
   const emptyForm = { name:"", category:"Harinas", unit:"g", stock:0, stockMin:0, unitCost:0, supplier:"", notes:"", calories:"", protein:"", carbs:"", fat:"", fiber:"", sugar:"", sodium:"" };
   const [modal, setModal] = useState(null);
@@ -70,42 +87,55 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
         if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
         setIngredients(p=>p.map(i=>i.id===modal.id?{...i,...data}:i));
 
-        // Si cambió la unidad, marcar recetas afectadas y actualizar recipe_ingredients
+        // Si cambió la unidad, convertir cantidades en recetas y actualizar recipe_ingredients
         if (unitChanged && recipes?.length) {
+          const conversion = getConversion(oldIngr.unit, data.unit);
           const affectedRecipes = recipes.filter(r =>
             r.ingredients.some(ri => ri.ingredientId === modal.id)
           );
           for (const recipe of affectedRecipes) {
-            // Actualizar unit y cost en cada recipe_ingredient afectado
             for (const ri of recipe.ingredients.filter(ri => ri.ingredientId === modal.id)) {
-              const newCost = ri.qty * data.unitCost;
+              const newQty = conversion ? +(ri.qty * conversion.factor).toFixed(6) : ri.qty;
+              const newCost = newQty * data.unitCost;
               await supabase.from("recipe_ingredients")
-                .update({ unit: data.unit, cost: newCost })
+                .update({ unit: data.unit, qty: newQty, cost: newCost })
                 .eq("id", ri.id);
             }
-            // Marcar la receta como "necesita revisión"
-            const reason = `Unidad de "${data.name}" cambió de ${oldIngr.unit} → ${data.unit}`;
-            await supabase.from("recipes")
-              .update({ needs_review: true, review_reason: reason })
-              .eq("id", recipe.id);
+            // Solo marcar para revisión si la conversión es entre tipos distintos o imposible
+            const needsReview = !conversion || conversion.crossType;
+            if (needsReview) {
+              const reason = conversion
+                ? `Unidad de "${data.name}" cambió de ${oldIngr.unit} → ${data.unit} (conversión aproximada, verificar cantidades)`
+                : `Unidad de "${data.name}" cambió de ${oldIngr.unit} → ${data.unit} (conversión no automática, revisar cantidades)`;
+              await supabase.from("recipes")
+                .update({ needs_review: true, review_reason: reason })
+                .eq("id", recipe.id);
+            }
           }
           if (affectedRecipes.length > 0) {
-            // Actualizar estado local de recetas
             setRecipes(prev => prev.map(r => {
               if (!affectedRecipes.find(ar => ar.id === r.id)) return r;
-              const reason = `Unidad de "${data.name}" cambió de ${oldIngr.unit} → ${data.unit}`;
+              const needsReview = !conversion || conversion.crossType;
+              const reason = conversion
+                ? `Unidad de "${data.name}" cambió de ${oldIngr.unit} → ${data.unit} (conversión aproximada, verificar cantidades)`
+                : `Unidad de "${data.name}" cambió de ${oldIngr.unit} → ${data.unit} (conversión no automática, revisar cantidades)`;
               return {
                 ...r,
-                needsReview: true,
-                reviewReason: reason,
-                ingredients: r.ingredients.map(ri =>
-                  ri.ingredientId === modal.id
-                    ? { ...ri, unit: data.unit, cost: ri.qty * data.unitCost }
-                    : ri
-                ),
+                ...(needsReview ? { needsReview: true, reviewReason: reason } : {}),
+                ingredients: r.ingredients.map(ri => {
+                  if (ri.ingredientId !== modal.id) return ri;
+                  const newQty = conversion ? +(ri.qty * conversion.factor).toFixed(6) : ri.qty;
+                  return { ...ri, unit: data.unit, qty: newQty, cost: newQty * data.unitCost };
+                }),
               };
             }));
-            showToast(`${affectedRecipes.length} receta${affectedRecipes.length !== 1 ? "s" : ""} marcada${affectedRecipes.length !== 1 ? "s" : ""} para revisión`);
+            if (!conversion) {
+              showToast(`Unidades incompatibles — revisá las cantidades en ${affectedRecipes.length} receta${affectedRecipes.length !== 1 ? "s" : ""}`, "error");
+            } else if (conversion.crossType) {
+              showToast(`Conversión aproximada aplicada (1 ${oldIngr.unit} ≈ ${conversion.factor} ${data.unit}) — verificar recetas`);
+            } else {
+              showToast(`Cantidades convertidas en ${affectedRecipes.length} receta${affectedRecipes.length !== 1 ? "s" : ""}`);
+            }
           }
         }
       }
