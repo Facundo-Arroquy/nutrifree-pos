@@ -75,7 +75,8 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
   const [payModal, setPayModal] = useState(null); // customer object
   const [payForm, setPayForm] = useState({ amount:"", paymentMethod:"cash", notes:"" });
   const [cashSelectedIds, setCashSelectedIds] = useState(new Set()); // pedidos seleccionados para pago adicional en cash
-  const [submitting, setSubmitting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [paying, setPaying] = useState(false);
   const [expandedSaleId, setExpandedSaleId] = useState(null);
   const [expandedCustomerId, setExpandedCustomerId] = useState(null);
   const [listExpandedSaleId, setListExpandedSaleId] = useState(null);
@@ -120,9 +121,9 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
   const openEdit = c => { setForm({...c}); setExpandedSaleId(null); setModal(c); };
 
   const save = async () => {
-    if (submitting) return;
+    if (saving) return;
     if (!form.name) { showToast("El nombre es obligatorio", "error"); return; }
-    setSubmitting(true);
+    setSaving(true);
     try {
       if (modal==="new") {
         const newCustomer = {...form, id:uid(), balance:Number(form.balance)||0};
@@ -140,7 +141,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
       setModal(null);
       showToast("Cliente guardado");
     } finally {
-      setSubmitting(false);
+      setSaving(false);
     }
   };
 
@@ -167,7 +168,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
   };
 
   const registerPayment = async () => {
-    if (submitting) return;
+    if (paying) return;
     const allocations = computeAllocations(payModal.id);
 
     const initialDebtAlloc = allocations.find(a => a.isInitialDebt);
@@ -181,7 +182,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
     if (totalCreditUsed === 0 && cashAmount === 0) {
       showToast("No hay saldo a favor ni monto ingresado", "error"); return;
     }
-    setSubmitting(true);
+    setPaying(true);
     try {
 
     const allNewPayments = [];
@@ -283,7 +284,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
       setPayModal(null);
       showToast("Pago registrado");
     } finally {
-      setSubmitting(false);
+      setPaying(false);
     }
   };
 
@@ -652,8 +653,8 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
           })()}
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={()=>setModal(null)}>Cancelar</button>
-            <button className="btn btn-primary" onClick={save} disabled={submitting}>
-              <Ico n="check" s={13}/>{submitting ? "Guardando..." : "Guardar"}
+            <button className="btn btn-primary" onClick={save} disabled={saving}>
+              <Ico n="check" s={13}/>{saving ? "Guardando..." : "Guardar"}
             </button>
           </div>
         </Modal>
@@ -808,8 +809,8 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={()=>setPayModal(null)}>Cancelar</button>
-              <button className="btn btn-primary" onClick={registerPayment} disabled={submitting}>
-                <Ico n="check" s={13}/>{submitting ? "Registrando..." : "Confirmar pago"}
+              <button className="btn btn-primary" onClick={registerPayment} disabled={paying}>
+                <Ico n="check" s={13}/>{paying ? "Registrando..." : "Confirmar pago"}
               </button>
             </div>
           </Modal>
