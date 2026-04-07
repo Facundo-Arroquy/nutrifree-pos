@@ -46,12 +46,12 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
   const computeAllocations = (customerId) => {
     const customer = customers.find(c => c.id === customerId);
     const balance = customer?.balance ?? 0;
-    const storedCredit = Math.max(0, balance);
-    const initialDebt = Math.max(0, -balance);
     const netApBalance = accountPayments
       .filter(p => p.customerId === customerId)
       .reduce((sum, p) => p.type === "payment" ? sum + p.amount : sum - p.amount, 0);
-    let creditLeft = storedCredit + Math.max(0, netApBalance);
+    const totalBalance = balance + netApBalance;
+    const initialDebt = Math.max(0, -totalBalance);
+    let creditLeft = Math.max(0, totalBalance);
     const result = [];
     if (initialDebt > 0) {
       const creditApplied = Math.min(creditLeft, initialDebt);
