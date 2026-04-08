@@ -13,6 +13,7 @@
 import { useState, useEffect } from "react";
 import { Ico, Modal, $, PAY_ORDER_LABELS, uid, todayStr } from "../shared.jsx";
 import { supabase, saleToDb, accountPaymentToDb } from "../supabase.js";
+import { sendBillingAlert } from "../utils/emailAlerts.js";
 
 export default function POSPage({ products, setProducts, customers, setCustomers, sales, setSales, accountPayments, setAccountPayments, showToast, logAction, frozenDiscount = 15 }) {
   const custBal = (id) => {
@@ -232,6 +233,11 @@ export default function POSPage({ products, setProducts, customers, setCustomers
     const metodo = PAY_ORDER_LABELS?.[payMethod] || payMethod;
     logAction?.(status === "closed" ? "venta" : "pedido", "pos",
       `$${total} — ${cliente} — ${metodo}${discountAmt > 0 ? ` (desc. $${discountAmt})` : ""}`);
+    if (sale.needsBilling) {
+      sendBillingAlert(sale).catch(err =>
+        console.error("[emailAlerts] No se pudo enviar el mail:", err)
+      );
+    }
     setSubmitting(false);
     setPayModal(false);
     clearCart();
