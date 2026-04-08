@@ -29,6 +29,7 @@ export const supabase = {
     return isDemo ? demoClient.rpc(fn, args) : _prod.rpc(fn, args);
   },
   auth: _prod.auth,
+  storage: _prod.storage,
   channel: (...args) => _prod.channel(...args),
   removeChannel: (...args) => _prod.removeChannel(...args),
 };

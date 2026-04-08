@@ -1,8 +1,9 @@
 import emailjs from "@emailjs/browser";
 
-const SERVICE_ID  = import.meta.env.VITE_EMAILJS_SERVICE_ID;
-const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
-const PUBLIC_KEY  = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+const SERVICE_ID           = import.meta.env.VITE_EMAILJS_SERVICE_ID;
+const TEMPLATE_ID          = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
+const INVOICE_TEMPLATE_ID  = import.meta.env.VITE_EMAILJS_INVOICE_TEMPLATE_ID;
+const PUBLIC_KEY           = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
 
 /**
  * Envía alerta de pedido con factura pendiente.
@@ -29,4 +30,30 @@ export async function sendBillingAlert(sale) {
   };
 
   await emailjs.send(SERVICE_ID, TEMPLATE_ID, params, PUBLIC_KEY);
+}
+
+/**
+ * Envía factura(s) al cliente con links de descarga.
+ * @param {{ name: string, email: string }} customer
+ * @param {{ name: string, url: string }[]} files
+ */
+export async function sendInvoiceEmail(customer, files) {
+  if (!SERVICE_ID || !INVOICE_TEMPLATE_ID || !PUBLIC_KEY) {
+    console.warn("[emailAlerts] VITE_EMAILJS_INVOICE_TEMPLATE_ID no configurado.");
+    return;
+  }
+
+  const fileLinks = files
+    .map(f => `• ${f.name}\n  ${f.url}`)
+    .join("\n\n");
+
+  const params = {
+    to_email:      customer.email,
+    customer_name: customer.name,
+    file_links:    fileLinks,
+    file_count:    String(files.length),
+    date:          new Date().toLocaleString("es-AR"),
+  };
+
+  await emailjs.send(SERVICE_ID, INVOICE_TEMPLATE_ID, params, PUBLIC_KEY);
 }

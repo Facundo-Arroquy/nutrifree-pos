@@ -7,9 +7,10 @@
  *
  * Props: sales, setSales, showToast
  */
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Ico, $ } from "../shared.jsx";
 import { supabase } from "../supabase.js";
+import { sendInvoiceEmail } from "../utils/emailAlerts.js";
 
 const MONTHS = [
   "Enero","Febrero","Marzo","Abril","Mayo","Junio",
@@ -21,6 +22,56 @@ export default function BillingPage({ sales, setSales, customers, showToast }) {
   const [filterMonth, setFilterMonth] = useState(now.getMonth());
   const [filterYear, setFilterYear]   = useState(now.getFullYear());
   const [expandedId, setExpandedId]   = useState(null);
+
+  // Panel envío de facturas
+  const [sendCustomerId, setSendCustomerId] = useState("");
+  const [sendFiles, setSendFiles]           = useState([]);
+  const [isDragging, setIsDragging]         = useState(false);
+  const [sending, setSending]               = useState(false);
+  const fileInputRef                        = useRef(null);
+
+  const customersWithEmail = customers.filter(c => c.email);
+
+  const addFiles = newFiles => {
+    const pdfs = Array.from(newFiles).filter(f => f.type === "application/pdf");
+    if (pdfs.length !== newFiles.length) showToast("Solo se aceptan archivos PDF", "error");
+    setSendFiles(prev => {
+      const names = prev.map(f => f.name);
+      return [...prev, ...pdfs.filter(f => !names.includes(f.name))];
+    });
+  };
+
+  const handleDrop = e => {
+    e.preventDefault();
+    setIsDragging(false);
+    addFiles(e.dataTransfer.files);
+  };
+
+  const handleSend = async () => {
+    const customer = customers.find(c => c.id === sendCustomerId);
+    if (!customer) { showToast("Seleccioná un cliente", "error"); return; }
+    if (!customer.email) { showToast("El cliente no tiene email", "error"); return; }
+    if (sendFiles.length === 0) { showToast("Agregá al menos un archivo PDF", "error"); return; }
+    setSending(true);
+    try {
+      const uploaded = [];
+      for (const file of sendFiles) {
+        const path = `${Date.now()}_${file.name.replace(/\s+/g, "_")}`;
+        const { error: upErr } = await supabase.storage.from("invoices").upload(path, file);
+        if (upErr) throw new Error(`No se pudo subir "${file.name}": ${upErr.message}`);
+        const { data } = supabase.storage.from("invoices").getPublicUrl(path);
+        uploaded.push({ name: file.name, url: data.publicUrl });
+      }
+      await sendInvoiceEmail(customer, uploaded);
+      showToast(`Factura${uploaded.length > 1 ? "s" : ""} enviada${uploaded.length > 1 ? "s" : ""} a ${customer.email} ✓`);
+      setSendFiles([]);
+      setSendCustomerId("");
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally {
+      setSending(false);
+    }
+  };
 
   const toggleExpand = id => setExpandedId(prev => prev === id ? null : id);
 
@@ -232,6 +283,87 @@ export default function BillingPage({ sales, setSales, customers, showToast }) {
           </table>
         </div>
       )}
+
+      {/* Panel: Enviar factura por mail */}
+      <div style={{ marginTop:32, background:"var(--s1)", border:"1px solid var(--border)", borderRadius:12, padding:"20px 24px" }}>
+        <h3 style={{ margin:"0 0 16px", fontSize:"1em", fontWeight:700, display:"flex", alignItems:"center", gap:8 }}>
+          <Ico n="mail" s={16}/> Enviar factura por mail
+        </h3>
+
+        {/* Selector de cliente */}
+        <div style={{ marginBottom:14 }}>
+          <label className="lbl">Cliente</label>
+          <select
+            value={sendCustomerId}
+            onChange={e => setSendCustomerId(e.target.value)}
+            style={{ width:"100%", maxWidth:340, marginTop:4, padding:"7px 10px", borderRadius:7, border:"1px solid var(--border)", background:"var(--bg1)", fontSize:".88em" }}>
+            <option value="">Seleccioná un cliente...</option>
+            {customersWithEmail.map(c => (
+              <option key={c.id} value={c.id}>{c.name} — {c.email}</option>
+            ))}
+          </select>
+          {customersWithEmail.length === 0 && (
+            <p style={{ fontSize:".78em", color:"var(--t4)", marginTop:4 }}>Ningún cliente tiene email registrado aún.</p>
+          )}
+        </div>
+
+        {/* Zona drag & drop */}
+        <div
+          onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            border: `2px dashed ${isDragging ? "var(--primary)" : "var(--border)"}`,
+            borderRadius: 10,
+            padding: "22px 16px",
+            textAlign: "center",
+            cursor: "pointer",
+            background: isDragging ? "var(--s2)" : "var(--bg1)",
+            transition: "all .15s",
+            marginBottom: 12,
+            maxWidth: 500,
+          }}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf"
+            multiple
+            style={{ display:"none" }}
+            onChange={e => { addFiles(e.target.files); e.target.value = ""; }}
+          />
+          <div style={{ fontSize:"1.6em", marginBottom:6 }}>📄</div>
+          <div style={{ fontSize:".84em", color:"var(--t3)", fontWeight:600 }}>
+            {isDragging ? "Soltá los archivos acá" : "Arrastrá PDFs acá o hacé click para buscar"}
+          </div>
+          <div style={{ fontSize:".75em", color:"var(--t4)", marginTop:3 }}>Solo archivos PDF</div>
+        </div>
+
+        {/* Lista de archivos seleccionados */}
+        {sendFiles.length > 0 && (
+          <div style={{ marginBottom:14, display:"flex", flexDirection:"column", gap:6, maxWidth:500 }}>
+            {sendFiles.map((f, i) => (
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:8, background:"var(--s2)", borderRadius:7, padding:"6px 10px", fontSize:".83em" }}>
+                <span>📄</span>
+                <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{f.name}</span>
+                <span style={{ color:"var(--t4)", fontSize:".78em" }}>{(f.size / 1024).toFixed(0)} KB</span>
+                <button
+                  onClick={() => setSendFiles(prev => prev.filter((_, j) => j !== i))}
+                  style={{ background:"none", border:"none", cursor:"pointer", color:"var(--t4)", padding:"0 2px", fontSize:"1em", lineHeight:1 }}>
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button
+          className="btn btn-primary"
+          onClick={handleSend}
+          disabled={sending || !sendCustomerId || sendFiles.length === 0}>
+          {sending ? "Enviando..." : <><Ico n="mail" s={13}/> Enviar{sendFiles.length > 1 ? ` ${sendFiles.length} archivos` : " factura"}</>}
+        </button>
+      </div>
     </div>
   );
 }
