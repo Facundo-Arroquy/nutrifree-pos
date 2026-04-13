@@ -238,10 +238,10 @@ tbody tr:hover td{background:var(--s1)}
 /* POS SPECIFIC */
 .pos-layout{display:grid;grid-template-columns:1fr 376px;gap:0;height:calc(100vh - 54px)}
 .pos-products{overflow-y:auto;padding:20px 24px;background:var(--bg)}
-.pos-cart{background:var(--s0);border-left:1px solid var(--border);display:flex;flex-direction:column;height:100%}
-.pos-cart-header{padding:16px 18px;border-bottom:1px solid var(--border)}
-.pos-cart-items{flex:1;overflow-y:auto;padding:12px 16px}
-.pos-cart-footer{padding:16px 18px;border-top:1px solid var(--border);background:var(--s0)}
+.pos-cart{background:var(--s0);border-left:1px solid var(--border);display:flex;flex-direction:column;height:100%;overflow:hidden}
+.pos-cart-header{padding:16px 18px;border-bottom:1px solid var(--border);flex-shrink:0}
+.pos-cart-items{flex:1;overflow-y:auto;padding:12px 16px;min-height:0}
+.pos-cart-footer{padding:16px 18px;border-top:1px solid var(--border);background:var(--s0);flex-shrink:0}
 .prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px}
 .prod-card{background:var(--s0);border:1px solid var(--border);border-radius:var(--rl);padding:14px;cursor:pointer;transition:border-color .14s,box-shadow .14s,transform .14s;user-select:none}
 .prod-card:hover{border-color:var(--green);box-shadow:0 4px 14px rgba(137,184,173,.18);transform:translateY(-1px)}
