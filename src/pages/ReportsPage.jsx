@@ -67,7 +67,7 @@ function MarginBar({ pct }) {
   );
 }
 
-export default function ReportsPage({ sales, products, recipes, expenses, expenseCategories, accountPayments, stockMovements, setPage, setHighlightRecipeId }) {
+export default function ReportsPage({ sales, products, recipes, expenses, expenseCategories, accountPayments, customers, stockMovements, setPage, setHighlightRecipeId }) {
   const presets = useMemo(() => {
     const now = new Date();
     const t = now.toISOString().slice(0,10);
@@ -108,10 +108,13 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
   // Total income = cash received directly + account debt collected
   const totalIncome = directIncome + accountIncome;
 
-  // Outstanding account debt (all time)
-  const allCharges  = (accountPayments || []).filter(p => p.type === "charge").reduce((a, b) => a + b.amount, 0);
-  const allPayments = (accountPayments || []).filter(p => p.type === "payment").reduce((a, b) => a + b.amount, 0);
-  const outstandingDebt = Math.max(0, allCharges - allPayments);
+  // Outstanding account debt (all time) — same logic as CustomersPage (includes customer.balance)
+  const outstandingDebt = (customers || []).reduce((sum, c) => {
+    const charges  = (accountPayments || []).filter(p => p.customerId === c.id && p.type === "charge").reduce((a, b) => a + b.amount, 0);
+    const payments = (accountPayments || []).filter(p => p.customerId === c.id && p.type === "payment").reduce((a, b) => a + b.amount, 0);
+    const bal = (c.balance ?? 0) + payments - charges;
+    return bal < 0 ? sum + Math.abs(bal) : sum;
+  }, 0);
 
   // Active open orders (all time — always relevant)
   const activeOrders = sales.filter(s => ["open", "pending", "ready"].includes(s.status));
