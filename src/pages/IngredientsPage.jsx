@@ -40,6 +40,7 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
   const [stockEdit, setStockEdit] = useState({});
   const [priceEdit, setPriceEdit] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, count, replacement }
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
 
   const recipesForIngredient = (ingredientId) =>
@@ -147,12 +148,35 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
   };
 
   const del = async (id) => {
-    if (confirm("¿Eliminar ingrediente?")) {
-      const { error } = await supabase.from("ingredients").delete().eq("id", id);
-      if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
-      setIngredients(p=>p.filter(i=>i.id!==id));
-      showToast("Eliminado");
+    const { data: usages } = await supabase
+      .from("recipe_ingredients")
+      .select("id")
+      .eq("ingredient_id", id);
+    const inUse = usages && usages.length > 0;
+    if (inUse) {
+      setDeleteConfirm({ id, count: usages.length, replacement: "" });
+    } else {
+      if (!confirm("¿Eliminar ingrediente?")) return;
+      await execDelete(id, null);
     }
+  };
+
+  const execDelete = async (id, replacementId) => {
+    if (replacementId) {
+      const { error: repErr } = await supabase
+        .from("recipe_ingredients")
+        .update({ ingredient_id: replacementId })
+        .eq("ingredient_id", id);
+      if (repErr) { showToast("Error al reemplazar: " + repErr.message, "error"); return; }
+    } else {
+      const { error: delRiErr } = await supabase.from("recipe_ingredients").delete().eq("ingredient_id", id);
+      if (delRiErr) { showToast("Error al eliminar de recetas: " + delRiErr.message, "error"); return; }
+    }
+    const { error } = await supabase.from("ingredients").delete().eq("id", id);
+    if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
+    setIngredients(p => p.filter(i => i.id !== id));
+    setDeleteConfirm(null);
+    showToast("Eliminado");
   };
 
   const applyPrice = async (id) => {
@@ -275,6 +299,37 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
           </tbody>
         </table>
       </div>
+
+      {deleteConfirm && (
+        <Modal title="Eliminar ingrediente" onClose={() => setDeleteConfirm(null)}>
+          <p style={{ marginBottom: 12 }}>
+            Este ingrediente está en <strong>{deleteConfirm.count}</strong> receta(s).
+            Podés elegir un reemplazo opcional antes de eliminarlo.
+          </p>
+          <div className="form-group" style={{ marginBottom: 16 }}>
+            <label className="lbl">Reemplazar por (opcional)</label>
+            <select
+              value={deleteConfirm.replacement}
+              onChange={e => setDeleteConfirm(p => ({ ...p, replacement: e.target.value }))}
+            >
+              <option value="">— Sin reemplazo (eliminar de las recetas) —</option>
+              {ingredients
+                .filter(i => i.id !== deleteConfirm.id)
+                .map(i => <option key={i.id} value={i.id}>{i.name}</option>)
+              }
+            </select>
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={() => setDeleteConfirm(null)}>Cancelar</button>
+            <button
+              className="btn btn-danger"
+              onClick={() => execDelete(deleteConfirm.id, deleteConfirm.replacement || null)}
+            >
+              {deleteConfirm.replacement ? "Reemplazar y eliminar" : "Eliminar de todas las recetas"}
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {modal && (
         <Modal title={modal==="new"?"Nuevo ingrediente":form.name} onClose={()=>setModal(null)} lg>
