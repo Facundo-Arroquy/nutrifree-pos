@@ -37,6 +37,12 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
   const [form, setForm] = useState(emptyForm);
   const [filterCat, setFilterCat] = useState("Todos");
   const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("name");
+  const [sortDir, setSortDir] = useState("asc");
+  const toggleSort = (key) => {
+    if (sortBy === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortBy(key); setSortDir("asc"); }
+  };
   const [stockEdit, setStockEdit] = useState({});
   const [priceEdit, setPriceEdit] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -53,7 +59,13 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
 
   const filtered = ingredients
     .filter(i => (filterCat==="Todos" || i.category===filterCat) && (!search || i.name.toLowerCase().includes(search.toLowerCase())))
-    .sort((a,b) => a.name.localeCompare(b.name));
+    .sort((a,b) => {
+      let v = 0;
+      if (sortBy === "name")  v = a.name.localeCompare(b.name);
+      if (sortBy === "price") v = (a.unitCost ?? 0) - (b.unitCost ?? 0);
+      if (sortBy === "stock") v = (a.stock ?? 0) - (b.stock ?? 0);
+      return sortDir === "asc" ? v : -v;
+    });
 
   const lowStock = ingredients.filter(i => i.stockMin > 0 && i.stock <= i.stockMin);
   const totalValue = ingredients.reduce((a,i) => a + i.stock * i.unitCost, 0);
@@ -225,6 +237,15 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
       <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:16 }}>
         {["Todos",...INGR_CATS].map(c=>(
           <button key={c} className={`btn btn-sm ${filterCat===c?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterCat(c)}>{c}</button>
+        ))}
+      </div>
+
+      <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:12 }}>
+        <span style={{ fontSize:".8em", color:"var(--t3)" }}>Ordenar:</span>
+        {[["name","Nombre"],["price","Precio"],["stock","Stock"]].map(([key,label])=>(
+          <button key={key} className={`btn btn-sm ${sortBy===key?"btn-primary":"btn-secondary"}`} onClick={()=>toggleSort(key)}>
+            {label} {sortBy===key ? (sortDir==="asc" ? "↑" : "↓") : ""}
+          </button>
         ))}
       </div>
 
