@@ -8,7 +8,7 @@
  * Props: products, setProducts, categories, showToast, logAction
  */
 import { useState } from "react";
-import { Ico, Modal, $, uid } from "../shared.jsx";
+import { Ico, Modal, $, uid, useSortable, SortableTh } from "../shared.jsx";
 import { supabase, productToDb } from "../supabase.js";
 
 export default function ProductsPage({ products, setProducts, categories, showToast, logAction }) {
@@ -22,11 +22,23 @@ export default function ProductsPage({ products, setProducts, categories, showTo
   const [submitting, setSubmitting] = useState(false);
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
 
+  const { sortBy, sortDir, toggleSort, applySortFn } = useSortable("name", "asc");
+
+  const SORT_ACCESSORS = {
+    name:     p => p.name,
+    category: p => p.category,
+    priceRetail:    p => p.priceRetail,
+    priceWholesale: p => p.priceWholesale,
+    stock:    p => p.stock,
+  };
+
   const cats = ["Todos", ...categories];
-  const filtered = products.filter(p =>
-    (filterCat==="Todos"||p.category===filterCat) &&
-    (!search||p.name.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = products
+    .filter(p =>
+      (filterCat==="Todos"||p.category===filterCat) &&
+      (!search||p.name.toLowerCase().includes(search.toLowerCase()))
+    )
+    .sort(applySortFn(SORT_ACCESSORS[sortBy] || (p => p.name)));
 
   const openNew = () => { setForm(emptyForm); setKitProductId(""); setKitQty(1); setModal("new"); };
   const openEdit = p => { setForm({...p, isKit: p.kitItems?.length > 0, kitItems: p.kitItems || []}); setKitProductId(""); setKitQty(1); setModal(p); };
@@ -109,7 +121,14 @@ export default function ProductsPage({ products, setProducts, categories, showTo
 
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Nombre</th><th>Categoría</th><th>P. Minorista</th><th>P. Mayorista</th><th>Stock</th><th>Estado</th><th></th></tr></thead>
+          <thead><tr>
+            <SortableTh col="name" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Nombre</SortableTh>
+            <SortableTh col="category" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Categoría</SortableTh>
+            <SortableTh col="priceRetail" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>P. Minorista</SortableTh>
+            <SortableTh col="priceWholesale" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>P. Mayorista</SortableTh>
+            <SortableTh col="stock" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Stock</SortableTh>
+            <th>Estado</th><th></th>
+          </tr></thead>
           <tbody>
             {filtered.map(p => (
               <tr key={p.id} className="tr-click" onClick={()=>openEdit(p)}>

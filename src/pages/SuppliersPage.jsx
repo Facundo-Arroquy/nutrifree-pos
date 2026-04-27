@@ -9,7 +9,7 @@
  * Props: suppliers, setSuppliers, supplierPayments, setSupplierPayments, showToast
  */
 import { useState } from "react";
-import { Ico, Modal, $, fmtDate, todayStr, PAY_LABELS } from "../shared.jsx";
+import { Ico, Modal, $, fmtDate, todayStr, PAY_LABELS, useSortable, SortableTh } from "../shared.jsx";
 import { supabase, supplierToDb, supplierPaymentToDb } from "../supabase.js";
 
 export default function SuppliersPage({ suppliers, setSuppliers, supplierPayments, setSupplierPayments, showToast }) {
@@ -20,6 +20,7 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
   const [form, setForm] = useState(emptyForm);
   const [payForm, setPayForm] = useState({ amount:"", paymentMethod:"cash", notes:"" });
   const [search, setSearch] = useState("");
+  const { sortBy, sortDir, toggleSort } = useSortable("name", "asc");
   const [submitting, setSubmitting] = useState(false);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -113,9 +114,24 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
 
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Nombre</th><th>Teléfono</th><th>Email</th><th>Saldo</th><th></th></tr></thead>
+          <thead><tr>
+            <SortableTh col="name" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Nombre</SortableTh>
+            <SortableTh col="phone" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Teléfono</SortableTh>
+            <SortableTh col="email" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Email</SortableTh>
+            <SortableTh col="balance" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Saldo</SortableTh>
+            <th></th>
+          </tr></thead>
           <tbody>
-            {suppliers.filter(s => !search || s.name.toLowerCase().includes(search.toLowerCase()) || (s.phone||"").includes(search) || (s.email||"").toLowerCase().includes(search.toLowerCase())).map(s => {
+            {suppliers
+              .filter(s => !search || s.name.toLowerCase().includes(search.toLowerCase()) || (s.phone||"").includes(search) || (s.email||"").toLowerCase().includes(search.toLowerCase()))
+              .sort((a, b) => {
+                let av, bv;
+                if (sortBy === "balance") { av = supplierBal(a.id); bv = supplierBal(b.id); }
+                else { av = (a[sortBy] ?? ""); bv = (b[sortBy] ?? ""); }
+                let v = typeof av === "string" ? av.localeCompare(bv, undefined, { sensitivity:"base" }) : (av - bv);
+                return sortDir === "asc" ? v : -v;
+              })
+              .map(s => {
               const bal = supplierBal(s.id);
               return (
                 <tr key={s.id} className="tr-click" onClick={()=>openEdit(s)}>

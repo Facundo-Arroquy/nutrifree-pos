@@ -8,7 +8,7 @@
  * Props: customers, setCustomers, sales, accountPayments, setAccountPayments, showToast, logAction
  */
 import { useState } from "react";
-import { Ico, Modal, $, fmtDate, uid, PAY_LABELS, STATUS_LABELS, STATUS_COLORS, todayStr } from "../shared.jsx";
+import { Ico, Modal, $, fmtDate, uid, PAY_LABELS, STATUS_LABELS, STATUS_COLORS, todayStr, useSortable, SortableTh } from "../shared.jsx";
 import { supabase, customerToDb, accountPaymentToDb } from "../supabase.js";
 
 export default function CustomersPage({ customers, setCustomers, sales, accountPayments, setAccountPayments, showToast, logAction }) {
@@ -109,7 +109,21 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
     setPayForm(p => ({ ...p, amount: newTotal > 0 ? String(newTotal) : "" }));
   };
 
-  const filtered = customers.filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search));
+  const { sortBy, sortDir, toggleSort } = useSortable("name", "asc");
+
+  const filtered = customers
+    .filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search))
+    .sort((a, b) => {
+      let av, bv;
+      if (sortBy === "balance")      { av = custBal(a.id); bv = custBal(b.id); }
+      else if (sortBy === "name")    { av = a.name ?? ""; bv = b.name ?? ""; }
+      else if (sortBy === "phone")   { av = a.phone ?? ""; bv = b.phone ?? ""; }
+      else if (sortBy === "priceList") { av = a.priceList ?? ""; bv = b.priceList ?? ""; }
+      else if (sortBy === "discountPct") { av = a.discountPct ?? 0; bv = b.discountPct ?? 0; }
+      else                           { av = a.name ?? ""; bv = b.name ?? ""; }
+      let v = typeof av === "string" ? av.localeCompare(bv, undefined, { sensitivity:"base" }) : (av - bv);
+      return sortDir === "asc" ? v : -v;
+    });
 
   const totalDebt = customers.reduce((sum, c) => {
     const b = custBal(c.id);
@@ -313,7 +327,15 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
 
       <div className="table-wrap">
         <table>
-          <thead><tr><th></th><th>Nombre</th><th>Teléfono</th><th>Lista</th><th>Descuento</th><th>Saldo</th><th>Notas</th><th></th></tr></thead>
+          <thead><tr>
+            <th></th>
+            <SortableTh col="name" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Nombre</SortableTh>
+            <SortableTh col="phone" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Teléfono</SortableTh>
+            <SortableTh col="priceList" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Lista</SortableTh>
+            <SortableTh col="discountPct" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Descuento</SortableTh>
+            <SortableTh col="balance" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Saldo</SortableTh>
+            <th>Notas</th><th></th>
+          </tr></thead>
           <tbody>
             {filtered.map(c => {
               const custSalesAll = sales.filter(s=>s.customerId===c.id);

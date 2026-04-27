@@ -12,7 +12,7 @@
  * Props: sales, expenses, recipes, products, stockMovements
  */
 import { useState, useMemo, useCallback } from "react";
-import { Ico, $, fmtDate, fmtTime, STATUS_LABELS, STATUS_COLORS, PAY_LABELS } from "../shared.jsx";
+import { Ico, $, fmtDate, fmtTime, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, useSortable, SortableTh } from "../shared.jsx";
 
 // ─── Bar chart (CSS-based, no library) ────────────────────────────────────────
 function TrendChart({ points }) {
@@ -277,6 +277,9 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
       .sort((a, b) => b.totalProfit - a.totalProfit)
       .slice(0, 5);
   }, [products, recipes, closedSales]);
+
+  // ── Sorting tabla de rentabilidad ────────────────────────────────────────────
+  const { sortBy: profitSortBy, sortDir: profitSortDir, toggleSort: profitToggleSort } = useSortable("totalProfit", "desc");
 
   // ── Tendencia ────────────────────────────────────────────────────────────────
   const [trendMode, setTrendMode] = useState("daily");
@@ -564,16 +567,21 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Producto</th>
-                  <th style={{ textAlign:"right" }}>Uds. vendidas</th>
-                  <th style={{ textAlign:"right" }}>Ingresos</th>
-                  <th style={{ textAlign:"right" }}>Costo total</th>
-                  <th style={{ textAlign:"right" }}>Ganancia</th>
-                  <th style={{ minWidth:140 }}>Margen</th>
+                  <SortableTh col="name" sortBy={profitSortBy} sortDir={profitSortDir} toggleSort={profitToggleSort}>Producto</SortableTh>
+                  <SortableTh col="unitsSold" sortBy={profitSortBy} sortDir={profitSortDir} toggleSort={profitToggleSort} align="right">Uds. vendidas</SortableTh>
+                  <SortableTh col="totalRevenue" sortBy={profitSortBy} sortDir={profitSortDir} toggleSort={profitToggleSort} align="right">Ingresos</SortableTh>
+                  <SortableTh col="totalCost" sortBy={profitSortBy} sortDir={profitSortDir} toggleSort={profitToggleSort} align="right">Costo total</SortableTh>
+                  <SortableTh col="totalProfit" sortBy={profitSortBy} sortDir={profitSortDir} toggleSort={profitToggleSort} align="right">Ganancia</SortableTh>
+                  <SortableTh col="margin" sortBy={profitSortBy} sortDir={profitSortDir} toggleSort={profitToggleSort} style={{ minWidth:140 }}>Margen</SortableTh>
                 </tr>
               </thead>
               <tbody>
-                {top5Profitable.map((p, i) => (
+                {[...top5Profitable].sort((a, b) => {
+                  const av = a[profitSortBy] ?? (typeof a[profitSortBy] === "string" ? "" : 0);
+                  const bv = b[profitSortBy] ?? (typeof b[profitSortBy] === "string" ? "" : 0);
+                  let v = typeof av === "string" ? av.localeCompare(bv, undefined, { sensitivity:"base" }) : (av - bv);
+                  return profitSortDir === "asc" ? v : -v;
+                }).map((p, i) => (
                   <tr key={p.id}>
                     <td>
                       <div style={{ width:22, height:22, borderRadius:6, background:i===0?"var(--green)":i===1?"var(--amber)":i===2?"var(--blue)":"var(--s2)", color:i<3?"white":"var(--t3)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:".75em" }}>

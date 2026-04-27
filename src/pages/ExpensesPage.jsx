@@ -13,7 +13,7 @@
  *        recipes, setRecipes, suppliers, setSupplierPayments, showToast, logAction
  */
 import { useState } from "react";
-import { Ico, Modal, $, fmtDate, uid, todayStr, PAY_LABELS } from "../shared.jsx";
+import { Ico, Modal, $, fmtDate, uid, todayStr, PAY_LABELS, useSortable, SortableTh } from "../shared.jsx";
 import { supabase, expenseToDb, supplierPaymentToDb } from "../supabase.js";
 
 const EXPENSE_UNITS = ["unidades", "kg", "g", "litros", "porciones"];
@@ -96,12 +96,26 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
   const to   = dateTo   || "9999-12-31";
   const inRange = e => { const d = e.date || e.createdAt?.slice(0,10) || ""; return d >= from && d <= to; };
 
+  const { sortBy, sortDir, toggleSort } = useSortable("date", "desc");
+
   const dateFiltered = expenses.filter(inRange);
   const cats = ["Todos", ...expenseCategories];
   const filtered = dateFiltered
     .filter(e => filterStatus==="all" || e.paymentStatus===filterStatus)
     .filter(e => filterCat==="Todos" || e.category===filterCat)
-    .sort((a,b) => new Date(b.date) - new Date(a.date));
+    .sort((a, b) => {
+      let av, bv;
+      if      (sortBy === "date")          { av = a.date ?? ""; bv = b.date ?? ""; }
+      else if (sortBy === "supplier")      { av = a.supplier ?? ""; bv = b.supplier ?? ""; }
+      else if (sortBy === "concept")       { av = a.concept ?? ""; bv = b.concept ?? ""; }
+      else if (sortBy === "total")         { av = a.total ?? 0; bv = b.total ?? 0; }
+      else if (sortBy === "category")      { av = a.category ?? ""; bv = b.category ?? ""; }
+      else if (sortBy === "paymentMethod") { av = a.paymentMethod ?? ""; bv = b.paymentMethod ?? ""; }
+      else if (sortBy === "paymentStatus") { av = a.paymentStatus ?? ""; bv = b.paymentStatus ?? ""; }
+      else                                 { av = a.date ?? ""; bv = b.date ?? ""; }
+      let v = typeof av === "string" ? av.localeCompare(bv, undefined, { sensitivity:"base" }) : (av - bv);
+      return sortDir === "asc" ? v : -v;
+    });
 
   const totalPaid    = dateFiltered.filter(e=>e.paymentStatus==="paid").reduce((a,b)=>a+b.total,0);
   const totalPending = dateFiltered.filter(e=>e.paymentStatus==="pending").reduce((a,b)=>a+b.total,0);
@@ -303,7 +317,17 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
 
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Fecha</th><th>Proveedor</th><th>Concepto</th><th>Cant.</th><th>P. Unit.</th><th>Total</th><th>Categoría</th><th>Método pago</th><th>Estado</th><th></th></tr></thead>
+          <thead><tr>
+            <SortableTh col="date" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Fecha</SortableTh>
+            <SortableTh col="supplier" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Proveedor</SortableTh>
+            <SortableTh col="concept" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Concepto</SortableTh>
+            <th>Cant.</th><th>P. Unit.</th>
+            <SortableTh col="total" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Total</SortableTh>
+            <SortableTh col="category" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Categoría</SortableTh>
+            <SortableTh col="paymentMethod" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Método pago</SortableTh>
+            <SortableTh col="paymentStatus" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Estado</SortableTh>
+            <th></th>
+          </tr></thead>
           <tbody>
             {filtered.map(e => (
               <tr key={e.id} className="tr-click" onClick={()=>openEdit(e)}>

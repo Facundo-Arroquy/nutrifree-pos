@@ -8,7 +8,7 @@
  * Props: ingredients, setIngredients, showToast
  */
 import { useState } from "react";
-import { Ico, Modal, $ } from "../shared.jsx";
+import { Ico, Modal, $, SortableTh } from "../shared.jsx";
 import { supabase, ingredientToDb, recipeToDb } from "../supabase.js";
 
 const INGR_CATS = ["Harinas","Lácteos","Grasas/Aceites","Endulzantes","Frutas/Verduras","Especias","Proteínas","Otros"];
@@ -57,13 +57,22 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
     setPage("recipes");
   };
 
+  const SORT_ACCESSORS = {
+    name:     i => i.name,
+    category: i => i.category,
+    unit:     i => i.unit,
+    stock:    i => i.stock ?? 0,
+    stockMin: i => i.stockMin ?? 0,
+    unitCost: i => i.unitCost ?? 0,
+    supplier: i => i.supplier ?? "",
+  };
+
   const filtered = ingredients
     .filter(i => (filterCat==="Todos" || i.category===filterCat) && (!search || i.name.toLowerCase().includes(search.toLowerCase())))
     .sort((a,b) => {
-      let v = 0;
-      if (sortBy === "name")  v = a.name.localeCompare(b.name);
-      if (sortBy === "price") v = (a.unitCost ?? 0) - (b.unitCost ?? 0);
-      if (sortBy === "stock") v = (a.stock ?? 0) - (b.stock ?? 0);
+      const acc = SORT_ACCESSORS[sortBy] || SORT_ACCESSORS.name;
+      const av = acc(a), bv = acc(b);
+      let v = typeof av === "string" ? av.localeCompare(bv, undefined, { sensitivity:"base" }) : (av - bv);
       return sortDir === "asc" ? v : -v;
     });
 
@@ -240,18 +249,18 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
         ))}
       </div>
 
-      <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:12 }}>
-        <span style={{ fontSize:".8em", color:"var(--t3)" }}>Ordenar:</span>
-        {[["name","Nombre"],["price","Precio"],["stock","Stock"]].map(([key,label])=>(
-          <button key={key} className={`btn btn-sm ${sortBy===key?"btn-primary":"btn-secondary"}`} onClick={()=>toggleSort(key)}>
-            {label} {sortBy===key ? (sortDir==="asc" ? "↑" : "↓") : ""}
-          </button>
-        ))}
-      </div>
-
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Nombre</th><th>Categoría</th><th>Unidad</th><th>Stock</th><th>Mín.</th><th>Costo/unid.</th><th>Proveedor</th><th>Recetas</th><th>Agregar stock</th><th></th></tr></thead>
+          <thead><tr>
+            <SortableTh col="name" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Nombre</SortableTh>
+            <SortableTh col="category" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Categoría</SortableTh>
+            <SortableTh col="unit" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Unidad</SortableTh>
+            <SortableTh col="stock" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Stock</SortableTh>
+            <SortableTh col="stockMin" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Mín.</SortableTh>
+            <SortableTh col="unitCost" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Costo/unid.</SortableTh>
+            <SortableTh col="supplier" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Proveedor</SortableTh>
+            <th>Recetas</th><th>Agregar stock</th><th></th>
+          </tr></thead>
           <tbody>
             {filtered.map(i => {
               const low = i.stockMin > 0 && i.stock <= i.stockMin;

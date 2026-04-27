@@ -478,4 +478,39 @@ function LoginPage({ onLogin }) {
   );
 }
 
-export { CSS, Ico, Toast, Modal, LoginPage, uid, $, fmtDate, fmtTime, fmtDT, todayStr, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, PAY_ORDER_LABELS, SEED_PRODUCTS, SEED_CUSTOMERS, SEED_RECIPES, SEED_SALES, SEED_CATEGORIES };
+// ─── SORTING UTILITIES ────────────────────────────────────────────────────────
+function useSortable(defaultKey = "", defaultDir = "asc") {
+  const [sortBy, setSortBy] = useState(defaultKey);
+  const [sortDir, setSortDir] = useState(defaultDir);
+  const toggleSort = (key) => {
+    if (sortBy === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortBy(key); setSortDir("asc"); }
+  };
+  const applySortFn = (accessor) => (a, b) => {
+    const av = accessor(a), bv = accessor(b);
+    let v = 0;
+    if (typeof av === "string" && typeof bv === "string") v = av.localeCompare(bv, undefined, { sensitivity: "base" });
+    else v = (av ?? 0) - (bv ?? 0);
+    return sortDir === "asc" ? v : -v;
+  };
+  return { sortBy, sortDir, toggleSort, applySortFn };
+}
+
+function SortableTh({ col, sortBy, sortDir, toggleSort, children, style, align }) {
+  const active = sortBy === col;
+  return (
+    <th
+      onClick={() => toggleSort(col)}
+      style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap", textAlign: align, ...style }}
+    >
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+        {children}
+        <span style={{ fontSize: ".7em", opacity: active ? 1 : 0.3, color: active ? "var(--accent)" : undefined }}>
+          {active ? (sortDir === "asc" ? "▲" : "▼") : "⬍"}
+        </span>
+      </span>
+    </th>
+  );
+}
+
+export { CSS, Ico, Toast, Modal, LoginPage, uid, $, fmtDate, fmtTime, fmtDT, todayStr, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, PAY_ORDER_LABELS, SEED_PRODUCTS, SEED_CUSTOMERS, SEED_RECIPES, SEED_SALES, SEED_CATEGORIES, useSortable, SortableTh };

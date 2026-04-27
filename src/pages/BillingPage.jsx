@@ -8,7 +8,7 @@
  * Props: sales, setSales, showToast
  */
 import { useState, useRef } from "react";
-import { Ico, $ } from "../shared.jsx";
+import { Ico, $, useSortable, SortableTh } from "../shared.jsx";
 import { supabase } from "../supabase.js";
 import { sendInvoiceEmail } from "../utils/emailAlerts.js";
 
@@ -125,11 +125,17 @@ export default function BillingPage({ sales, setSales, customers, showToast }) {
     );
   };
 
-  // orden: pendientes primero, luego por fecha desc
+  const { sortBy, sortDir, toggleSort } = useSortable("createdAt", "desc");
+
   const sortedFiltered = [...filtered].sort((a, b) => {
-    if (a.billingStatus === "pending" && b.billingStatus !== "pending") return -1;
-    if (a.billingStatus !== "pending" && b.billingStatus === "pending") return 1;
-    return new Date(b.createdAt) - new Date(a.createdAt);
+    let av, bv;
+    if      (sortBy === "createdAt")     { av = new Date(a.createdAt).getTime(); bv = new Date(b.createdAt).getTime(); }
+    else if (sortBy === "customerName")  { av = a.customerName ?? ""; bv = b.customerName ?? ""; }
+    else if (sortBy === "total")         { av = a.total ?? 0; bv = b.total ?? 0; }
+    else if (sortBy === "billingStatus") { av = a.billingStatus ?? ""; bv = b.billingStatus ?? ""; }
+    else                                 { av = new Date(a.createdAt).getTime(); bv = new Date(b.createdAt).getTime(); }
+    let v = typeof av === "string" ? av.localeCompare(bv, undefined, { sensitivity:"base" }) : (av - bv);
+    return sortDir === "asc" ? v : -v;
   });
 
   return (
@@ -189,13 +195,13 @@ export default function BillingPage({ sales, setSales, customers, showToast }) {
           <table className="table">
             <thead>
               <tr>
-                <th>Fecha</th>
-                <th>Cliente</th>
+                <SortableTh col="createdAt" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Fecha</SortableTh>
+                <SortableTh col="customerName" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Cliente</SortableTh>
                 <th>CUIT / CUIL</th>
                 <th>Email</th>
                 <th>Items</th>
-                <th style={{ textAlign:"right" }}>Total</th>
-                <th style={{ textAlign:"center" }}>Estado</th>
+                <SortableTh col="total" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort} align="right">Total</SortableTh>
+                <SortableTh col="billingStatus" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort} align="center">Estado</SortableTh>
                 <th style={{ textAlign:"center" }}>Acciones</th>
               </tr>
             </thead>

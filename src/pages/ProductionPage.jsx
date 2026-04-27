@@ -10,13 +10,14 @@
  * Props: products, setProducts, recipes, setIngredients, setStockMovements, showToast, logAction
  */
 import { useState } from "react";
-import { Ico } from "../shared.jsx";
+import { Ico, useSortable, SortableTh } from "../shared.jsx";
 import { supabase } from "../supabase.js";
 
 export default function ProductionPage({ products, setProducts, recipes, setIngredients, setStockMovements, showToast, logAction }) {
   const [qty, setQty] = useState({});
   const [search, setSearch] = useState("");
   const [submitting, setSubmitting] = useState({});
+  const { sortBy, sortDir, toggleSort } = useSortable("name", "asc");
 
   const setQ = (id,v) => setQty(p=>({...p,[id]:v}));
 
@@ -89,9 +90,22 @@ export default function ProductionPage({ products, setProducts, recipes, setIngr
 
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Producto</th><th>Categoría</th><th>Stock actual</th><th>Producción hoy</th><th></th></tr></thead>
+          <thead><tr>
+            <SortableTh col="name" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Producto</SortableTh>
+            <SortableTh col="category" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Categoría</SortableTh>
+            <SortableTh col="stock" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Stock actual</SortableTh>
+            <th>Producción hoy</th><th></th>
+          </tr></thead>
           <tbody>
-            {products.filter(p => p.active && (!search || p.name.toLowerCase().includes(search.toLowerCase()))).sort((a,b)=>a.name.localeCompare(b.name)).map(p => (
+            {products
+              .filter(p => p.active && (!search || p.name.toLowerCase().includes(search.toLowerCase())))
+              .sort((a, b) => {
+                let av = sortBy === "stock" ? (a.stock ?? 0) : (a[sortBy] ?? "");
+                let bv = sortBy === "stock" ? (b.stock ?? 0) : (b[sortBy] ?? "");
+                let v = typeof av === "string" ? av.localeCompare(bv, undefined, { sensitivity:"base" }) : (av - bv);
+                return sortDir === "asc" ? v : -v;
+              })
+              .map(p => (
               <tr key={p.id}>
                 <td style={{ fontWeight:600 }}>{p.name}</td>
                 <td><span className="tag">{p.category}</span></td>

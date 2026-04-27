@@ -9,7 +9,7 @@
  *        accountPayments, setAccountPayments, setStockMovements, showToast
  */
 import { useState } from "react";
-import { Ico, Modal, $, fmtDT, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, PAY_ORDER_LABELS, todayStr } from "../shared.jsx";
+import { Ico, Modal, $, fmtDT, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, PAY_ORDER_LABELS, todayStr, useSortable, SortableTh } from "../shared.jsx";
 import { supabase, accountPaymentToDb } from "../supabase.js";
 
 export default function OrdersPage({ sales, setSales, products, setProducts, customers, setCustomers, accountPayments, setAccountPayments, setStockMovements, showToast }) {
@@ -32,10 +32,26 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
       .reduce((sum, p) => sum + p.amount, 0);
     return paid < charge.amount;
   };
+  const { sortBy, sortDir, toggleSort } = useSortable("createdAt", "desc");
+
+  const SORT_ACCESSORS = {
+    id:            s => s.id,
+    customerName:  s => s.customerName ?? "",
+    total:         s => s.total ?? 0,
+    paymentMethod: s => s.paymentMethod ?? "",
+    status:        s => s.status ?? "",
+    createdAt:     s => new Date(s.createdAt).getTime(),
+  };
+
   const filtered = sales
     .filter(s => filter==="all" || s.status===filter)
     .filter(s => filterPay==="all" || s.paymentMethod===filterPay)
-    .sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt));
+    .sort((a,b) => {
+      const acc = SORT_ACCESSORS[sortBy] || SORT_ACCESSORS.createdAt;
+      const av = acc(a), bv = acc(b);
+      let v = typeof av === "string" ? av.localeCompare(bv, undefined, { sensitivity:"base" }) : (av - bv);
+      return sortDir === "asc" ? v : -v;
+    });
 
   const changeStatus = async (id, status) => {
     const { error } = await supabase.from("sales").update({ status }).eq("id", id);
@@ -153,7 +169,16 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
 
       <div className="table-wrap">
         <table>
-          <thead><tr><th>#</th><th>Cliente</th><th>Productos</th><th>Total</th><th>Pago</th><th>Estado</th><th>Fecha</th><th></th></tr></thead>
+          <thead><tr>
+            <SortableTh col="id" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>#</SortableTh>
+            <SortableTh col="customerName" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Cliente</SortableTh>
+            <th>Productos</th>
+            <SortableTh col="total" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Total</SortableTh>
+            <SortableTh col="paymentMethod" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Pago</SortableTh>
+            <SortableTh col="status" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Estado</SortableTh>
+            <SortableTh col="createdAt" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Fecha</SortableTh>
+            <th></th>
+          </tr></thead>
           <tbody>
             {filtered.map(s => (
               <tr key={s.id} className="tr-click" onClick={()=>setSelected(s)}>
