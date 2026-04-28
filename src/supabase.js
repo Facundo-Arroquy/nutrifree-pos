@@ -95,7 +95,8 @@ export const saleToDb = s => ({
 
 export const dbToRecipe = r => ({
   id: r.id, productId: r.product_id, prepTime: r.prep_time,
-  cookTime: r.cook_time, yield: r.yield, notes: r.notes,
+  cookTime: r.cook_time, packagingTime: r.packaging_time || 0,
+  yield: r.yield, notes: r.notes,
   minMargin: r.min_margin ?? null,
   needsReview: r.needs_review ?? false,
   reviewReason: r.review_reason ?? null,
@@ -104,7 +105,8 @@ export const dbToRecipe = r => ({
 
 export const recipeToDb = r => ({
   id: r.id, product_id: r.productId, prep_time: r.prepTime,
-  cook_time: r.cookTime, yield: r.yield, notes: r.notes,
+  cook_time: r.cookTime, packaging_time: r.packagingTime || 0,
+  yield: r.yield, notes: r.notes,
   min_margin: r.minMargin != null && r.minMargin !== "" ? Number(r.minMargin) : null,
   needs_review: r.needsReview ?? false,
   review_reason: r.reviewReason ?? null,
@@ -229,4 +231,20 @@ export const cashShiftToDb = s => ({
   sales_card: s.salesCard, sales_account: s.salesAccount,
   expenses_cash: s.expensesCash, expected_cash: s.expectedCash,
   counted_cash: s.countedCash, difference: s.difference, notes: s.notes,
+});
+
+// ─── PRODUCCIONES & BANCO DE HORAS ────────────────────────────────────────
+export const dbToProduction = r => ({
+  id: r.id, recipeId: r.recipe_id, createdAt: r.created_at,
+});
+
+export const dbToProductionEmployee = r => ({
+  id: r.id, productionId: r.production_id, employeeId: r.employee_id,
+  role: r.role, hours: r.hours || 0,
+});
+
+export const dbToEmployeeHours = r => ({
+  employeeId: r.employee_id,
+  cookingHours: r.cooking_hours || 0,
+  packagingHours: r.packaging_hours || 0,
 });

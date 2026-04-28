@@ -50,6 +50,8 @@ import SettingsPage from "./pages/SettingsPage.jsx";
 import CashShiftPage from "./pages/CashShiftPage.jsx";
 import ImportPage from "./pages/ImportPage.jsx";
 import HelpAdminPage from "./pages/HelpAdminPage.jsx";
+import ProductionLogPage from "./pages/ProductionLogPage.jsx";
+import HoursBankPage from "./pages/HoursBankPage.jsx";
 import ChatWidget from "./components/ChatWidget.jsx";
 
 // ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
@@ -350,7 +352,7 @@ export default function App() {
   };
 
   // ─── Route guards ──────────────────────────────────────────────────────────
-  const PAGE_ROLES = { reports: ["admin"], import: ["admin"], "help-admin": ["admin"] };
+  const PAGE_ROLES = { reports: ["admin"], import: ["admin"], "help-admin": ["admin"], "hours-bank": ["admin"] };
   const canAccess = (pageId) => {
     if (user?.isDemo) return true;
     const allowed = PAGE_ROLES[pageId] || ["admin", "vendor"];
@@ -518,12 +520,14 @@ export default function App() {
     { id:"products",    label:"Productos",       icon:"products",    roles:["admin","vendor"], section:"productos" },
     { id:"recipes",     label:"Recetas",         icon:"recipes",     roles:["admin","vendor"], section:"productos" },
     { id:"ingredients", label:"Ingredientes",    icon:"ingredients", roles:["admin","vendor"], section:"productos" },
-    { id:"production",  label:"Producción",      icon:"production",  roles:["admin","vendor"], section:"productos" },
+    { id:"production",      label:"Producción",        icon:"production",  roles:["admin","vendor"], section:"productos" },
+    { id:"production-log",  label:"Reg. Producción",   icon:"production",  roles:["admin","vendor"], section:"productos" },
     { id:"cash",        label:"Cierre de Caja",  icon:"cash",        roles:["admin","vendor"], section:"finanzas" },
     { id:"expenses",    label:"Gastos",          icon:"expenses",    roles:["admin","vendor"], section:"finanzas" },
     { id:"suppliers",   label:"Proveedores",     icon:"suppliers",   roles:["admin","vendor"], section:"finanzas" },
     { id:"import",      label:"Importar datos",  icon:"upload",      roles:["admin"],          section:"bottom" },
     { id:"reports",     label:"Reportes",        icon:"reports",     roles:["admin"],          section:"bottom" },
+    { id:"hours-bank",  label:"Banco de Horas",  icon:"reports",     roles:["admin"],          section:"bottom" },
     { id:"help-admin",  label:"FAQ / Ayuda",     icon:"settings",    roles:["admin"],          section:"bottom" },
     { id:"settings",    label:"Configuración",   icon:"settings",    roles:["admin","vendor"], section:"bottom" },
   ].filter(n => user.isDemo || n.roles.includes(user.role));
@@ -675,6 +679,8 @@ export default function App() {
             {page==="customers" && <CustomersPage {...props}/>}
             {page==="products" && <ProductsPage {...props}/>}
             {page==="production" && <ProductionPage {...props}/>}
+            {page==="production-log" && <ProductionLogPage {...props}/>}
+            {page==="hours-bank" && (canAccess("hours-bank") ? <HoursBankPage {...props}/> : <AccessDenied/>)}
             {page==="recipes" && <RecipesPage {...props}/>}
             {page==="ingredients" && <IngredientsPage {...props}/>}
             {page==="expenses" && <ExpensesPage {...props}/>}
