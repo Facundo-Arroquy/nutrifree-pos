@@ -12,7 +12,7 @@ import { useState, useEffect } from "react";
 import { Ico } from "../shared.jsx";
 import { supabase } from "../supabase.js";
 
-export default function SettingsPage({ user, categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, settingsSection = "general" }) {
+export default function SettingsPage({ user, categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, settingsSection = "general", setPage }) {
   const [newCat, setNewCat] = useState("");
   const [newExpCat, setNewExpCat] = useState("");
   const [newPass, setNewPass] = useState("");
@@ -439,6 +439,18 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
           <p style={{ fontSize:".75em", color:"var(--t4)", marginTop:12 }}>
             Los empleados se registran desde el Dashboard de Supabase. Al iniciar sesión por primera vez, aparecen aquí automáticamente.
           </p>
+        </div>
+      )}
+
+      {settingsSection === "empleados" && user?.role === "admin" && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="section-title">Banco de Horas</div>
+          <p style={{ fontSize:".85em", color:"var(--t3)", marginBottom:12 }}>
+            Consultá las horas acumuladas por empleado en producción (cocina y empaque).
+          </p>
+          <button className="btn btn-secondary" onClick={() => setPage("hours-bank")}>
+            Ver Banco de Horas →
+          </button>
         </div>
       )}
 

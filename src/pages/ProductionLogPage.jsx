@@ -3,12 +3,14 @@
  *
  * Flujo:
  *  1. Seleccioná una receta (searchable)
- *  2. Marcá empleados de cocina (si cook_time > 0) y empaque (si packaging_time > 0)
- *  3. Al registrar: inserta en `productions` + `production_employees` y acumula
- *     horas en `employee_hours` vía RPC.
- *
- * Nota: la sección de empaque solo aparece si la receta tiene `packaging_time > 0`.
- * Configurá ese campo en cada receta desde la sección de Recetas.
+ *  2. Ingresá cantidad de lotes (default 1)
+ *  3. Marcá empleados de cocina (si cook_time > 0) y empaque (si packaging_time > 0)
+ *  4. Al registrar:
+ *     - Inserta en `productions` (con batches)
+ *     - Inserta en `production_employees`
+ *     - Acumula horas en `employee_hours` vía RPC (multiplicadas por lotes)
+ *     - Incrementa stock del producto: batches × recipe.yield
+ *     - Registra movimiento en `stock_movements`
  *
  * Props: user, recipes, products, showToast
  */
@@ -23,7 +25,7 @@ const fmt = (mins) => {
   return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ""}` : `${m}m`;
 };
 
-export default function ProductionLogPage({ user, recipes, products, showToast }) {
+export default function ProductionLogPage({ user, recipes, products, setProducts, showToast }) {
   const [employees, setEmployees] = useState([]);
   const [loadingEmps, setLoadingEmps] = useState(true);
 
@@ -31,6 +33,9 @@ export default function ProductionLogPage({ user, recipes, products, showToast }
   const [recipeSearch, setRecipeSearch] = useState("");
   const [showDrop, setShowDrop] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
+
+  // Batches
+  const [batches, setBatches] = useState(1);
 
   // Employee assignment
   const [cookingEmps, setCookingEmps] = useState([]);
@@ -51,13 +56,15 @@ export default function ProductionLogPage({ user, recipes, products, showToast }
       });
   }, [user]);
 
+  const getProduct = (recipe) => products.find(p => p.id === recipe.productId);
   const getProductName = (recipe) =>
-    products.find(p => p.id === recipe.productId)?.name || `Receta (${recipe.id.slice(0, 6)})`;
+    getProduct(recipe)?.name || `Receta (${recipe.id.slice(0, 6)})`;
 
   const CATEGORY = "Pastelería";
+  const norm = s => s?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") || "";
   const filteredRecipes = recipes.filter(r => {
     const prod = products.find(p => p.id === r.productId);
-    if (!prod || prod.category?.toLowerCase() !== CATEGORY.toLowerCase()) return false;
+    if (!prod || norm(prod.category) !== norm(CATEGORY)) return false;
     if (!recipeSearch) return true;
     return prod.name.toLowerCase().includes(recipeSearch.toLowerCase());
   });
@@ -69,6 +76,7 @@ export default function ProductionLogPage({ user, recipes, products, showToast }
     setSelectedRecipe(r);
     setRecipeSearch("");
     setShowDrop(false);
+    setBatches(1);
     setCookingEmps([]);
     setPackagingEmps([]);
   };
@@ -76,23 +84,32 @@ export default function ProductionLogPage({ user, recipes, products, showToast }
   const clearRecipe = () => {
     setSelectedRecipe(null);
     setRecipeSearch("");
+    setBatches(1);
     setCookingEmps([]);
     setPackagingEmps([]);
   };
 
   const handleRegister = async () => {
     if (!selectedRecipe) { showToast("Seleccioná una receta", "error"); return; }
-    const cookTime = selectedRecipe.cookTime || 0;
-    const packTime = selectedRecipe.packagingTime || 0;
-    if (cookTime > 0 && cookingEmps.length === 0) {
+    const b = Math.max(1, batches || 1);
+    const cookTime = (selectedRecipe.cookTime || 0) * b;
+    const packTime = (selectedRecipe.packagingTime || 0) * b;
+
+    if (!(selectedRecipe.yield > 0)) {
+      showToast("La receta no tiene rendimiento configurado. Editá la receta para agregar el campo 'Rendimiento'.", "error"); return;
+    }
+    if ((selectedRecipe.cookTime || 0) > 0 && cookingEmps.length === 0) {
       showToast("Asigná al menos 1 empleado de cocina", "error"); return;
     }
-    if (packTime > 0 && packagingEmps.length === 0) {
+    if ((selectedRecipe.packagingTime || 0) > 0 && packagingEmps.length === 0) {
       showToast("Asigná al menos 1 empleado de empaque", "error"); return;
     }
     if (cookingEmps.length === 0 && packagingEmps.length === 0) {
       showToast("Asigná al menos 1 empleado", "error"); return;
     }
+
+    const product = getProduct(selectedRecipe);
+    const totalUnits = b * selectedRecipe.yield;
 
     setSaving(true);
     try {
@@ -117,7 +134,6 @@ export default function ProductionLogPage({ user, recipes, products, showToast }
           employee_id: eid, role: "packaging", hours: packHoursEach,
         })),
       ];
-
       const { error: peErr } = await supabase.from("production_employees").insert(peRows);
       if (peErr) throw peErr;
 
@@ -138,7 +154,34 @@ export default function ProductionLogPage({ user, recipes, products, showToast }
       const rpcErr = results.find(r => r.error)?.error;
       if (rpcErr) throw rpcErr;
 
-      showToast("Producción registrada ✓");
+      // 4. Actualizar stock del producto (fetch fresco para evitar estado desactualizado)
+      if (product) {
+        const { data: freshProd, error: fetchErr } = await supabase
+          .from("products").select("stock").eq("id", product.id).single();
+        if (fetchErr) throw fetchErr;
+        const newStock = (freshProd.stock || 0) + totalUnits;
+        const { error: stockErr } = await supabase
+          .from("products")
+          .update({ stock: newStock })
+          .eq("id", product.id);
+        if (stockErr) throw stockErr;
+        setProducts(prev => prev.map(p => p.id === product.id ? { ...p, stock: newStock } : p));
+
+        // 5. Registrar movimiento de stock
+        const { error: mvErr } = await supabase
+          .from("stock_movements")
+          .insert({
+            id: crypto.randomUUID(),
+            product_id: product.id,
+            product_name: product.name,
+            qty: totalUnits,
+            type: "production",
+            notes: `${b} lote${b > 1 ? "s" : ""} de receta`,
+          });
+        if (mvErr) throw mvErr;
+      }
+
+      showToast(`Producción registrada ✓ (+${totalUnits} uds.)`);
       clearRecipe();
     } catch (err) {
       showToast("Error: " + err.message, "error");
@@ -147,7 +190,16 @@ export default function ProductionLogPage({ user, recipes, products, showToast }
     }
   };
 
-  const EmpList = ({ selected, onToggle, accentClass, accentBorder, hoursEach }) => (
+  const b = Math.max(1, batches || 1);
+  const cookHoursEach = cookingEmps.length > 0
+    ? (((selectedRecipe?.cookTime || 0) * b) / 60) / cookingEmps.length
+    : 0;
+  const packHoursEach = packagingEmps.length > 0
+    ? (((selectedRecipe?.packagingTime || 0) * b) / 60) / packagingEmps.length
+    : 0;
+  const totalUnitsPreview = b * (selectedRecipe?.yield || 0);
+
+  const EmpList = ({ selected, onToggle, accentClass, hoursEach }) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       {loadingEmps ? (
         <p style={{ fontSize: ".85em", color: "var(--t3)" }}>Cargando empleados...</p>
@@ -188,9 +240,6 @@ export default function ProductionLogPage({ user, recipes, products, showToast }
     </div>
   );
 
-  const cookHoursEach = cookingEmps.length > 0 ? ((selectedRecipe?.cookTime || 0) / 60) / cookingEmps.length : 0;
-  const packHoursEach = packagingEmps.length > 0 ? ((selectedRecipe?.packagingTime || 0) / 60) / packagingEmps.length : 0;
-
   return (
     <div className="page">
       <div className="page-header">
@@ -216,6 +265,7 @@ export default function ProductionLogPage({ user, recipes, products, showToast }
                   {selectedRecipe.prepTime > 0 && <span>Prep: {fmt(selectedRecipe.prepTime)}</span>}
                   {selectedRecipe.cookTime > 0 && <span>🍳 Cocina: {fmt(selectedRecipe.cookTime)}</span>}
                   {selectedRecipe.packagingTime > 0 && <span>📦 Empaque: {fmt(selectedRecipe.packagingTime)}</span>}
+                  {selectedRecipe.yield > 0 && <span>📦 Rinde: {selectedRecipe.yield} uds.</span>}
                 </div>
               </div>
               <button className="btn btn-ghost btn-icon btn-sm" onClick={clearRecipe}>
@@ -245,6 +295,7 @@ export default function ProductionLogPage({ user, recipes, products, showToast }
                       >
                         <span style={{ fontWeight: 500, fontSize: ".9em" }}>{getProductName(r)}</span>
                         <span style={{ fontSize: ".75em", color: "var(--t3)", display: "flex", gap: 10 }}>
+                          {r.yield > 0 && <span>×{r.yield} uds.</span>}
                           {r.cookTime > 0 && <span>🍳 {fmt(r.cookTime)}</span>}
                           {r.packagingTime > 0 && <span>📦 {fmt(r.packagingTime)}</span>}
                         </span>
@@ -257,15 +308,57 @@ export default function ProductionLogPage({ user, recipes, products, showToast }
           )}
         </div>
 
-        {/* ── Empleados (solo si hay receta seleccionada) ───────── */}
+        {/* ── Lotes + empleados (solo si hay receta seleccionada) ── */}
         {selectedRecipe && (
           <>
+            {/* Cantidad de lotes */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="section-title">Cantidad de lotes</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <button
+                    className="btn btn-ghost btn-icon btn-sm"
+                    onClick={() => setBatches(v => Math.max(1, (v || 1) - 1))}
+                    style={{ width: 36, height: 36, fontSize: "1.2em", fontWeight: 700 }}
+                  >−</button>
+                  <input
+                    type="number" min={1}
+                    value={batches}
+                    onChange={e => setBatches(Math.max(1, parseInt(e.target.value) || 1))}
+                    style={{ width: 64, textAlign: "center", fontSize: "1.1em", fontWeight: 700, padding: "6px 8px" }}
+                  />
+                  <button
+                    className="btn btn-ghost btn-icon btn-sm"
+                    onClick={() => setBatches(v => (v || 1) + 1)}
+                    style={{ width: 36, height: 36, fontSize: "1.2em", fontWeight: 700 }}
+                  >+</button>
+                </div>
+
+                {/* Resumen de unidades y tiempos */}
+                <div style={{ flex: 1, display: "flex", flexWrap: "wrap", gap: 12, fontSize: ".83em", color: "var(--t3)" }}>
+                  {selectedRecipe.yield > 0 && (
+                    <span style={{ fontWeight: 700, color: "var(--green)", fontSize: ".95em" }}>
+                      = {totalUnitsPreview} uds. de {getProductName(selectedRecipe)}
+                    </span>
+                  )}
+                  {selectedRecipe.cookTime > 0 && b > 1 && (
+                    <span>🍳 {fmt(selectedRecipe.cookTime * b)} total cocina</span>
+                  )}
+                  {selectedRecipe.packagingTime > 0 && b > 1 && (
+                    <span>📦 {fmt(selectedRecipe.packagingTime * b)} total empaque</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {selectedRecipe.cookTime > 0 && (
               <div className="card" style={{ marginBottom: 16 }}>
                 <div className="section-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span>🍳 Empleados de cocina</span>
                   <span style={{ fontWeight: 400, color: "var(--t3)", fontSize: ".8em" }}>
-                    {cookingEmps.length > 0 ? `${cookingEmps.length} sel. · ${cookHoursEach.toFixed(2)}h c/u` : `Total: ${fmt(selectedRecipe.cookTime)}`}
+                    {cookingEmps.length > 0
+                      ? `${cookingEmps.length} sel. · ${cookHoursEach.toFixed(2)}h c/u`
+                      : `Total: ${fmt(selectedRecipe.cookTime * b)}`}
                   </span>
                 </div>
                 <EmpList
@@ -282,7 +375,9 @@ export default function ProductionLogPage({ user, recipes, products, showToast }
                 <div className="section-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span>📦 Empleados de empaque</span>
                   <span style={{ fontWeight: 400, color: "var(--t3)", fontSize: ".8em" }}>
-                    {packagingEmps.length > 0 ? `${packagingEmps.length} sel. · ${packHoursEach.toFixed(2)}h c/u` : `Total: ${fmt(selectedRecipe.packagingTime)}`}
+                    {packagingEmps.length > 0
+                      ? `${packagingEmps.length} sel. · ${packHoursEach.toFixed(2)}h c/u`
+                      : `Total: ${fmt(selectedRecipe.packagingTime * b)}`}
                   </span>
                 </div>
                 <EmpList
@@ -308,7 +403,7 @@ export default function ProductionLogPage({ user, recipes, products, showToast }
               onClick={handleRegister}
               disabled={saving}
             >
-              {saving ? "Registrando..." : "✓ Registrar producción"}
+              {saving ? "Registrando..." : `✓ Registrar producción${totalUnitsPreview > 0 ? ` (+${totalUnitsPreview} uds.)` : ""}`}
             </button>
           </>
         )}
