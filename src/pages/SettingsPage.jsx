@@ -11,7 +11,7 @@
  * Props: user, categories, setCategories, expenseCategories, setExpenseCategories,
  *        showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo
  */
-import { useState, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Ico } from "../shared.jsx";
 import { supabase } from "../supabase.js";
 
@@ -27,6 +27,39 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
   const [balThreshold, setBalThreshold] = useState(String(alertBalanceThreshold));
   const [frozenInput, setFrozenInput] = useState(String(frozenDiscount));
   const [vatInput, setVatInput] = useState(String(vatRate));
+
+  // ─── Empleados ────────────────────────────────────────────────────────────
+  const [employees, setEmployees] = useState([]);
+  const [loadingEmps, setLoadingEmps] = useState(false);
+  const domain = user?.email ? user.email.split("@")[1] : null;
+
+  useEffect(() => {
+    if (!user || user.role !== "admin" || user.isDemo || !domain) return;
+    setLoadingEmps(true);
+    supabase
+      .from("business_users")
+      .select("id, email, name, role, active, created_at")
+      .eq("domain", domain)
+      .order("created_at", { ascending: true })
+      .then(({ data, error }) => {
+        setLoadingEmps(false);
+        if (!error && data) setEmployees(data);
+      });
+  }, [user, domain]);
+
+  const updateEmployeeRole = async (id, role) => {
+    const { error } = await supabase.from("business_users").update({ role }).eq("id", id);
+    if (error) { showToast("Error: " + error.message, "error"); return; }
+    setEmployees(prev => prev.map(e => e.id === id ? { ...e, role } : e));
+    showToast("Rol actualizado ✓");
+  };
+
+  const toggleEmployeeActive = async (id, active) => {
+    const { error } = await supabase.from("business_users").update({ active: !active }).eq("id", id);
+    if (error) { showToast("Error: " + error.message, "error"); return; }
+    setEmployees(prev => prev.map(e => e.id === id ? { ...e, active: !active } : e));
+    showToast(!active ? "Usuario activado ✓" : "Usuario desactivado");
+  };
 
   const changePassword = async () => {
     if (newPass.length < 6) { showToast("La contraseña debe tener al menos 6 caracteres", "error"); return; }
@@ -243,6 +276,95 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
           Freezadas: <strong>-{frozenDiscount}%</strong> · IVA: <strong>+{vatRate}%</strong>
         </p>
       </div>
+
+      {user?.role === "admin" && !user?.isDemo && (
+        <div className="card" style={{ marginBottom:16 }}>
+          <div className="section-title" style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <span>Empleados del negocio</span>
+            <span style={{ fontSize:".78em", fontWeight:400, color:"var(--t3)" }}>
+              {domain && <>Dominio: <strong>@{domain}</strong> · </>}
+              {employees.length} {employees.length === 1 ? "usuario" : "usuarios"}
+            </span>
+          </div>
+
+          {loadingEmps ? (
+            <p style={{ fontSize:".85em", color:"var(--t3)", padding:"12px 0" }}>Cargando...</p>
+          ) : employees.length === 0 ? (
+            <p style={{ fontSize:".85em", color:"var(--t3)", padding:"12px 0" }}>
+              No hay usuarios registrados con dominio @{domain}. Los empleados aparecen aquí automáticamente cuando inician sesión por primera vez.
+            </p>
+          ) : (
+            <div style={{ overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:".85em" }}>
+                <thead>
+                  <tr style={{ borderBottom:"1px solid var(--border)", color:"var(--t3)" }}>
+                    <th style={{ textAlign:"left", padding:"6px 8px", fontWeight:500 }}>Nombre</th>
+                    <th style={{ textAlign:"left", padding:"6px 8px", fontWeight:500 }}>Email</th>
+                    <th style={{ textAlign:"left", padding:"6px 8px", fontWeight:500 }}>Rol</th>
+                    <th style={{ textAlign:"left", padding:"6px 8px", fontWeight:500 }}>Estado</th>
+                    <th style={{ textAlign:"left", padding:"6px 8px", fontWeight:500 }}>Alta</th>
+                    <th style={{ padding:"6px 8px" }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employees.map(emp => {
+                    const isSelf = emp.email === user.email;
+                    return (
+                      <tr key={emp.id} style={{ borderBottom:"1px solid var(--border)", opacity: emp.active ? 1 : 0.5 }}>
+                        <td style={{ padding:"8px 8px" }}>{emp.name || "—"}</td>
+                        <td style={{ padding:"8px 8px", color:"var(--t3)" }}>{emp.email}</td>
+                        <td style={{ padding:"8px 8px" }}>
+                          {isSelf ? (
+                            <span style={{ fontSize:".8em", padding:"2px 8px", borderRadius:4, background:"var(--blue-bg,#1e3a5f)", color:"var(--blue,#60a5fa)" }}>
+                              {emp.role}
+                            </span>
+                          ) : (
+                            <select
+                              value={emp.role}
+                              onChange={e => updateEmployeeRole(emp.id, e.target.value)}
+                              style={{ fontSize:".82em", padding:"2px 6px", borderRadius:4 }}
+                            >
+                              <option value="vendor">vendor</option>
+                              <option value="admin">admin</option>
+                            </select>
+                          )}
+                        </td>
+                        <td style={{ padding:"8px 8px" }}>
+                          <span style={{
+                            fontSize:".78em", padding:"2px 8px", borderRadius:4,
+                            background: emp.active ? "var(--green-bg,#14532d)" : "var(--red-bg,#450a0a)",
+                            color: emp.active ? "var(--green)" : "var(--red)"
+                          }}>
+                            {emp.active ? "Activo" : "Inactivo"}
+                          </span>
+                        </td>
+                        <td style={{ padding:"8px 8px", color:"var(--t4)", fontSize:".8em" }}>
+                          {new Date(emp.created_at).toLocaleDateString("es-AR")}
+                        </td>
+                        <td style={{ padding:"8px 8px" }}>
+                          {!isSelf && (
+                            <button
+                              className="btn btn-ghost btn-icon btn-sm"
+                              title={emp.active ? "Desactivar usuario" : "Activar usuario"}
+                              onClick={() => toggleEmployeeActive(emp.id, emp.active)}
+                            >
+                              <Ico n={emp.active ? "user-x" : "user-check"} s={14} c={emp.active ? "var(--red)" : "var(--green)"}/>
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <p style={{ fontSize:".75em", color:"var(--t4)", marginTop:12 }}>
+            Los empleados se registran desde el Dashboard de Supabase. Al iniciar sesión por primera vez, aparecen aquí automáticamente.
+          </p>
+        </div>
+      )}
 
       {user?.isDemo && (
         <div className="card" style={{ maxWidth:420, marginBottom:16, borderColor:"var(--amberlb)" }}>

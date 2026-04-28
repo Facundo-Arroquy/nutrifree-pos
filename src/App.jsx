@@ -55,10 +55,46 @@ import ChatWidget from "./components/ChatWidget.jsx";
 // ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
 const sessionToUser = (session) => {
   const email = session.user.email || "";
-  // El prefijo del email determina el rol: admin@... → admin, cualquier otro → vendor
   const role = email.toLowerCase().startsWith("admin") ? "admin" : "vendor";
   const name = session.user.user_metadata?.name || email.split("@")[0] || "Usuario";
   return { name, role, email, isDemo: false };
+};
+
+// Sincroniza el usuario con business_users y devuelve el user con el rol guardado en DB.
+// Si el registro no existe lo crea. Si existe, preserva el rol ya almacenado.
+// Si el usuario está inactivo devuelve null (debe ser deslogueado).
+const syncBusinessUser = async (session) => {
+  const base = sessionToUser(session);
+  const { email, name, role } = base;
+  const domain = email.split("@")[1] || "";
+  if (!domain) return base;
+
+  try {
+    // Intentar leer registro existente
+    const { data: existing } = await supabase
+      .from("business_users")
+      .select("id, role, name, active")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (existing) {
+      if (!existing.active) return null; // bloqueado
+      // Actualizar nombre en caso de cambio, preservar rol
+      await supabase.from("business_users").update({ name }).eq("id", existing.id);
+      return { ...base, role: existing.role, name: existing.name || name };
+    } else {
+      // Primer login: insertar con rol derivado del email
+      const { data: inserted } = await supabase
+        .from("business_users")
+        .insert({ email, domain, name, role })
+        .select("role, active")
+        .single();
+      if (inserted && !inserted.active) return null;
+      return base;
+    }
+  } catch (_) {
+    return base; // Si falla la sincronización, usar el usuario base
+  }
 };
 
 function AccessDenied() {
@@ -113,13 +149,30 @@ export default function App() {
 
   // ─── Supabase Auth: restaurar sesión y escuchar cambios ───────────────────
   useEffect(() => {
+    // Sincroniza en background: no bloquea la carga inicial.
+    // Establece el usuario base de inmediato y luego actualiza con el rol de DB.
+    const syncInBackground = (session) => {
+      syncBusinessUser(session).then(u => {
+        if (!u) supabase.auth.signOut();
+        else setUser(u);
+      });
+    };
+
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setUser(sessionToUser(session));
+      if (session) {
+        setUser(sessionToUser(session)); // carga inmediata
+        syncInBackground(session);       // actualiza rol en background
+      }
       setAuthLoading(false);
     });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) setUser(sessionToUser(session));
-      else setUser(prev => (prev?.isDemo ? prev : null));
+      if (session) {
+        setUser(sessionToUser(session));
+        syncInBackground(session);
+      } else {
+        setUser(prev => (prev?.isDemo ? prev : null));
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
