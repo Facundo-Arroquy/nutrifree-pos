@@ -54,9 +54,12 @@ export default function ProductionLogPage({ user, recipes, products, showToast }
   const getProductName = (recipe) =>
     products.find(p => p.id === recipe.productId)?.name || `Receta (${recipe.id.slice(0, 6)})`;
 
+  const CATEGORY = "Pastelería";
   const filteredRecipes = recipes.filter(r => {
+    const prod = products.find(p => p.id === r.productId);
+    if (!prod || prod.category?.toLowerCase() !== CATEGORY.toLowerCase()) return false;
     if (!recipeSearch) return true;
-    return getProductName(r).toLowerCase().includes(recipeSearch.toLowerCase());
+    return prod.name.toLowerCase().includes(recipeSearch.toLowerCase());
   });
 
   const toggleEmp = (id, list, setList) =>
@@ -198,7 +201,12 @@ export default function ProductionLogPage({ user, recipes, products, showToast }
 
         {/* ── Selector de receta ────────────────────────────────── */}
         <div className="card" style={{ marginBottom: 16 }}>
-          <div className="section-title">Receta</div>
+          <div className="section-title" style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <span>Receta</span>
+            <span style={{ fontWeight:400, color:"var(--t4)", fontSize:".78em", textTransform:"none", letterSpacing:0 }}>
+              Solo productos de <strong>Pastelería</strong>
+            </span>
+          </div>
 
           {selectedRecipe ? (
             <div style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--greenl)", border: "1px solid var(--greenlb)", borderRadius: 10, padding: "12px 16px" }}>
