@@ -115,6 +115,8 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [page, setPage] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState("general");
+  const [settingsExpanded, setSettingsExpanded] = useState(false);
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [sales, setSales] = useState([]);
@@ -525,6 +527,13 @@ export default function App() {
     { id:"help-admin",  label:"FAQ / Ayuda",     icon:"settings",    roles:["admin"],          section:"bottom" },
     { id:"settings",    label:"Configuración",   icon:"settings",    roles:["admin","vendor"], section:"bottom" },
   ].filter(n => user.isDemo || n.roles.includes(user.role));
+  const SETTINGS_SECTIONS = [
+    { id:"general",   label:"General",         roles:["admin","vendor"] },
+    { id:"sistema",   label:"Sistema",          roles:["admin","vendor"] },
+    { id:"empleados", label:"Empleados",        roles:["admin"] },
+    { id:"notas",     label:"Notas internas",   roles:["admin"] },
+    { id:"cuenta",    label:"Mi cuenta",        roles:["admin","vendor"] },
+  ];
   const sidebarSections = [
     { label: null,        key: "top" },
     { label: "Ventas",    key: "ventas" },
@@ -539,7 +548,7 @@ export default function App() {
     window.location.reload();
   };
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction, settingsSection, setSettingsSection };
 
   return (
     <>
@@ -561,20 +570,48 @@ export default function App() {
               return (
                 <div key={sec.key}>
                   {sec.label && <div className="sb-section">{sec.label}</div>}
-                  {items.map(n => (
-                    <button key={n.id} className={`ni${page===n.id?" active":""}`} onClick={() => {
-                      if (n.id === "reports") logAction("view", "reports", "Acceso a reportes");
-                      setPage(n.id);
-                      setSidebarOpen(false);
-                    }}>
-                      <Ico n={n.icon} s={15}/>{n.label}
-                      {n.id === "reports" && marginAlertCount > 0 && (
-                        <span style={{ marginLeft:"auto", background:"var(--red)", color:"white", borderRadius:99, minWidth:17, height:17, fontSize:".6em", fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px", flexShrink:0 }}>
-                          {marginAlertCount}
-                        </span>
-                      )}
-                    </button>
-                  ))}
+                  {items.map(n => {
+                    if (n.id === "settings") {
+                      const expanded = settingsExpanded || page === "settings";
+                      const sections = SETTINGS_SECTIONS.filter(s => user.isDemo || s.roles.includes(user.role));
+                      return (
+                        <div key="settings">
+                          <button className={`ni${page==="settings"?" active":""}`} onClick={() => {
+                            if (page !== "settings") { setPage("settings"); setSettingsSection("general"); }
+                            setSettingsExpanded(v => !v);
+                            setSidebarOpen(false);
+                          }}>
+                            <Ico n="settings" s={15}/>Configuración
+                            <span style={{ marginLeft:"auto", display:"flex", alignItems:"center", transform: expanded ? "none" : "rotate(-90deg)", transition:"transform .2s" }}>
+                              <Ico n="chevron" s={11}/>
+                            </span>
+                          </button>
+                          {expanded && sections.map(sec => (
+                            <button key={sec.id} className={`ni${page==="settings" && settingsSection===sec.id?" active":""}`}
+                              style={{ paddingLeft:32, fontSize:".82em" }}
+                              onClick={() => { setPage("settings"); setSettingsSection(sec.id); setSidebarOpen(false); }}
+                            >
+                              {sec.label}
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    }
+                    return (
+                      <button key={n.id} className={`ni${page===n.id?" active":""}`} onClick={() => {
+                        if (n.id === "reports") logAction("view", "reports", "Acceso a reportes");
+                        setPage(n.id);
+                        setSidebarOpen(false);
+                      }}>
+                        <Ico n={n.icon} s={15}/>{n.label}
+                        {n.id === "reports" && marginAlertCount > 0 && (
+                          <span style={{ marginLeft:"auto", background:"var(--red)", color:"white", borderRadius:99, minWidth:17, height:17, fontSize:".6em", fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px", flexShrink:0 }}>
+                            {marginAlertCount}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               );
             })}

@@ -1,21 +1,18 @@
 /**
- * SettingsPage — Configuración del sistema.
+ * SettingsPage — Configuración del sistema dividida en subsecciones.
  *
- * Permite:
- *  - Agregar/eliminar categorías de productos (tabla "categories" en DB)
- *  - Agregar/eliminar categorías de gastos (tabla "expense_categories" en DB)
- *  - Configurar el rango horario del recordatorio de entregas (localStorage)
- *  - Ver los usuarios del sistema con sus roles
- *  - Restaurar datos demo (solo visible en modo demo)
- *
- * Props: user, categories, setCategories, expenseCategories, setExpenseCategories,
- *        showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo
+ * Subsecciones:
+ *  - general   → Categorías de productos y gastos
+ *  - sistema   → Recordatorios, alertas, valores comerciales
+ *  - empleados → Gestión de empleados (admin only)
+ *  - notas     → Notas / Fichas internas (admin only)
+ *  - cuenta    → Cambiar contraseña
  */
 import { useState, useEffect } from "react";
 import { Ico } from "../shared.jsx";
 import { supabase } from "../supabase.js";
 
-export default function SettingsPage({ user, categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate }) {
+export default function SettingsPage({ user, categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, settingsSection = "general" }) {
   const [newCat, setNewCat] = useState("");
   const [newExpCat, setNewExpCat] = useState("");
   const [newPass, setNewPass] = useState("");
@@ -34,6 +31,7 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
   const domain = user?.email ? user.email.split("@")[1] : null;
 
   useEffect(() => {
+    if (settingsSection !== "empleados") return;
     if (!user || user.role !== "admin" || user.isDemo || !domain) return;
     setLoadingEmps(true);
     supabase
@@ -45,7 +43,7 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
         setLoadingEmps(false);
         if (!error && data) setEmployees(data);
       });
-  }, [user, domain]);
+  }, [user, domain, settingsSection]);
 
   const updateEmployeeRole = async (id, role) => {
     const { error } = await supabase.from("business_users").update({ role }).eq("id", id);
@@ -117,168 +115,244 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
     showToast("Categoría eliminada");
   };
 
+  // ─── Notas internas ───────────────────────────────────────────────────────
+  const [notes, setNotes] = useState([]);
+  const [loadingNotes, setLoadingNotes] = useState(false);
+  const [noteInvolved, setNoteInvolved] = useState("");
+  const [noteDesc, setNoteDesc] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+
+  useEffect(() => {
+    if (settingsSection !== "notas") return;
+    if (user?.role !== "admin" || user?.isDemo) return;
+    setLoadingNotes(true);
+    supabase
+      .from("internal_notes")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .then(({ data, error }) => {
+        setLoadingNotes(false);
+        if (!error && data) setNotes(data);
+      });
+  }, [user, settingsSection]);
+
+  const saveNote = async () => {
+    if (!noteDesc.trim()) { showToast("La descripción es obligatoria", "error"); return; }
+    setSavingNote(true);
+    const row = {
+      id: crypto.randomUUID(),
+      created_by: user.name || user.email,
+      involved: noteInvolved.trim() || null,
+      description: noteDesc.trim(),
+      created_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("internal_notes").insert(row);
+    setSavingNote(false);
+    if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
+    setNotes(prev => [row, ...prev]);
+    setNoteInvolved("");
+    setNoteDesc("");
+    showToast("Nota guardada ✓");
+  };
+
+  const SECTION_TITLES = {
+    general:   "General",
+    sistema:   "Sistema",
+    empleados: "Empleados",
+    notas:     "Notas internas",
+    cuenta:    "Mi cuenta",
+  };
+
   return (
     <div className="page">
       <div className="page-header">
-        <div><div className="page-title">Configuración</div></div>
+        <div>
+          <div className="page-title">
+            Configuración
+            <span style={{ fontWeight:400, color:"var(--t3)", marginLeft:8, fontSize:".75em" }}>
+              / {SECTION_TITLES[settingsSection] || "General"}
+            </span>
+          </div>
+        </div>
       </div>
 
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
-        <div className="card">
-          <div className="section-title">Categorías de productos</div>
-          {categories.map(c=>(
-            <div key={c} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
-              <span style={{ fontSize:".88em" }}>{c}</span>
-              {categories.length>1 && (
-                <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>delCat(c)}>
-                  <Ico n="x" s={12} c="var(--red)"/>
-                </button>
-              )}
+      {/* ── GENERAL ─────────────────────────────────────────────────── */}
+      {settingsSection === "general" && (
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+          <div className="card">
+            <div className="section-title">Categorías de productos</div>
+            {categories.map(c=>(
+              <div key={c} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
+                <span style={{ fontSize:".88em" }}>{c}</span>
+                {categories.length>1 && (
+                  <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>delCat(c)}>
+                    <Ico n="x" s={12} c="var(--red)"/>
+                  </button>
+                )}
+              </div>
+            ))}
+            <div style={{ display:"flex", gap:8, marginTop:12 }}>
+              <input value={newCat} onChange={e=>setNewCat(e.target.value)} placeholder="Nueva categoría..."
+                onKeyDown={e=>{ if(e.key==="Enter") addCat(); }}/>
+              <button className="btn btn-primary btn-sm" disabled={!newCat||categories.includes(newCat)} onClick={addCat}>
+                <Ico n="plus" s={13}/>
+              </button>
             </div>
-          ))}
-          <div style={{ display:"flex", gap:8, marginTop:12 }}>
-            <input value={newCat} onChange={e=>setNewCat(e.target.value)} placeholder="Nueva categoría..."
-              onKeyDown={e=>{ if(e.key==="Enter") addCat(); }}/>
-            <button className="btn btn-primary btn-sm" disabled={!newCat||categories.includes(newCat)} onClick={addCat}>
-              <Ico n="plus" s={13}/>
-            </button>
           </div>
-        </div>
 
-        <div className="card">
-          <div className="section-title">Categorías de gastos</div>
-          {expenseCategories.map(c=>(
-            <div key={c} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
-              <span style={{ fontSize:".88em" }}>{c}</span>
-              {expenseCategories.length>1 && (
-                <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>delExpCat(c)}>
-                  <Ico n="x" s={12} c="var(--red)"/>
-                </button>
-              )}
+          <div className="card">
+            <div className="section-title">Categorías de gastos</div>
+            {expenseCategories.map(c=>(
+              <div key={c} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
+                <span style={{ fontSize:".88em" }}>{c}</span>
+                {expenseCategories.length>1 && (
+                  <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>delExpCat(c)}>
+                    <Ico n="x" s={12} c="var(--red)"/>
+                  </button>
+                )}
+              </div>
+            ))}
+            <div style={{ display:"flex", gap:8, marginTop:12 }}>
+              <input value={newExpCat} onChange={e=>setNewExpCat(e.target.value)} placeholder="Nueva categoría..."
+                onKeyDown={e=>{ if(e.key==="Enter") addExpCat(); }}/>
+              <button className="btn btn-primary btn-sm" disabled={!newExpCat||expenseCategories.includes(newExpCat)} onClick={addExpCat}>
+                <Ico n="plus" s={13}/>
+              </button>
             </div>
-          ))}
-          <div style={{ display:"flex", gap:8, marginTop:12 }}>
-            <input value={newExpCat} onChange={e=>setNewExpCat(e.target.value)} placeholder="Nueva categoría..."
-              onKeyDown={e=>{ if(e.key==="Enter") addExpCat(); }}/>
-            <button className="btn btn-primary btn-sm" disabled={!newExpCat||expenseCategories.includes(newExpCat)} onClick={addExpCat}>
-              <Ico n="plus" s={13}/>
-            </button>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="card" style={{ maxWidth:420, marginBottom:16 }}>
-        <div className="section-title">Sistema</div>
-        <div style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
-          Horario en que aparecen los recordatorios al iniciar sesión: entregas pendientes del día y menú del día.
-        </div>
-        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16, flexWrap:"wrap" }}>
-          <div className="form-group" style={{ flex:1, minWidth:120 }}>
-            <label className="lbl">Desde</label>
-            <input type="time" value={rStart} onChange={e => setRStart(e.target.value)}/>
+      {/* ── SISTEMA ─────────────────────────────────────────────────── */}
+      {settingsSection === "sistema" && (
+        <>
+          <div className="card" style={{ maxWidth:420, marginBottom:16 }}>
+            <div className="section-title">Recordatorios</div>
+            <div style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
+              Horario en que aparecen los recordatorios al iniciar sesión: entregas pendientes del día y menú del día.
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16, flexWrap:"wrap" }}>
+              <div className="form-group" style={{ flex:1, minWidth:120 }}>
+                <label className="lbl">Desde</label>
+                <input type="time" value={rStart} onChange={e => setRStart(e.target.value)}/>
+              </div>
+              <div className="form-group" style={{ flex:1, minWidth:120 }}>
+                <label className="lbl">Hasta</label>
+                <input type="time" value={rEnd} onChange={e => setREnd(e.target.value)}/>
+              </div>
+              <button className="btn btn-primary btn-sm" style={{ alignSelf:"flex-end", marginBottom:1 }} onClick={saveReminderRange}>
+                <Ico n="check" s={13}/> Guardar
+              </button>
+            </div>
+            <p style={{ fontSize:".76em", color:"var(--t4)" }}>
+              Valor actual: <strong>{reminderStart}</strong> – <strong>{reminderEnd}</strong>
+            </p>
+            <div style={{ borderTop:"1px solid var(--border)", marginTop:14, paddingTop:14 }}>
+              <div style={{ fontSize:".84em", color:"var(--t3)", marginBottom:10 }}>
+                Reiniciar el recordatorio del menú del día para que vuelva a aparecer al iniciar sesión, sin borrar el menú ya cargado.
+              </div>
+              <button className="btn btn-secondary btn-sm" onClick={() => {
+                localStorage.removeItem("menuSavedDate");
+                showToast("Recordatorio de menú reiniciado ✓");
+              }}>
+                ↺ Reiniciar recordatorio de menú
+              </button>
+            </div>
           </div>
-          <div className="form-group" style={{ flex:1, minWidth:120 }}>
-            <label className="lbl">Hasta</label>
-            <input type="time" value={rEnd} onChange={e => setREnd(e.target.value)}/>
-          </div>
-          <button className="btn btn-primary btn-sm" style={{ alignSelf:"flex-end", marginBottom:1 }} onClick={saveReminderRange}>
-            <Ico n="check" s={13}/> Guardar
-          </button>
-        </div>
-        <p style={{ fontSize:".76em", color:"var(--t4)" }}>
-          Valor actual: <strong>{reminderStart}</strong> – <strong>{reminderEnd}</strong>
-        </p>
-        <div style={{ borderTop:"1px solid var(--border)", marginTop:14, paddingTop:14 }}>
-          <div style={{ fontSize:".84em", color:"var(--t3)", marginBottom:10 }}>
-            Reiniciar el recordatorio del menú del día para que vuelva a aparecer al iniciar sesión, sin borrar el menú ya cargado.
-          </div>
-          <button className="btn btn-secondary btn-sm" onClick={() => {
-            localStorage.removeItem("menuSavedDate");
-            showToast("Recordatorio de menú reiniciado ✓");
-          }}>
-            ↺ Reiniciar recordatorio de menú
-          </button>
-        </div>
-      </div>
 
-      <div className="card" style={{ maxWidth:420, marginBottom:16 }}>
-        <div className="section-title">Alerta de cuenta corriente</div>
-        <div style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
-          Se mostrará una alerta en el Dashboard cuando un cliente tenga saldo negativo mayor a este monto. Ingresá 0 para desactivar la alerta.
-        </div>
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <div className="form-group" style={{ flex:1, marginBottom:0 }}>
-            <label className="lbl">Monto límite ($)</label>
-            <input
-              type="text" inputMode="numeric"
-              value={balThreshold}
-              onChange={e => setBalThreshold(e.target.value.replace(/[^0-9]/g, ""))}
-              placeholder="Ej: 100000"
-            />
+          <div className="card" style={{ maxWidth:420, marginBottom:16 }}>
+            <div className="section-title">Alerta de cuenta corriente</div>
+            <div style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
+              Se mostrará una alerta en el Dashboard cuando un cliente tenga saldo negativo mayor a este monto. Ingresá 0 para desactivar la alerta.
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <div className="form-group" style={{ flex:1, marginBottom:0 }}>
+                <label className="lbl">Monto límite ($)</label>
+                <input
+                  type="text" inputMode="numeric"
+                  value={balThreshold}
+                  onChange={e => setBalThreshold(e.target.value.replace(/[^0-9]/g, ""))}
+                  placeholder="Ej: 100000"
+                />
+              </div>
+              <button className="btn btn-primary btn-sm" style={{ alignSelf:"flex-end", marginBottom:1 }} onClick={async () => {
+                const v = Math.max(0, Number(balThreshold) || 0);
+                const { error } = await supabase.from("app_settings")
+                  .upsert({ key: "balance_alert_threshold", value: String(v) }, { onConflict: "key" });
+                if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
+                setAlertBalanceThreshold(v);
+                showToast("Límite de alerta guardado ✓");
+              }}>
+                <Ico n="check" s={13}/> Guardar
+              </button>
+            </div>
+            {alertBalanceThreshold > 0
+              ? <p style={{ fontSize:".76em", color:"var(--t4)", marginTop:8 }}>Activa: alerta cuando deuda supere <strong>${alertBalanceThreshold.toLocaleString("es-AR")}</strong></p>
+              : <p style={{ fontSize:".76em", color:"var(--t4)", marginTop:8 }}>Desactivada (monto en 0)</p>
+            }
           </div>
-          <button className="btn btn-primary btn-sm" style={{ alignSelf:"flex-end", marginBottom:1 }} onClick={async () => {
-            const v = Math.max(0, Number(balThreshold) || 0);
-            const { error } = await supabase.from("app_settings")
-              .upsert({ key: "balance_alert_threshold", value: String(v) }, { onConflict: "key" });
-            if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
-            setAlertBalanceThreshold(v);
-            showToast("Límite de alerta guardado ✓");
-          }}>
-            <Ico n="check" s={13}/> Guardar
-          </button>
-        </div>
-        {alertBalanceThreshold > 0
-          ? <p style={{ fontSize:".76em", color:"var(--t4)", marginTop:8 }}>Activa: alerta cuando deuda supere <strong>${alertBalanceThreshold.toLocaleString("es-AR")}</strong></p>
-          : <p style={{ fontSize:".76em", color:"var(--t4)", marginTop:8 }}>Desactivada (monto en 0)</p>
-        }
-      </div>
 
-      <div className="card" style={{ maxWidth:420, marginBottom:16 }}>
-        <div className="section-title">Valores comerciales</div>
-        <div style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
-          Descuento para productos freezados y porcentaje de IVA aplicado en gastos de ingredientes.
-        </div>
-        <div style={{ display:"flex", alignItems:"flex-end", gap:10, marginBottom:12, flexWrap:"wrap" }}>
-          <div className="form-group" style={{ flex:1, minWidth:120, marginBottom:0 }}>
-            <label className="lbl">Descuento freezadas (%)</label>
-            <input
-              type="text" inputMode="numeric"
-              value={frozenInput}
-              onChange={e => setFrozenInput(e.target.value.replace(/[^0-9]/g, ""))}
-              placeholder="Ej: 15"
-            />
+          <div className="card" style={{ maxWidth:420, marginBottom:16 }}>
+            <div className="section-title">Valores comerciales</div>
+            <div style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
+              Descuento para productos freezados y porcentaje de IVA aplicado en gastos de ingredientes.
+            </div>
+            <div style={{ display:"flex", alignItems:"flex-end", gap:10, marginBottom:12, flexWrap:"wrap" }}>
+              <div className="form-group" style={{ flex:1, minWidth:120, marginBottom:0 }}>
+                <label className="lbl">Descuento freezadas (%)</label>
+                <input
+                  type="text" inputMode="numeric"
+                  value={frozenInput}
+                  onChange={e => setFrozenInput(e.target.value.replace(/[^0-9]/g, ""))}
+                  placeholder="Ej: 15"
+                />
+              </div>
+              <div className="form-group" style={{ flex:1, minWidth:120, marginBottom:0 }}>
+                <label className="lbl">IVA (%)</label>
+                <input
+                  type="text" inputMode="numeric"
+                  value={vatInput}
+                  onChange={e => setVatInput(e.target.value.replace(/[^0-9]/g, ""))}
+                  placeholder="Ej: 21"
+                />
+              </div>
+              <button className="btn btn-primary btn-sm" style={{ marginBottom:1 }} onClick={async () => {
+                const frozen = Math.max(0, Math.min(100, Number(frozenInput) || 0));
+                const vat    = Math.max(0, Number(vatInput) || 0);
+                const { error: e1 } = await supabase.from("app_settings")
+                  .upsert({ key: "frozen_discount", value: String(frozen) }, { onConflict: "key" });
+                const { error: e2 } = await supabase.from("app_settings")
+                  .upsert({ key: "vat_rate", value: String(vat) }, { onConflict: "key" });
+                if (e1 || e2) { showToast("Error al guardar: " + (e1||e2).message, "error"); return; }
+                setFrozenDiscount(frozen);
+                setVatRate(vat);
+                showToast("Valores guardados ✓");
+              }}>
+                <Ico n="check" s={13}/> Guardar
+              </button>
+            </div>
+            <p style={{ fontSize:".76em", color:"var(--t4)" }}>
+              Freezadas: <strong>-{frozenDiscount}%</strong> · IVA: <strong>+{vatRate}%</strong>
+            </p>
           </div>
-          <div className="form-group" style={{ flex:1, minWidth:120, marginBottom:0 }}>
-            <label className="lbl">IVA (%)</label>
-            <input
-              type="text" inputMode="numeric"
-              value={vatInput}
-              onChange={e => setVatInput(e.target.value.replace(/[^0-9]/g, ""))}
-              placeholder="Ej: 21"
-            />
-          </div>
-          <button className="btn btn-primary btn-sm" style={{ marginBottom:1 }} onClick={async () => {
-            const frozen = Math.max(0, Math.min(100, Number(frozenInput) || 0));
-            const vat    = Math.max(0, Number(vatInput) || 0);
-            const { error: e1 } = await supabase.from("app_settings")
-              .upsert({ key: "frozen_discount", value: String(frozen) }, { onConflict: "key" });
-            const { error: e2 } = await supabase.from("app_settings")
-              .upsert({ key: "vat_rate", value: String(vat) }, { onConflict: "key" });
-            if (e1 || e2) { showToast("Error al guardar: " + (e1||e2).message, "error"); return; }
-            setFrozenDiscount(frozen);
-            setVatRate(vat);
-            showToast("Valores guardados ✓");
-          }}>
-            <Ico n="check" s={13}/> Guardar
-          </button>
-        </div>
-        <p style={{ fontSize:".76em", color:"var(--t4)" }}>
-          Freezadas: <strong>-{frozenDiscount}%</strong> · IVA: <strong>+{vatRate}%</strong>
-        </p>
-      </div>
 
-      {user?.role === "admin" && !user?.isDemo && (
-        <div className="card" style={{ marginBottom:16 }}>
+          {user?.isDemo && (
+            <div className="card" style={{ maxWidth:420, borderColor:"var(--amberlb)" }}>
+              <div className="section-title">🧪 Entorno Demo</div>
+              <p style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
+                Restaura todos los datos de demostración a su estado inicial.
+              </p>
+              <button className="btn btn-amber btn-sm" onClick={resetDemo}>
+                ↺ Restaurar datos de demo
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── EMPLEADOS ───────────────────────────────────────────────── */}
+      {settingsSection === "empleados" && user?.role === "admin" && (
+        <div className="card">
           <div className="section-title" style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <span>Empleados del negocio</span>
             <span style={{ fontSize:".78em", fontWeight:400, color:"var(--t3)" }}>
@@ -287,7 +361,9 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
             </span>
           </div>
 
-          {loadingEmps ? (
+          {user?.isDemo ? (
+            <p style={{ fontSize:".85em", color:"var(--t3)", padding:"12px 0" }}>No disponible en modo demo.</p>
+          ) : loadingEmps ? (
             <p style={{ fontSize:".85em", color:"var(--t3)", padding:"12px 0" }}>Cargando...</p>
           ) : employees.length === 0 ? (
             <p style={{ fontSize:".85em", color:"var(--t3)", padding:"12px 0" }}>
@@ -366,20 +442,84 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
         </div>
       )}
 
-      {user?.isDemo && (
-        <div className="card" style={{ maxWidth:420, marginBottom:16, borderColor:"var(--amberlb)" }}>
-          <div className="section-title">🧪 Entorno Demo</div>
-          <p style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
-            Restaura todos los datos de demostración a su estado inicial. Las ventas, pedidos, gastos y
-            movimientos registrados en demo se eliminarán y se reemplazarán por los datos de muestra originales.
-          </p>
-          <button className="btn btn-amber btn-sm" onClick={resetDemo}>
-            ↺ Restaurar datos de demo
-          </button>
+      {/* ── NOTAS INTERNAS ──────────────────────────────────────────── */}
+      {settingsSection === "notas" && user?.role === "admin" && (
+        <div className="card">
+          <div className="section-title" style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <Ico n="settings" s={14} c="var(--t3)"/>
+            Notas / Fichas internas
+            <span style={{ marginLeft:"auto", fontSize:".75em", fontWeight:400, color:"var(--t4)" }}>
+              Solo visible para administradores
+            </span>
+          </div>
+
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+            <div className="form-group" style={{ marginBottom:0 }}>
+              <label className="lbl">Cargado por</label>
+              <input value={user.name || user.email} disabled style={{ opacity:.6, cursor:"not-allowed" }}/>
+            </div>
+            <div className="form-group" style={{ marginBottom:0 }}>
+              <label className="lbl">Involucrado/a</label>
+              <input
+                value={noteInvolved}
+                onChange={e => setNoteInvolved(e.target.value)}
+                placeholder="Nombre del empleado o cliente..."
+              />
+            </div>
+          </div>
+          <div className="form-group" style={{ marginBottom:10 }}>
+            <label className="lbl">Descripción del caso <span style={{ color:"var(--red)" }}>*</span></label>
+            <textarea
+              value={noteDesc}
+              onChange={e => setNoteDesc(e.target.value)}
+              placeholder="Describí el caso o situación..."
+              rows={3}
+              style={{ resize:"vertical", minHeight:72 }}
+              onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) saveNote(); }}
+            />
+          </div>
+          <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:20 }}>
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={!noteDesc.trim() || savingNote}
+              onClick={saveNote}
+            >
+              <Ico n="plus" s={13}/> {savingNote ? "Guardando..." : "Guardar nota"}
+            </button>
+          </div>
+
+          {loadingNotes ? (
+            <p style={{ fontSize:".85em", color:"var(--t3)" }}>Cargando notas...</p>
+          ) : notes.length === 0 ? (
+            <p style={{ fontSize:".85em", color:"var(--t4)", fontStyle:"italic" }}>No hay notas registradas aún.</p>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {notes.map(n => (
+                <div key={n.id} style={{ border:"1px solid var(--border)", borderRadius:8, padding:"10px 14px", background:"var(--s1)" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6, flexWrap:"wrap" }}>
+                    <span style={{ fontSize:".78em", fontWeight:600, color:"var(--t2)" }}>{n.created_by}</span>
+                    {n.involved && (
+                      <>
+                        <span style={{ fontSize:".75em", color:"var(--t4)" }}>·</span>
+                        <span style={{ fontSize:".78em", color:"var(--t3)" }}>
+                          Involucrado/a: <strong>{n.involved}</strong>
+                        </span>
+                      </>
+                    )}
+                    <span style={{ marginLeft:"auto", fontSize:".74em", color:"var(--t4)", whiteSpace:"nowrap" }}>
+                      {new Date(n.created_at).toLocaleString("es-AR", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" })}
+                    </span>
+                  </div>
+                  <p style={{ fontSize:".84em", color:"var(--t2)", margin:0, whiteSpace:"pre-wrap", lineHeight:1.5 }}>{n.description}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {!user?.isDemo && (
+      {/* ── MI CUENTA ───────────────────────────────────────────────── */}
+      {settingsSection === "cuenta" && !user?.isDemo && (
         <div className="card" style={{ maxWidth:420 }}>
           <div className="section-title">Cambiar contraseña</div>
           <p style={{ fontSize:".82em", color:"var(--t3)", marginBottom:14 }}>
@@ -401,6 +541,13 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
           <button className="btn btn-primary btn-sm" onClick={changePassword} disabled={changingPass || !newPass || !newPassConfirm}>
             {changingPass ? "Guardando..." : "Actualizar contraseña"}
           </button>
+        </div>
+      )}
+
+      {settingsSection === "cuenta" && user?.isDemo && (
+        <div className="card" style={{ maxWidth:420 }}>
+          <div className="section-title">Mi cuenta</div>
+          <p style={{ fontSize:".84em", color:"var(--t3)" }}>No disponible en modo demo.</p>
         </div>
       )}
     </div>
