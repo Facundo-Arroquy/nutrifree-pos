@@ -18,7 +18,7 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
   const [selected, setSelected] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const statuses = ["all","open","ready","delivered","closed","cancelled"];
+  const statuses = ["all","open","preparing","ready","delivered","closed","cancelled"];
 
   const isPendingPayment = (s) => {
     if (s.status === "cancelled") return false;

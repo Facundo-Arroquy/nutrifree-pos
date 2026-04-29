@@ -52,6 +52,7 @@ import ImportPage from "./pages/ImportPage.jsx";
 import HelpAdminPage from "./pages/HelpAdminPage.jsx";
 import ProductionLogPage from "./pages/ProductionLogPage.jsx";
 import HoursBankPage from "./pages/HoursBankPage.jsx";
+import OrdersKanbanPage from "./pages/OrdersKanbanPage.jsx";
 import ChatWidget from "./components/ChatWidget.jsx";
 
 // ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
@@ -513,8 +514,9 @@ export default function App() {
 
   const nav = [
     { id:"dashboard",   label:"Dashboard",      icon:"dashboard",   roles:["admin","vendor"], section:"top" },
-    { id:"pos",         label:"Caja / POS",      icon:"pos",         roles:["admin","vendor"], section:"ventas" },
-    { id:"orders",      label:"Pedidos",         icon:"orders",      roles:["admin","vendor"], section:"ventas" },
+    { id:"pos",         label:"Ventas en Mostrador", icon:"pos",      roles:["admin","vendor"], section:"ventas" },
+    { id:"orders-kanban", label:"Calendario de Pedidos", icon:"orders", roles:["admin","vendor"], section:"ventas" },
+  { id:"orders",      label:"Pedidos",         icon:"orders",      roles:["admin","vendor"], section:"ventas" },
     { id:"billing",     label:"Facturación",     icon:"billing",     roles:["admin","vendor"], section:"ventas" },
     { id:"customers",   label:"Clientes",        icon:"customers",   roles:["admin","vendor"], section:"ventas" },
     { id:"products",    label:"Productos",       icon:"products",    roles:["admin","vendor"], section:"productos" },
@@ -672,6 +674,7 @@ export default function App() {
           <div style={{ flex:1, overflow:"hidden" }}>
             {page==="dashboard" && <DashboardPage {...props}/>}
             {page==="pos" && <POSPage {...props}/>}
+            {page==="orders-kanban" && <OrdersKanbanPage {...props}/>}
             {page==="orders" && <OrdersPage {...props}/>}
             {page==="billing" && <BillingPage {...props}/>}
             {page==="cash" && <CashShiftPage {...props}/>}

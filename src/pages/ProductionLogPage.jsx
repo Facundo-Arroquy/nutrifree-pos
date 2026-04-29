@@ -48,7 +48,6 @@ export default function ProductionLogPage({ user, recipes, products, setProducts
     supabase
       .from("business_users")
       .select("id, name, email, active")
-      .eq("active", true)
       .order("name")
       .then(({ data }) => {
         setLoadingEmps(false);
@@ -204,7 +203,7 @@ export default function ProductionLogPage({ user, recipes, products, setProducts
       {loadingEmps ? (
         <p style={{ fontSize: ".85em", color: "var(--t3)" }}>Cargando empleados...</p>
       ) : employees.length === 0 ? (
-        <p style={{ fontSize: ".85em", color: "var(--t4)" }}>No hay empleados activos registrados.</p>
+        <p style={{ fontSize: ".85em", color: "var(--t4)" }}>No hay empleados registrados.</p>
       ) : (
         employees.map(emp => {
           const checked = selected.includes(emp.id);
