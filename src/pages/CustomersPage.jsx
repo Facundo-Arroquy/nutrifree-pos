@@ -70,7 +70,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
 
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState(null); // null | "new" | customer
-  const [form, setForm] = useState({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0, discountPct:0, email:"", cuit:"" });
+  const [form, setForm] = useState({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0, discountPct:0, email:"", cuit:"", defaultBilling:false });
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
   const [payModal, setPayModal] = useState(null); // customer object
   const [payForm, setPayForm] = useState({ amount:"", paymentMethod:"cash", notes:"" });
@@ -131,7 +131,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
   }, 0);
   const debtorsCount = customers.filter(c => custBal(c.id) < 0).length;
 
-  const openNew = () => { setForm({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0, discountPct:0, email:"", cuit:"" }); setExpandedSaleId(null); setModal("new"); };
+  const openNew = () => { setForm({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0, discountPct:0, email:"", cuit:"", defaultBilling:false }); setExpandedSaleId(null); setModal("new"); };
   const openEdit = c => { setForm({...c}); setExpandedSaleId(null); setModal(c); };
 
   const save = async () => {
@@ -333,6 +333,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
             <SortableTh col="phone" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Teléfono</SortableTh>
             <SortableTh col="priceList" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Lista</SortableTh>
             <SortableTh col="discountPct" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Descuento</SortableTh>
+            <th>Factura</th>
             <SortableTh col="balance" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Saldo</SortableTh>
             <th>Notas</th><th></th>
           </tr></thead>
@@ -355,6 +356,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
                     <td data-label="Teléfono" style={{ color:"var(--t2)" }}>{c.phone||"—"}</td>
                     <td data-label="Lista"><span className={`badge ${c.priceList==="wholesale"?"badge-blue":"badge-green"}`}>{c.priceList==="wholesale"?"Mayorista":"Minorista"}</span></td>
                     <td data-label="Descuento">{(c.discountPct||0)>0 ? <span className="badge badge-amber">{c.discountPct}%</span> : <span style={{color:"var(--t4)"}}>—</span>}</td>
+                    <td data-label="Factura">{c.defaultBilling ? <span className="badge badge-green" title="Facturación activa por defecto">🧾 Sí</span> : <span style={{color:"var(--t4)"}}>—</span>}</td>
                     <td data-label="Saldo">{(() => { const b = custBal(c.id); return <span className={b>0?"balance-pos":b<0?"balance-neg":"balance-zero"}>{$(b)}</span>; })()}</td>
                     <td data-label="Notas" style={{ color:"var(--t3)", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.notes||"—"}</td>
                     <td data-label="" style={{ whiteSpace:"nowrap" }}>
@@ -553,6 +555,23 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
             <div className="form-group full"><label className="lbl">Dirección</label><input value={form.address} onChange={e=>set("address",e.target.value)}/></div>
             <div className="form-group"><label className="lbl">Saldo inicial ($)</label><input type="number" value={form.balance} onChange={e=>set("balance",e.target.value)}/></div>
             <div className="form-group"><label className="lbl">Descuento por defecto (%)</label><input type="number" min="0" max="100" value={form.discountPct||0} onChange={e=>set("discountPct",e.target.value)}/></div>
+            <div className="form-group">
+              <label className="lbl">Facturación por defecto</label>
+              <button type="button"
+                onClick={()=>set("defaultBilling",!form.defaultBilling)}
+                style={{
+                  display:"flex", alignItems:"center", justifyContent:"space-between",
+                  padding:"8px 12px", borderRadius:7, cursor:"pointer",
+                  fontWeight:600, fontSize:".86em", width:"100%",
+                  border:`1.5px solid ${form.defaultBilling?"var(--green)":"var(--border)"}`,
+                  background: form.defaultBilling?"var(--greenl)":"var(--s1)",
+                  color: form.defaultBilling?"var(--green)":"var(--t3)",
+                  transition:"all .15s",
+                }}>
+                <span>🧾 Generar factura siempre</span>
+                <span style={{ fontSize:".82em", fontWeight:700 }}>{form.defaultBilling?"Sí":"No"}</span>
+              </button>
+            </div>
             <div className="form-group full"><label className="lbl">Notas</label><textarea value={form.notes} onChange={e=>set("notes",e.target.value)}/></div>
           </div>
           {modal!=="new" && (

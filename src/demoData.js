@@ -41,10 +41,10 @@ export const DEMO_SEED = {
     { id:"dp8", name:"Envio Extra",            category:"Servicios", price_retail:1200, price_wholesale:900,  unit:"unit", stock:999, active:true, photo:null, description:"Envío a zona extendida",             kit_items:[] },
   ],
   customers: [
-    { id:"dc1", name:"Ana Rodríguez",       phone:"11-2345-6789", address:"Av. Santa Fe 1234", notes:"Sin TACC estricto", price_list:"retail",    balance:4200, discount_pct:0 },
-    { id:"dc2", name:"Comedor La Estrella", phone:"11-5678-9012", address:"Av. Belgrano 456",  notes:"Pedido fijo lunes", price_list:"wholesale", balance:18700, discount_pct:5 },
-    { id:"dc3", name:"Marcos Pérez",        phone:"11-9876-5432", address:"Av. Córdoba 789",   notes:"Prefiere efectivo", price_list:"retail",    balance:0, discount_pct:0 },
-    { id:"dc4", name:"Panadería El Sol",    phone:"11-4444-5555", address:"Calle Mitre 321",   notes:"Mayorista fijo",    price_list:"wholesale", balance:9500, discount_pct:10 },
+    { id:"dc1", name:"Ana Rodríguez",       phone:"11-2345-6789", address:"Av. Santa Fe 1234", notes:"Sin TACC estricto", price_list:"retail",    balance:4200, discount_pct:0,  default_billing:false },
+    { id:"dc2", name:"Comedor La Estrella", phone:"11-5678-9012", address:"Av. Belgrano 456",  notes:"Pedido fijo lunes", price_list:"wholesale", balance:18700, discount_pct:5,  default_billing:true  },
+    { id:"dc3", name:"Marcos Pérez",        phone:"11-9876-5432", address:"Av. Córdoba 789",   notes:"Prefiere efectivo", price_list:"retail",    balance:0,     discount_pct:0,  default_billing:false },
+    { id:"dc4", name:"Panadería El Sol",    phone:"11-4444-5555", address:"Calle Mitre 321",   notes:"Mayorista fijo",    price_list:"wholesale", balance:9500,  discount_pct:10, default_billing:true  },
   ],
   ingredients: [
     { id:"di1", name:"Ternera (nalga)",    category:"Carnes",     unit:"g",    stock:5000, stock_min:500, unit_cost:5.5,  supplier:"Carnicería Don Juan", notes:"" },

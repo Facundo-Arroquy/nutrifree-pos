@@ -3,7 +3,7 @@
 | Tabla (nombre en DB)   | Traducción           | Contenido                                                                                                      |
 |------------------------|----------------------|----------------------------------------------------------------------------------------------------------------|
 | `products`             | Productos            | Nombre, categoría, precios (minorista/mayorista), unidad, stock, activo, foto, descripción, ítems de kit.     |
-| `customers`            | Clientes             | Nombre, teléfono, dirección, notas, lista de precios, saldo en cuenta corriente, descuento, email, CUIT.      |
+| `customers`            | Clientes             | Nombre, teléfono, dirección, notas, lista de precios, saldo en cuenta corriente, descuento, email, CUIT, `default_billing` (boolean — activa facturación automáticamente en el POS al seleccionar el cliente). |
 | `sales`                | Ventas / Pedidos     | Cliente, ítems comprados, total, método de pago, estado del pedido, descuento, fecha de entrega, facturación. |
 | `recipes`              | Recetas              | Producto asociado, tiempos de preparación y cocción, rendimiento, pasos (JSONB), margen mínimo, notas.        |
 | `recipe_ingredients`   | Ingredientes de receta | Relación receta ↔ ingrediente con cantidad, unidad y costo unitario.                                        |

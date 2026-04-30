@@ -58,6 +58,7 @@ export const dbToCustomer = r => ({
   notes: r.notes, priceList: r.price_list, balance: r.balance,
   discountPct: r.discount_pct || 0,
   email: r.email || "", cuit: r.cuit || "",
+  defaultBilling: r.default_billing || false,
 });
 
 export const customerToDb = c => ({
@@ -65,6 +66,7 @@ export const customerToDb = c => ({
   notes: c.notes, price_list: c.priceList, balance: c.balance,
   discount_pct: Number(c.discountPct) || 0,
   email: c.email || "", cuit: c.cuit || "",
+  default_billing: c.defaultBilling || false,
 });
 
 export const dbToSale = r => ({
