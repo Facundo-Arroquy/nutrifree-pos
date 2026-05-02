@@ -281,6 +281,9 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
   // ── Sorting tabla de rentabilidad ────────────────────────────────────────────
   const { sortBy: profitSortBy, sortDir: profitSortDir, toggleSort: profitToggleSort } = useSortable("totalProfit", "desc");
 
+  // ── Sorting tabla de gastos ───────────────────────────────────────────────────
+  const { sortBy: expSortBy, sortDir: expSortDir, toggleSort: expToggleSort } = useSortable("date", "desc");
+
   // ── Tendencia ────────────────────────────────────────────────────────────────
   const [trendMode, setTrendMode] = useState("daily");
   const [filterExpCat, setFilterExpCat] = useState("Todos");
@@ -350,6 +353,34 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
   const filteredPExpenses = filterExpCat === "Todos"
     ? pExpenses
     : pExpenses.filter(e => (e.category || "Otros") === filterExpCat);
+
+  const sortedExpenses = [...filteredPExpenses].sort((a, b) => {
+    let av, bv;
+    if      (expSortBy === "date")          { av = a.date ?? ""; bv = b.date ?? ""; }
+    else if (expSortBy === "concept")       { av = a.concept ?? ""; bv = b.concept ?? ""; }
+    else if (expSortBy === "supplier")      { av = a.supplier ?? ""; bv = b.supplier ?? ""; }
+    else if (expSortBy === "category")      { av = a.category ?? ""; bv = b.category ?? ""; }
+    else if (expSortBy === "paymentMethod") { av = a.paymentMethod ?? ""; bv = b.paymentMethod ?? ""; }
+    else if (expSortBy === "paymentStatus") { av = a.paymentStatus ?? ""; bv = b.paymentStatus ?? ""; }
+    else if (expSortBy === "total")         { av = a.total ?? 0; bv = b.total ?? 0; }
+    else                                    { av = a.date ?? ""; bv = b.date ?? ""; }
+    const v = typeof av === "string" ? av.localeCompare(bv, undefined, { sensitivity:"base" }) : (av - bv);
+    return expSortDir === "asc" ? v : -v;
+  });
+
+  const exportExpensesExcel = () => {
+    const headers = ["Fecha","Concepto","Proveedor","Categoría","Método de pago","Estado","Total"];
+    const rows = sortedExpenses.map(e => [
+      e.date,
+      e.concept || "",
+      e.supplier || "",
+      e.category || "",
+      PAY_LABELS[e.paymentMethod] || e.paymentMethod || "-",
+      e.paymentStatus === "paid" ? "Pagado" : "Pendiente",
+      e.total,
+    ]);
+    exportXlsx(headers, rows, `gastos-${from}-${to}${filterExpCat !== "Todos" ? `-${filterExpCat}` : ""}`);
+  };
 
   const totalExpenses   = filteredPExpenses.filter(e=>e.paymentStatus==="paid").reduce((a,b)=>a+b.total,0);
   const pendingExpenses = filteredPExpenses.filter(e=>e.paymentStatus==="pending").reduce((a,b)=>a+b.total,0);
@@ -566,6 +597,70 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ── DETALLE DE GASTOS ──────────────────────────────────────────────── */}
+      <div className="card" style={{ marginBottom:16 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+          <div>
+            <div className="section-title" style={{ marginBottom:2 }}>Detalle de gastos</div>
+            <div style={{ fontSize:".75em", color:"var(--t4)" }}>
+              {filterExpCat !== "Todos" ? `Categoría: ${filterExpCat} · ` : ""}
+              {filteredPExpenses.length} registro{filteredPExpenses.length !== 1 ? "s" : ""}
+            </div>
+          </div>
+          {filteredPExpenses.length > 0 && (
+            <button className="btn btn-secondary btn-sm" onClick={exportExpensesExcel}>↓ Excel</button>
+          )}
+        </div>
+        {filteredPExpenses.length === 0
+          ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin gastos en el período{filterExpCat !== "Todos" ? ` para "${filterExpCat}"` : ""}</div>
+          : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <SortableTh col="date" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Fecha</SortableTh>
+                    <SortableTh col="concept" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Concepto</SortableTh>
+                    <SortableTh col="supplier" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Proveedor</SortableTh>
+                    <SortableTh col="category" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Categoría</SortableTh>
+                    <SortableTh col="paymentMethod" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Método</SortableTh>
+                    <SortableTh col="paymentStatus" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Estado</SortableTh>
+                    <SortableTh col="total" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort} align="right">Total</SortableTh>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedExpenses.map(e => (
+                    <tr key={e.id}>
+                      <td style={{ fontSize:".84em", whiteSpace:"nowrap" }}>{fmtDate(e.date)}</td>
+                      <td style={{ fontSize:".86em", fontWeight:500 }}>{e.concept || "—"}</td>
+                      <td style={{ fontSize:".84em", color:"var(--t3)" }}>{e.supplier || "—"}</td>
+                      <td><span className="badge badge-blue" style={{ fontSize:".74em" }}>{e.category || "Otros"}</span></td>
+                      <td style={{ fontSize:".82em", color:"var(--t3)" }}>{PAY_LABELS[e.paymentMethod] || "—"}</td>
+                      <td>
+                        <span className={`badge ${e.paymentStatus === "paid" ? "badge-green" : "badge-amber"}`} style={{ fontSize:".74em" }}>
+                          {e.paymentStatus === "paid" ? "Pagado" : "Pendiente"}
+                        </span>
+                      </td>
+                      <td style={{ textAlign:"right", fontWeight:700, color:e.paymentStatus==="paid"?"var(--red)":"var(--amber)" }}>
+                        {$(e.total)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ borderTop:"2px solid var(--border)" }}>
+                    <td colSpan={6} style={{ fontWeight:700, fontSize:".86em", paddingTop:10 }}>Totales</td>
+                    <td style={{ textAlign:"right", paddingTop:10 }}>
+                      <div style={{ fontWeight:800, color:"var(--red)" }}>{$(totalExpenses)}</div>
+                      {pendingExpenses > 0 && <div style={{ fontWeight:600, color:"var(--amber)", fontSize:".8em" }}>+{$(pendingExpenses)} pend.</div>}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )
+        }
       </div>
 
       {/* ── TOP 5 RENTABILIDAD ─────────────────────────────────────────────── */}
