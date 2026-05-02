@@ -283,6 +283,7 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
 
   // ── Tendencia ────────────────────────────────────────────────────────────────
   const [trendMode, setTrendMode] = useState("daily");
+  const [filterExpCat, setFilterExpCat] = useState("Todos");
 
   const trendPoints = useMemo(() => {
     const dayMap = {};
@@ -341,8 +342,17 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
   }, [trendPoints]);
 
   // ── Expenses derived values ───────────────────────────────────────────────────
-  const totalExpenses   = pExpenses.filter(e=>e.paymentStatus==="paid").reduce((a,b)=>a+b.total,0);
-  const pendingExpenses = pExpenses.filter(e=>e.paymentStatus==="pending").reduce((a,b)=>a+b.total,0);
+  const availableExpCats = useMemo(() => {
+    const cats = [...new Set(pExpenses.map(e => e.category || "Otros"))].sort();
+    return cats;
+  }, [pExpenses]);
+
+  const filteredPExpenses = filterExpCat === "Todos"
+    ? pExpenses
+    : pExpenses.filter(e => (e.category || "Otros") === filterExpCat);
+
+  const totalExpenses   = filteredPExpenses.filter(e=>e.paymentStatus==="paid").reduce((a,b)=>a+b.total,0);
+  const pendingExpenses = filteredPExpenses.filter(e=>e.paymentStatus==="pending").reduce((a,b)=>a+b.total,0);
   const netResult       = totalIncome - totalExpenses;
   const expByCat = {};
   pExpenses.filter(e=>e.paymentStatus==="paid").forEach(e => {
@@ -373,10 +383,19 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
         <div className="stat"><div className="stat-num">{pSales.length}</div><div className="stat-label">Ventas en período</div><div className="stat-icon">🧾</div></div>
         <div className="stat stat-blue"><div className="stat-num">{$(activeOrdersValue)}</div><div className="stat-label">Pedidos activos ({activeOrders.length})</div><div className="stat-icon">📋</div></div>
       </div>
+      {availableExpCats.length > 0 && (
+        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8, flexWrap:"wrap" }}>
+          <span style={{ fontSize:".78em", color:"var(--t3)", fontWeight:500 }}>Filtrar gastos:</span>
+          <button className={`btn btn-sm ${filterExpCat==="Todos"?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterExpCat("Todos")}>Todos</button>
+          {availableExpCats.map(cat=>(
+            <button key={cat} className={`btn btn-sm ${filterExpCat===cat?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterExpCat(cat)}>{cat}</button>
+          ))}
+        </div>
+      )}
       <div className="stats-row" style={{ marginBottom:16 }}>
-        <div className="stat stat-red"><div className="stat-num">{$(totalExpenses)}</div><div className="stat-label">Gastos pagados</div><div className="stat-icon">💸</div></div>
-        <div className="stat stat-amber"><div className="stat-num">{$(pendingExpenses)}</div><div className="stat-label">Gastos pendientes</div><div className="stat-icon">📤</div></div>
-        <div className="stat"><div className="stat-num">{pExpenses.length}</div><div className="stat-label">Gastos en período</div><div className="stat-icon">🧾</div></div>
+        <div className="stat stat-red"><div className="stat-num">{$(totalExpenses)}</div><div className="stat-label">Gastos pagados{filterExpCat!=="Todos"?` · ${filterExpCat}`:""}</div><div className="stat-icon">💸</div></div>
+        <div className="stat stat-amber"><div className="stat-num">{$(pendingExpenses)}</div><div className="stat-label">Gastos pendientes{filterExpCat!=="Todos"?` · ${filterExpCat}`:""}</div><div className="stat-icon">📤</div></div>
+        <div className="stat"><div className="stat-num">{filteredPExpenses.length}</div><div className="stat-label">Gastos en período{filterExpCat!=="Todos"?` · ${filterExpCat}`:""}</div><div className="stat-icon">🧾</div></div>
         <div className={`stat ${netResult>=0?"stat-green":"stat-red"}`}>
           <div className="stat-num">{netResult<0?"-":""}{$(Math.abs(netResult))}</div>
           <div className="stat-label">Resultado neto</div>
