@@ -2,10 +2,10 @@
 
 | Tabla (nombre en DB)   | Traducción           | Contenido                                                                                                      |
 |------------------------|----------------------|----------------------------------------------------------------------------------------------------------------|
-| `products`             | Productos            | Nombre, categoría, precios (minorista/mayorista), unidad, stock, activo, foto, descripción, ítems de kit.     |
+| `products`             | Productos            | Nombre, categoría, precios (minorista/mayorista), unidad, stock, activo, foto, descripción, ítems de kit, `is_favorite` (boolean — favorito global compartido entre todos los usuarios). |
 | `customers`            | Clientes             | Nombre, teléfono, dirección, notas, lista de precios, saldo en cuenta corriente, descuento, email, CUIT, `default_billing` (boolean — activa facturación automáticamente en el POS al seleccionar el cliente). |
 | `sales`                | Ventas / Pedidos     | Cliente, ítems comprados, total, método de pago, estado del pedido, descuento, fecha de entrega, facturación. |
-| `recipes`              | Recetas              | Producto asociado, tiempos de preparación y cocción, rendimiento, pasos (JSONB), margen mínimo, notas.        |
+| `recipes`              | Recetas              | Producto asociado, tiempos de preparación y cocción, rendimiento, pasos (JSONB), margen mínimo, notas, `is_favorite` (boolean — favorito global compartido entre todos los usuarios). |
 | `recipe_ingredients`   | Ingredientes de receta | Relación receta ↔ ingrediente con cantidad, unidad y costo unitario.                                        |
 | `ingredients`          | Ingredientes         | Nombre, categoría, unidad, stock actual, stock mínimo, costo unitario, proveedor, notas e información nutricional (calorías, proteínas, carbs, grasa, fibra, azúcar, sodio). |
 | `expenses`             | Gastos               | Fecha, proveedor, concepto, cantidad, unidad, precio unitario, total, método y estado de pago, categoría, notas, proveedor vinculado, líneas de ingredientes. |

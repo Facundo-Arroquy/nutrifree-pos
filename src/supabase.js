@@ -43,6 +43,7 @@ export const dbToProduct = r => ({
   unit: r.unit, stock: r.stock, active: r.active,
   photo: r.photo, description: r.description,
   kitItems: r.kit_items || [],
+  isFavorite: r.is_favorite ?? false,
 });
 
 export const productToDb = p => ({
@@ -51,6 +52,7 @@ export const productToDb = p => ({
   unit: p.unit, stock: p.stock, active: p.active,
   photo: p.photo, description: p.description,
   kit_items: p.kitItems || [],
+  is_favorite: p.isFavorite ?? false,
 });
 
 export const dbToCustomer = r => ({
@@ -101,6 +103,7 @@ export const dbToRecipe = r => ({
   minMargin: r.min_margin ?? null,
   needsReview: r.needs_review ?? false,
   reviewReason: r.review_reason ?? null,
+  isFavorite: r.is_favorite ?? false,
   ingredients: [], steps: r.steps,
 });
 
@@ -110,6 +113,7 @@ export const recipeToDb = r => ({
   min_margin: r.minMargin != null && r.minMargin !== "" ? Number(r.minMargin) : null,
   needs_review: r.needsReview ?? false,
   review_reason: r.reviewReason ?? null,
+  is_favorite: r.isFavorite ?? false,
   steps: r.steps,
 });
 

@@ -41,20 +41,15 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   const [posTab, setPosTab] = useState("products"); // mobile: "products" | "cart"
   const [applyCredit, setApplyCredit] = useState(null); // null | true | false
   const [submitting, setSubmitting] = useState(false);
-  const [favorites, setFavorites] = useState(
-    () => new Set(JSON.parse(localStorage.getItem("pos_favorites") || "[]"))
-  );
-
   const isDelivery = name => /^envio/i.test((name||"").trim());
 
-  const toggleFav = (e, id) => {
+  const toggleFav = async (e, id) => {
     e.stopPropagation();
-    setFavorites(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      localStorage.setItem("pos_favorites", JSON.stringify([...next]));
-      return next;
-    });
+    const prod = products.find(p => p.id === id);
+    if (!prod) return;
+    const next = !prod.isFavorite;
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, isFavorite: next } : p));
+    await supabase.from("products").update({ is_favorite: next }).eq("id", id);
   };
 
   const categories = ["Todos", ...new Set(products.map(p => p.category))];
@@ -75,8 +70,8 @@ export default function POSPage({ products, setProducts, customers, setCustomers
       (!search || p.name.toLowerCase().includes(search.toLowerCase()))
     )
     .sort((a, b) => {
-      const af = favorites.has(a.id) ? 0 : 1;
-      const bf = favorites.has(b.id) ? 0 : 1;
+      const af = a.isFavorite ? 0 : 1;
+      const bf = b.isFavorite ? 0 : 1;
       if (af !== bf) return af - bf;
       return a.name.localeCompare(b.name);
     });
@@ -302,7 +297,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
           {filtered.map(p => {
             const price = priceList==="retail" ? p.priceRetail : p.priceWholesale;
             const effStock = getKitMaxStock(p);
-            const isFav = favorites.has(p.id);
+            const isFav = p.isFavorite;
             return (
               <div key={p.id} className={`prod-card${effStock<=0?" inactive":""}`} onClick={()=>addToCart(p)} style={{ position:"relative" }}>
                 <button

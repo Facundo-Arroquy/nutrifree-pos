@@ -33,9 +33,6 @@ export default function RecipesPage({ recipes, setRecipes, products, ingredients
     return () => clearTimeout(t);
   }, [highlightRecipeId]);
   const [search, setSearch] = useState("");
-  const [favorites, setFavorites] = useState(
-    () => new Set(JSON.parse(localStorage.getItem("recipes_favorites") || "[]"))
-  );
   const [form, setForm] = useState({ productId:"", prepTime:0, cookTime:0, yield:1, notes:"", ingredients:[], steps:[] });
   const [submitting, setSubmitting] = useState(false);
   const [newIngr, setNewIngr] = useState({ ingredientId:"", qty:"" });
@@ -43,14 +40,13 @@ export default function RecipesPage({ recipes, setRecipes, products, ingredients
   const [prodSearch, setProdSearch] = useState("");
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
 
-  const toggleFav = (e, id) => {
+  const toggleFav = async (e, id) => {
     e.stopPropagation();
-    setFavorites(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      localStorage.setItem("recipes_favorites", JSON.stringify([...next]));
-      return next;
-    });
+    const rec = recipes.find(r => r.id === id);
+    if (!rec) return;
+    const next = !rec.isFavorite;
+    setRecipes(prev => prev.map(r => r.id === id ? { ...r, isFavorite: next } : r));
+    await supabase.from("recipes").update({ is_favorite: next }).eq("id", id);
   };
 
   const NUTR_FIELDS = [
@@ -270,8 +266,8 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
         {recipes
           .filter(r => !search || (products.find(p=>p.id===r.productId)?.name||"").toLowerCase().includes(search.toLowerCase()))
           .sort((a, b) => {
-            const af = favorites.has(a.id) ? 0 : 1;
-            const bf = favorites.has(b.id) ? 0 : 1;
+            const af = a.isFavorite ? 0 : 1;
+            const bf = b.isFavorite ? 0 : 1;
             if (af !== bf) return af - bf;
             const an = products.find(p=>p.id===a.productId)?.name || "";
             const bn = products.find(p=>p.id===b.productId)?.name || "";
@@ -304,9 +300,9 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
                   )}
                   <button
                     onClick={e => toggleFav(e, r.id)}
-                    title={favorites.has(r.id) ? "Quitar de favoritos" : "Agregar a favoritos"}
-                    style={{ background:"none", border:"none", cursor:"pointer", fontSize:"1.1em", lineHeight:1, padding:"2px 4px", color: favorites.has(r.id) ? "var(--amber)" : "var(--t4)" }}>
-                    {favorites.has(r.id) ? "★" : "☆"}
+                    title={r.isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"}
+                    style={{ background:"none", border:"none", cursor:"pointer", fontSize:"1.1em", lineHeight:1, padding:"2px 4px", color: r.isFavorite ? "var(--amber)" : "var(--t4)" }}>
+                    {r.isFavorite ? "★" : "☆"}
                   </button>
                 </div>
               </div>
