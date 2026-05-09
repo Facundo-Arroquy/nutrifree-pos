@@ -12,7 +12,7 @@
  * Props: sales, setSales, products, setProducts, customers,
  *        accountPayments, setAccountPayments, showToast
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Ico, Modal, $, uid, PAY_ORDER_LABELS, todayStr } from "../shared.jsx";
 import { supabase, saleToDb, accountPaymentToDb } from "../supabase.js";
 
@@ -40,6 +40,57 @@ export default function OrdersKanbanPage({
   // ── Drag & drop ────────────────────────────────────────────────────────────
   const [draggingId, setDraggingId]   = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
+
+  // ── Touch drag (tablets) ───────────────────────────────────────────────────
+  // Usamos refs para evitar closures stale en los listeners de documento
+  const touchRef  = useRef({ saleId: null, active: false, startX: 0, startY: 0, overCol: null });
+  const salesRef  = useRef(sales);
+  useEffect(() => { salesRef.current = sales; });
+
+  const handleTouchStart = (e, sale) => {
+    const t = e.touches[0];
+    touchRef.current = { saleId: sale.id, active: false, startX: t.clientX, startY: t.clientY, overCol: null };
+  };
+
+  useEffect(() => {
+    const onMove = (e) => {
+      const { saleId, startX, startY } = touchRef.current;
+      if (!saleId) return;
+      const t = e.touches[0];
+      if (!touchRef.current.active) {
+        const dist = Math.abs(t.clientX - startX) + Math.abs(t.clientY - startY);
+        if (dist < 8) return;
+        touchRef.current.active = true;
+        setDraggingId(saleId);
+      }
+      e.preventDefault(); // evita scroll mientras arrastra
+      const el = document.elementFromPoint(t.clientX, t.clientY);
+      const col = el?.closest("[data-col-id]")?.dataset.colId ?? null;
+      touchRef.current.overCol = col;
+      setDragOverCol(col);
+    };
+
+    const onEnd = async () => {
+      const { active, saleId, overCol } = touchRef.current;
+      touchRef.current = { saleId: null, active: false, startX: 0, startY: 0, overCol: null };
+      setDraggingId(null);
+      setDragOverCol(null);
+      if (!active || !saleId || !overCol) return;
+      const sale = salesRef.current.find(s => s.id === saleId);
+      if (!sale || sale.status === overCol) return;
+      const { error } = await supabase.from("sales").update({ status: overCol }).eq("id", saleId);
+      if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
+      setSales(prev => prev.map(s => s.id === saleId ? { ...s, status: overCol } : s));
+    };
+
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend",  onEnd);
+    return () => {
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend",  onEnd);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Detalle / cobro ────────────────────────────────────────────────────────
   const [detail, setDetail]       = useState(null);
@@ -289,6 +340,7 @@ export default function OrdersKanbanPage({
           return (
             <div
               key={col.id}
+              data-col-id={col.id}
               onDragOver={e => handleDragOver(e, col.id)}
               onDrop={e => handleDrop(e, col.id)}
               onDragLeave={() => { if (dragOverCol === col.id) setDragOverCol(null); }}
@@ -323,6 +375,7 @@ export default function OrdersKanbanPage({
                     draggable
                     onDragStart={e => handleDragStart(e, sale)}
                     onDragEnd={handleDragEnd}
+                    onTouchStart={e => handleTouchStart(e, sale)}
                     onClick={() => { setDetail(sale); setPayMethod(sale.paymentMethod || "cash"); }}
                     style={{
                       background: "var(--bg1)",
@@ -335,6 +388,7 @@ export default function OrdersKanbanPage({
                       boxShadow: isDragging ? "none" : "0 1px 4px rgba(0,0,0,.07)",
                       transition: "opacity .12s",
                       userSelect: "none",
+                      touchAction: "none",
                     }}
                   >
                     <div style={{ fontWeight: 700, fontSize: ".92em", marginBottom: 3 }}>
