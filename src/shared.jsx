@@ -79,10 +79,10 @@ const fmtDate = d => {
   const date = (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d))
     ? new Date(d + "T12:00:00")
     : new Date(d);
-  return date.toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"});
+  return date.toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric",timeZone:"America/Argentina/Buenos_Aires"});
 };
 /** Formatea una fecha ISO o Date como "hh:mm". */
-const fmtTime = d => new Date(d).toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"});
+const fmtTime = d => new Date(d).toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit",timeZone:"America/Argentina/Buenos_Aires"});
 /** Formatea una fecha ISO o Date como "dd/mm/aaaa hh:mm". */
 const fmtDT = d => `${fmtDate(d)} ${fmtTime(d)}`;
 /** Devuelve la fecha de hoy como string "YYYY-MM-DD" en hora local. */

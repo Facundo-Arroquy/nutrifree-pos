@@ -415,7 +415,7 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
                           </span>
                         </td>
                         <td style={{ padding:"8px 8px", color:"var(--t4)", fontSize:".8em" }}>
-                          {new Date(emp.created_at).toLocaleDateString("es-AR")}
+                          {new Date(emp.created_at).toLocaleDateString("es-AR",{timeZone:"America/Argentina/Buenos_Aires"})}
                         </td>
                         <td style={{ padding:"8px 8px" }}>
                           {!isSelf && (
@@ -507,7 +507,7 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
                       </>
                     )}
                     <span style={{ marginLeft:"auto", fontSize:".74em", color:"var(--t4)", whiteSpace:"nowrap" }}>
-                      {new Date(n.created_at).toLocaleString("es-AR", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" })}
+                      {new Date(n.created_at).toLocaleString("es-AR", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit", timeZone:"America/Argentina/Buenos_Aires" })}
                     </span>
                   </div>
                   <p style={{ fontSize:".84em", color:"var(--t2)", margin:0, whiteSpace:"pre-wrap", lineHeight:1.5 }}>{n.description}</p>

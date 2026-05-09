@@ -26,7 +26,7 @@ export async function sendBillingAlert(sale) {
     payment_method: sale.paymentMethod || "-",
     items:          itemsList,
     notes:          sale.notes || "-",
-    date:           new Date().toLocaleString("es-AR"),
+    date:           new Date().toLocaleString("es-AR",{timeZone:"America/Argentina/Buenos_Aires"}),
   };
 
   await emailjs.send(SERVICE_ID, TEMPLATE_ID, params, PUBLIC_KEY);
@@ -52,7 +52,7 @@ export async function sendInvoiceEmail(customer, files) {
     customer_name: customer.name,
     file_links:    fileLinks,
     file_count:    String(files.length),
-    date:          new Date().toLocaleString("es-AR"),
+    date:          new Date().toLocaleString("es-AR",{timeZone:"America/Argentina/Buenos_Aires"}),
   };
 
   await emailjs.send(SERVICE_ID, INVOICE_TEMPLATE_ID, params, PUBLIC_KEY);

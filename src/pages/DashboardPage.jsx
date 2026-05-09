@@ -85,7 +85,7 @@ export default function DashboardPage({ sales, products, cashShifts, customers, 
       <div className="page-header">
         <div>
           <div className="page-title">Dashboard</div>
-          <div className="page-sub">{new Date().toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>
+          <div className="page-sub">{new Date().toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"America/Argentina/Buenos_Aires"})}</div>
         </div>
         {/* Filtro de fechas */}
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>

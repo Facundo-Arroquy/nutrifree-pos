@@ -103,7 +103,7 @@ export default function BillingPage({ sales, setSales, customers, showToast }) {
     showToast(newStatus === "done" ? "Marcado como facturado ✓" : "Facturación cancelada");
   };
 
-  const fmtDate = iso => new Date(iso).toLocaleDateString("es-AR", { day:"2-digit", month:"2-digit", year:"numeric" });
+  const fmtDate = iso => new Date(iso).toLocaleDateString("es-AR", { day:"2-digit", month:"2-digit", year:"numeric", timeZone:"America/Argentina/Buenos_Aires" });
 
   const fmtItems = items => {
     if (!items?.length) return "—";

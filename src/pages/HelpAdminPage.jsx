@@ -185,7 +185,7 @@ export default function HelpAdminPage({ faqEntries, setFaqEntries, faqMissed, se
                   <tr key={m.id}>
                     <td style={{ fontWeight: 500 }}>{m.question}</td>
                     <td style={{ color: "var(--t3)", fontSize: ".82em", whiteSpace: "nowrap" }}>
-                      {new Date(m.date).toLocaleDateString("es-AR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })}
+                      {new Date(m.date).toLocaleDateString("es-AR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit", timeZone:"America/Argentina/Buenos_Aires" })}
                     </td>
                     <td>
                       <div style={{ display: "flex", gap: 6 }}>

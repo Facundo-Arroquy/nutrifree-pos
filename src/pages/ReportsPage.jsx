@@ -152,7 +152,7 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
     const rows = [["Fecha","Producto","Tipo","Unidades"]];
     // ventas
     pSales.forEach(s => {
-      const date = new Date(s.createdAt).toLocaleString("es-AR");
+      const date = new Date(s.createdAt).toLocaleString("es-AR",{timeZone:"America/Argentina/Buenos_Aires"});
       s.items.forEach(i => {
         if (i.kitItems?.length) {
           i.kitItems.forEach(comp => {
@@ -167,7 +167,7 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
     // movimientos de stock
     const pMovements = (stockMovements||[]).filter(m => m.createdAt?.slice(0,10) >= from && m.createdAt?.slice(0,10) <= to);
     pMovements.forEach(m => {
-      rows.push([new Date(m.createdAt).toLocaleString("es-AR"), m.productName, "Producción", m.qty]);
+      rows.push([new Date(m.createdAt).toLocaleString("es-AR",{timeZone:"America/Argentina/Buenos_Aires"}), m.productName, "Producción", m.qty]);
     });
     // ordenar por fecha
     rows.sort((a,b) => a[0] === "Fecha" ? -1 : new Date(b[0]) - new Date(a[0]));

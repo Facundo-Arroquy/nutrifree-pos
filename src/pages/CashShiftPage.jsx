@@ -327,7 +327,7 @@ export default function CashShiftPage({ sales, expenses, accountPayments, user, 
       {openModal && (
         <Modal title="Abrir turno" onClose={() => setOpenModal(false)}>
           <div className="form-grid">
-            <div className="form-group"><label className="lbl">Fecha / Hora</label><input value={new Date().toLocaleString("es-AR")} readOnly style={{ color:"var(--t3)" }}/></div>
+            <div className="form-group"><label className="lbl">Fecha / Hora</label><input value={new Date().toLocaleString("es-AR",{timeZone:"America/Argentina/Buenos_Aires"})} readOnly style={{ color:"var(--t3)" }}/></div>
             <div className="form-group"><label className="lbl">Responsable</label><input value={user.name} readOnly style={{ color:"var(--t3)" }}/></div>
             <div className="form-group full"><label className="lbl">Efectivo inicial *</label><input type="number" min="0" step="0.01" autoFocus placeholder="0.00" value={openForm.initialCash} onChange={e => setOpenForm(p => ({ ...p, initialCash: e.target.value }))}/></div>
           </div>

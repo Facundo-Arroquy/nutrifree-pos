@@ -654,7 +654,7 @@ export default function App() {
               <span>Nutrifree Manager</span>
             </div>
             <div className="topbar-right">
-              <span className="topbar-date">{new Date().toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"})}</span>
+              <span className="topbar-date">{new Date().toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long",timeZone:"America/Argentina/Buenos_Aires"})}</span>
               <div className="topbar-userchip">
                 <div className="user-av" style={{ width:22, height:22, fontSize:".65em", flexShrink:0 }}>{user.name[0]}</div>
                 <span className="topbar-user-name">{user.name}</span>
