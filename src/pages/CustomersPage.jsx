@@ -369,18 +369,42 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
                     const custMovs = accountPayments
                       .filter(p => p.customerId === c.id)
                       .sort((a,b) => new Date(b.createdAt||b.date) - new Date(a.createdAt||a.date))
-                      .slice(0, 20);
+                      .slice(0, 5);
+                    const custSales = sales
+                      .filter(s => s.customerId === c.id)
+                      .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))
+                      .slice(0, 5);
+                    const payStatus = (s) => {
+                      if (s.status === "cancelled") return null;
+                      if (s.status !== "closed") return { label:"Sin cobrar", cls:"badge-gray" };
+                      if (s.paymentMethod !== "account") return { label:"Pagado", cls:"badge-green" };
+                      const charge = accountPayments.find(p => p.saleId === s.id && p.type === "charge");
+                      if (!charge) return { label:"Pagado", cls:"badge-green" };
+                      const paid = accountPayments.filter(p => p.saleId === s.id && p.type === "payment").reduce((sum,p) => sum + p.amount, 0);
+                      if (paid >= charge.amount) return { label:"Pagado", cls:"badge-green" };
+                      if (paid > 0) return { label:`Parcial — debe ${$(charge.amount - paid)}`, cls:"badge-amber" };
+                      return { label:`Pendiente ${$(charge.amount)}`, cls:"badge-red" };
+                    };
+                    const bal = custBal(c.id);
                     return (
                       <tr key={c.id+"-expand"}>
                         <td colSpan={8} style={{ padding:0, background:"var(--bg2)", borderBottom:"2px solid var(--border)" }}>
                           <div style={{ padding:"12px 16px" }}>
+
+                            {/* Saldo actual */}
+                            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
+                              <span style={{ fontSize:".8em", fontWeight:600, color:"var(--t2)", textTransform:"uppercase", letterSpacing:".05em" }}>Saldo actual:</span>
+                              <span className={bal > 0 ? "balance-pos" : bal < 0 ? "balance-neg" : "balance-zero"} style={{ fontWeight:700 }}>{$(bal)}</span>
+                            </div>
+
+                            {/* Historial cuenta corriente */}
                             <div style={{ fontSize:".8em", fontWeight:600, color:"var(--t2)", marginBottom:8, textTransform:"uppercase", letterSpacing:".05em" }}>
-                              Historial de pagos
+                              Historial cuenta corriente
                             </div>
                             {custMovs.length === 0 ? (
-                              <div style={{ fontSize:".85em", color:"var(--t4)", padding:"8px 0" }}>Sin movimientos registrados.</div>
+                              <div style={{ fontSize:".85em", color:"var(--t4)", padding:"8px 0", marginBottom:14 }}>Sin movimientos registrados.</div>
                             ) : (
-                              <table style={{ width:"100%", fontSize:".85em" }}>
+                              <table style={{ width:"100%", fontSize:".85em", marginBottom:16 }}>
                                 <thead>
                                   <tr style={{ color:"var(--t3)" }}>
                                     <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Fecha</th>
@@ -408,6 +432,68 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
                                   ))}
                                 </tbody>
                               </table>
+                            )}
+
+                            {/* Historial de pedidos */}
+                            {custSales.length > 0 && (
+                              <>
+                                <div style={{ fontSize:".8em", fontWeight:600, color:"var(--t2)", marginBottom:8, textTransform:"uppercase", letterSpacing:".05em" }}>
+                                  Historial de pedidos
+                                </div>
+                                <table style={{ width:"100%", fontSize:".85em" }}>
+                                  <thead>
+                                    <tr style={{ color:"var(--t3)" }}>
+                                      <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Fecha</th>
+                                      <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Estado</th>
+                                      <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Total</th>
+                                      <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Método</th>
+                                      <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Pago</th>
+                                      <th style={{ width:24 }}></th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {custSales.map(s => {
+                                      const ps = payStatus(s);
+                                      const isOpen = listExpandedSaleId === s.id;
+                                      return (
+                                        <>
+                                          <tr key={s.id} className="tr-click" style={{ borderTop:"1px solid var(--border)" }}
+                                              onClick={() => setListExpandedSaleId(isOpen ? null : s.id)}>
+                                            <td style={{ padding:"6px 8px", color:"var(--t3)", whiteSpace:"nowrap", fontSize:".9em" }}>{fmtDate(s.createdAt)}</td>
+                                            <td style={{ padding:"6px 8px" }}><span className={`badge ${STATUS_COLORS[s.status]||"badge-gray"}`}>{STATUS_LABELS[s.status]||s.status}</span></td>
+                                            <td style={{ padding:"6px 8px", fontWeight:700 }}>{$(s.total)}</td>
+                                            <td style={{ padding:"6px 8px", fontSize:".84em" }}>{PAY_LABELS[s.paymentMethod]||"—"}</td>
+                                            <td style={{ padding:"6px 8px" }}>{ps ? <span className={`badge ${ps.cls}`}>{ps.label}</span> : <span style={{ color:"var(--t4)" }}>—</span>}</td>
+                                            <td style={{ padding:"6px 8px", textAlign:"center" }}>
+                                              <span style={{ display:"inline-block", transition:"transform .15s", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+                                                <Ico n="chevron" s={12} c="var(--t3)"/>
+                                              </span>
+                                            </td>
+                                          </tr>
+                                          {isOpen && (
+                                            <tr key={s.id+"-det"}>
+                                              <td colSpan={6} style={{ padding:"0 8px 10px 8px", background:"var(--bg3, var(--bg2))" }}>
+                                                <div style={{ padding:"8px 4px", fontSize:".85em" }}>
+                                                  {s.items.map((item, i) => (
+                                                    <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"4px 8px", borderBottom:"1px solid var(--border)", gap:8 }}>
+                                                      <span style={{ color:"var(--t1)", flex:1 }}>{item.name}</span>
+                                                      <span style={{ color:"var(--t3)", minWidth:60, textAlign:"center" }}>x{item.qty}</span>
+                                                      <span style={{ fontWeight:600, minWidth:80, textAlign:"right" }}>{$(item.subtotal)}</span>
+                                                    </div>
+                                                  ))}
+                                                  <div style={{ display:"flex", justifyContent:"flex-end", padding:"6px 8px 0", fontWeight:700, fontSize:"1em" }}>
+                                                    Total: {$(s.total)}
+                                                  </div>
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          )}
+                                        </>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </>
                             )}
                           </div>
                         </td>
