@@ -9,7 +9,7 @@
  * Props: recipes, setRecipes, products, ingredients, showToast
  */
 import { useState, useEffect, useRef } from "react";
-import { Ico, Modal, $ } from "../shared.jsx";
+import { Ico, Modal, $, exportXlsx } from "../shared.jsx";
 import { supabase, recipeToDb, recipeIngredientToDb } from "../supabase.js";
 
 export default function RecipesPage({ recipes, setRecipes, products, ingredients, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast }) {
@@ -134,7 +134,7 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
     win.onload = () => win.print();
   };
 
-  const exportCsv = () => {
+  const exportExcel = () => {
     const headers = ["Producto","Tiempo Prep (min)","Tiempo Cocción (min)","Rendimiento","Costo Total","Costo/Unidad","Margen Minorista (%)","Margen Mayorista (%)","Notas","Ingredientes"];
     const rows = recipes.map(r => {
       const prod = products.find(p => p.id === r.productId);
@@ -145,9 +145,7 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
       const ingList = r.ingredients.map(i => `${i.name} ${i.qty}${i.unit}`).join(" | ");
       return [prod?.name||"Producto eliminado", r.prepTime, r.cookTime, r.yield, cost.toFixed(2), cpu.toFixed(2), marginR, marginW, r.notes||"", ingList];
     });
-    const csv = "\uFEFF" + [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
-    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv;charset=utf-8;" }));
-    a.download = "recetas.csv"; a.click();
+    exportXlsx(headers, rows, "recetas");
   };
 
   const openNew = () => { setForm({ productId:"", prepTime:0, cookTime:0, yield:1, notes:"", minMargin:"", ingredients:[], steps:[] }); setProdSearch(""); setModal("new"); };
@@ -231,7 +229,7 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
             <div className="search-ico"><Ico n="search" s={14}/></div>
             <input placeholder="Buscar receta..." value={search} onChange={e=>setSearch(e.target.value)}/>
           </div>
-          <button className="btn btn-secondary" onClick={exportCsv}><Ico n="download" s={14}/>Exportar CSV</button>
+          <button className="btn btn-secondary" onClick={exportExcel}><Ico n="download" s={14}/>Exportar Excel</button>
           <button className="btn btn-primary" onClick={openNew}><Ico n="plus" s={14}/>Nueva receta</button>
         </div>
       </div>

@@ -91,8 +91,8 @@ const todayStr = () => { const n = new Date(); return `${n.getFullYear()}-${Stri
 const clamp = (v,mn,mx) => Math.min(Math.max(v,mn),mx);
 
 // Etiquetas y clases CSS para los estados de los pedidos
-const STATUS_LABELS = { open:"Abierto", pending:"Pend. pago", ready:"Listo", delivered:"Entregado", cancelled:"Cancelado", closed:"Cerrado" };
-const STATUS_COLORS = { open:"badge-blue", pending:"badge-amber", ready:"badge-green", delivered:"badge-gray", cancelled:"badge-red", closed:"badge-gray" };
+const STATUS_LABELS = { open:"Pendiente", preparing:"En preparación", pending:"Pend. pago", ready:"Listo para Retirar", delivered:"Entregado", cancelled:"Cancelado", closed:"Cerrado" };
+const STATUS_COLORS = { open:"badge-amber", preparing:"badge-blue", pending:"badge-amber", ready:"badge-green", delivered:"badge-gray", cancelled:"badge-red", closed:"badge-gray" };
 // Etiquetas para métodos de pago (PAY_ORDER_LABELS excluye tarjeta, que no aplica en pedidos)
 const PAY_LABELS = { cash:"Efectivo", transfer:"Transferencia", card:"Tarjeta", account:"Cuenta corriente" };
 const PAY_ORDER_LABELS = { cash:"Efectivo", transfer:"Transferencia", account:"Cuenta corriente" };
@@ -513,4 +513,14 @@ function SortableTh({ col, sortBy, sortDir, toggleSort, children, style, align }
   );
 }
 
-export { CSS, Ico, Toast, Modal, LoginPage, uid, $, fmtDate, fmtTime, fmtDT, todayStr, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, PAY_ORDER_LABELS, SEED_PRODUCTS, SEED_CUSTOMERS, SEED_RECIPES, SEED_SALES, SEED_CATEGORIES, useSortable, SortableTh };
+import * as XLSX from "xlsx";
+
+/** Exporta datos como archivo .xlsx */
+function exportXlsx(headers, rows, filename) {
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Datos");
+  XLSX.writeFile(wb, filename + ".xlsx");
+}
+
+export { CSS, Ico, Toast, Modal, LoginPage, uid, $, fmtDate, fmtTime, fmtDT, todayStr, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, PAY_ORDER_LABELS, SEED_PRODUCTS, SEED_CUSTOMERS, SEED_RECIPES, SEED_SALES, SEED_CATEGORIES, useSortable, SortableTh, exportXlsx };

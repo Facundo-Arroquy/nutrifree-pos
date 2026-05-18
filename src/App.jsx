@@ -50,6 +50,9 @@ import SettingsPage from "./pages/SettingsPage.jsx";
 import CashShiftPage from "./pages/CashShiftPage.jsx";
 import ImportPage from "./pages/ImportPage.jsx";
 import HelpAdminPage from "./pages/HelpAdminPage.jsx";
+import ProductionLogPage from "./pages/ProductionLogPage.jsx";
+import HoursBankPage from "./pages/HoursBankPage.jsx";
+import OrdersKanbanPage from "./pages/OrdersKanbanPage.jsx";
 import ChatWidget from "./components/ChatWidget.jsx";
 
 // ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
@@ -135,6 +138,8 @@ export default function App() {
   const [openRecipeId, setOpenRecipeId] = useState(null);
   const [highlightRecipeId, setHighlightRecipeId] = useState(null);
   const [alertBalanceThreshold, setAlertBalanceThreshold] = useState(0);
+  const [inactiveDayThreshold, setInactiveDayThreshold] = useState(0);
+  const [inactiveDismissed, setInactiveDismissed] = useState([]); // [{ customerId, lastSaleAt, dismissedAt, dismissedBy }]
   const [frozenDiscount, setFrozenDiscount] = useState(15);
   const [vatRate, setVatRate] = useState(21);
   const [toast, setToast] = useState(null);
@@ -182,7 +187,7 @@ export default function App() {
   useEffect(() => {
     if (!user || user.isDemo) return;
     const load = async () => {
-      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }, { data: faqs }, { data: faqsMissed }, { data: settings }] = await Promise.all([
+      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }, { data: faqs }, { data: faqsMissed }, { data: settings }, { data: inactiveDis }] = await Promise.all([
         supabase.from("categories").select("*"),
         supabase.from("expense_categories").select("*").order("name"),
         supabase.from("products").select("*"),
@@ -200,6 +205,7 @@ export default function App() {
         supabase.from("faq_entries").select("*").order("created_at", { ascending: false }),
         supabase.from("faq_missed").select("*").order("created_at", { ascending: false }),
         supabase.from("app_settings").select("*"),
+        supabase.from("customer_inactive_dismissed").select("*"),
       ]);
       if (accPaysErr) console.error("[account_payments] Error al cargar:", accPaysErr);
       if (cats) setCategories(cats.map(c => c.name));
@@ -232,7 +238,15 @@ export default function App() {
         if (frozen) setFrozenDiscount(Number(frozen.value) || 15);
         const vat = settings.find(s => s.key === "vat_rate");
         if (vat) setVatRate(Number(vat.value) || 21);
+        const inactiveDays = settings.find(s => s.key === "inactive_days_threshold");
+        if (inactiveDays) setInactiveDayThreshold(Number(inactiveDays.value) || 0);
       }
+      if (inactiveDis) setInactiveDismissed(inactiveDis.map(r => ({
+        customerId: r.customer_id,
+        lastSaleAt: r.last_sale_at,
+        dismissedAt: r.dismissed_at,
+        dismissedBy: r.dismissed_by,
+      })));
     };
     loadDataRef.current = load;
     load();
@@ -282,6 +296,20 @@ export default function App() {
       sub("cash_shifts",       dbToCashShift,       setCashShifts),
     ];
 
+    // Subscripción a dismissed de clientes inactivos (re-fetch completo en cualquier cambio)
+    const dismissedChannel = supabase.channel("rt_customer_inactive_dismissed")
+      .on("postgres_changes", { event: "*", schema: "public", table: "customer_inactive_dismissed" }, () => {
+        supabase.from("customer_inactive_dismissed").select("*").then(({ data }) => {
+          if (data) setInactiveDismissed(data.map(r => ({
+            customerId: r.customer_id,
+            lastSaleAt: r.last_sale_at,
+            dismissedAt: r.dismissed_at,
+            dismissedBy: r.dismissed_by,
+          })));
+        });
+      })
+      .subscribe();
+
     // Recetas: preserva el array local de ingredients al actualizar
     const recipesChannel = supabase.channel("rt_recipes")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "recipes" }, ({ new: row }) =>
@@ -315,7 +343,7 @@ export default function App() {
       .subscribe();
 
     return () => {
-      [...channels, recipesChannel, recIngChannel].forEach(ch => supabase.removeChannel(ch));
+      [...channels, recipesChannel, recIngChannel, dismissedChannel].forEach(ch => supabase.removeChannel(ch));
     };
   }, [user?.email]);
 
@@ -350,7 +378,7 @@ export default function App() {
   };
 
   // ─── Route guards ──────────────────────────────────────────────────────────
-  const PAGE_ROLES = { reports: ["admin"], import: ["admin"], "help-admin": ["admin"] };
+  const PAGE_ROLES = { reports: ["admin"], import: ["admin"], "help-admin": ["admin"], "hours-bank": ["admin"] };
   const canAccess = (pageId) => {
     if (user?.isDemo) return true;
     const allowed = PAGE_ROLES[pageId] || ["admin", "vendor"];
@@ -511,14 +539,16 @@ export default function App() {
 
   const nav = [
     { id:"dashboard",   label:"Dashboard",      icon:"dashboard",   roles:["admin","vendor"], section:"top" },
-    { id:"pos",         label:"Caja / POS",      icon:"pos",         roles:["admin","vendor"], section:"ventas" },
-    { id:"orders",      label:"Pedidos",         icon:"orders",      roles:["admin","vendor"], section:"ventas" },
+    { id:"pos",         label:"Ventas en Mostrador", icon:"pos",      roles:["admin","vendor"], section:"ventas" },
+    { id:"orders-kanban", label:"Calendario de Pedidos", icon:"orders", roles:["admin","vendor"], section:"ventas" },
+  { id:"orders",      label:"Pedidos",         icon:"orders",      roles:["admin","vendor"], section:"ventas" },
     { id:"billing",     label:"Facturación",     icon:"billing",     roles:["admin","vendor"], section:"ventas" },
     { id:"customers",   label:"Clientes",        icon:"customers",   roles:["admin","vendor"], section:"ventas" },
     { id:"products",    label:"Productos",       icon:"products",    roles:["admin","vendor"], section:"productos" },
     { id:"recipes",     label:"Recetas",         icon:"recipes",     roles:["admin","vendor"], section:"productos" },
     { id:"ingredients", label:"Ingredientes",    icon:"ingredients", roles:["admin","vendor"], section:"productos" },
-    { id:"production",  label:"Producción",      icon:"production",  roles:["admin","vendor"], section:"productos" },
+    { id:"production",      label:"Producción",        icon:"production",  roles:["admin","vendor"], section:"productos" },
+    { id:"production-log",  label:"Reg. Producción",   icon:"production",  roles:["admin","vendor"], section:"productos" },
     { id:"cash",        label:"Cierre de Caja",  icon:"cash",        roles:["admin","vendor"], section:"finanzas" },
     { id:"expenses",    label:"Gastos",          icon:"expenses",    roles:["admin","vendor"], section:"finanzas" },
     { id:"suppliers",   label:"Proveedores",     icon:"suppliers",   roles:["admin","vendor"], section:"finanzas" },
@@ -548,7 +578,7 @@ export default function App() {
     window.location.reload();
   };
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction, settingsSection, setSettingsSection };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, inactiveDismissed, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction, settingsSection, setSettingsSection };
 
   return (
     <>
@@ -669,12 +699,15 @@ export default function App() {
           <div style={{ flex:1, overflow:"hidden" }}>
             {page==="dashboard" && <DashboardPage {...props}/>}
             {page==="pos" && <POSPage {...props}/>}
+            {page==="orders-kanban" && <OrdersKanbanPage {...props}/>}
             {page==="orders" && <OrdersPage {...props}/>}
             {page==="billing" && <BillingPage {...props}/>}
             {page==="cash" && <CashShiftPage {...props}/>}
             {page==="customers" && <CustomersPage {...props}/>}
             {page==="products" && <ProductsPage {...props}/>}
             {page==="production" && <ProductionPage {...props}/>}
+            {page==="production-log" && <ProductionLogPage {...props}/>}
+            {page==="hours-bank" && (canAccess("hours-bank") ? <HoursBankPage {...props}/> : <AccessDenied/>)}
             {page==="recipes" && <RecipesPage {...props}/>}
             {page==="ingredients" && <IngredientsPage {...props}/>}
             {page==="expenses" && <ExpensesPage {...props}/>}

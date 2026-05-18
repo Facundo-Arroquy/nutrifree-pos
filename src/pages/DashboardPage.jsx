@@ -6,8 +6,9 @@
  *
  * Props: sales, products, cashShifts, setPage
  */
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { $, fmtDT, fmtTime, todayStr, PAY_LABELS, Ico } from "../shared.jsx";
+import { supabase } from "../supabase.js";
 
 function StatCard({ label, value, sub, color = "green" }) {
   const bg = { green:"var(--greenl)", amber:"var(--amberl)", blue:"var(--bluel)", red:"var(--redl)" };
@@ -22,10 +23,12 @@ function StatCard({ label, value, sub, color = "green" }) {
   );
 }
 
-export default function DashboardPage({ sales, products, cashShifts, customers, accountPayments, alertBalanceThreshold, setPage }) {
+export default function DashboardPage({ sales, products, cashShifts, customers, accountPayments, alertBalanceThreshold, inactiveDayThreshold, inactiveDismissed, user, showToast, setPage }) {
   const today = todayStr();
   const [dateFrom, setDateFrom] = useState(today);
   const [dateTo,   setDateTo]   = useState(today);
+  // Estado local optimista para que el botón responda de inmediato
+  const [localDismissed, setLocalDismissed] = useState({});
 
   // Normalizar: fin del día para dateTo
   const from = dateFrom || "0000-01-01";
@@ -70,6 +73,49 @@ export default function DashboardPage({ sales, products, cashShifts, customers, 
         .filter(c => c.realBalance < -alertBalanceThreshold)
         .sort((a, b) => a.realBalance - b.realBalance)
     : [];
+
+  // Clientes inactivos: última compra hace más de X días
+  // Combina dismissed de Supabase (RT) con el estado local optimista
+  const inactiveAlerts = useMemo(() => {
+    const threshold = Number(inactiveDayThreshold) || 0;
+    if (threshold <= 0) return [];
+    const now = new Date();
+    const lastSaleByCustomer = {};
+    for (const s of sales) {
+      if (!s.customerId || !s.createdAt) continue;
+      const prev = lastSaleByCustomer[s.customerId];
+      if (!prev || s.createdAt > prev) lastSaleByCustomer[s.customerId] = s.createdAt;
+    }
+    const result = [];
+    for (const [custId, lastSale] of Object.entries(lastSaleByCustomer)) {
+      const daysSince = Math.floor((now - new Date(lastSale)) / 86400000);
+      if (daysSince <= threshold) continue;
+      // Verificar dismissed: primero local (optimista), luego Supabase (RT)
+      if (localDismissed[custId] && lastSale <= localDismissed[custId]) continue;
+      const dis = (inactiveDismissed || []).find(d => d.customerId === custId);
+      if (dis && lastSale <= dis.lastSaleAt) continue;
+      const customer = (customers || []).find(c => c.id === custId);
+      if (!customer) continue;
+      result.push({ ...customer, lastSale, daysSince });
+    }
+    return result.sort((a, b) => b.daysSince - a.daysSince);
+  }, [sales, customers, inactiveDayThreshold, inactiveDismissed, localDismissed]);
+
+  const dismissInactive = async (customerId, lastSaleAt) => {
+    // Actualización optimista inmediata
+    setLocalDismissed(prev => ({ ...prev, [customerId]: lastSaleAt }));
+    const { error } = await supabase.from("customer_inactive_dismissed").upsert({
+      customer_id: customerId,
+      last_sale_at: lastSaleAt,
+      dismissed_at: new Date().toISOString(),
+      dismissed_by: user?.email || "—",
+    }, { onConflict: "customer_id" });
+    if (error) {
+      // Revertir si falló
+      setLocalDismissed(prev => { const n = { ...prev }; delete n[customerId]; return n; });
+      showToast?.("Error al guardar: " + error.message, "error");
+    }
+  };
 
   const recentSales = rangeSales.slice(0, 5);
 
@@ -150,6 +196,48 @@ export default function DashboardPage({ sales, products, cashShifts, customers, 
                     <td style={{ fontWeight:600, fontSize:".88em" }}>{c.name}</td>
                     <td style={{ color:"var(--t3)", fontSize:".82em" }}>{c.phone || "—"}</td>
                     <td style={{ textAlign:"right", fontWeight:700, color:"var(--red)" }}>{$(c.realBalance)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Alerta clientes inactivos */}
+      {inactiveAlerts.length > 0 && (
+        <div style={{ background:"var(--amberl)", border:"1px solid var(--amberlb)", borderRadius:"var(--rl)", padding:"14px 20px", marginBottom:22 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
+            <span style={{ fontSize:"1.3em" }}>🕐</span>
+            <div style={{ fontWeight:700, color:"var(--amber)", fontSize:".9em" }}>
+              {inactiveAlerts.length === 1
+                ? `1 cliente sin comprar hace más de ${inactiveDayThreshold} días`
+                : `${inactiveAlerts.length} clientes sin comprar hace más de ${inactiveDayThreshold} días`}
+            </div>
+            <button className="btn btn-ghost btn-sm" style={{ marginLeft:"auto", fontSize:".8em" }} onClick={() => setPage("customers")}>
+              Ver clientes
+            </button>
+          </div>
+          <div className="table-wrap" style={{ margin:0 }}>
+            <table>
+              <thead>
+                <tr><th>Cliente</th><th>Teléfono</th><th style={{ textAlign:"right" }}>Días sin comprar</th><th></th></tr>
+              </thead>
+              <tbody>
+                {inactiveAlerts.map(c => (
+                  <tr key={c.id}>
+                    <td style={{ fontWeight:600, fontSize:".88em" }}>{c.name}</td>
+                    <td style={{ color:"var(--t3)", fontSize:".82em" }}>{c.phone || "—"}</td>
+                    <td style={{ textAlign:"right", fontWeight:700, color:"var(--amber)" }}>{c.daysSince} días</td>
+                    <td style={{ textAlign:"right" }}>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ fontSize:".78em", whiteSpace:"nowrap" }}
+                        onClick={() => dismissInactive(c.id, c.lastSale)}
+                      >
+                        Contactado ✓
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

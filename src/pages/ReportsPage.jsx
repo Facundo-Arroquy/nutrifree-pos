@@ -12,7 +12,7 @@
  * Props: sales, expenses, recipes, products, stockMovements
  */
 import { useState, useMemo, useCallback } from "react";
-import { Ico, $, fmtDate, fmtTime, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, useSortable, SortableTh } from "../shared.jsx";
+import { Ico, $, fmtDate, fmtTime, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, useSortable, SortableTh, exportXlsx } from "../shared.jsx";
 
 // ─── Bar chart (CSS-based, no library) ────────────────────────────────────────
 function TrendChart({ points }) {
@@ -148,8 +148,9 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
   const topProducts = allProductsSold.slice(0,8);
   const maxQty = topProducts[0]?.[1]||1;
 
-  const exportProductsCsv = () => {
-    const rows = [["Fecha","Producto","Tipo","Unidades"]];
+  const exportProductsExcel = () => {
+    const headers = ["Fecha","Producto","Tipo","Unidades"];
+    const rows = [];
     // ventas
     pSales.forEach(s => {
       const date = new Date(s.createdAt).toLocaleString("es-AR",{timeZone:"America/Argentina/Buenos_Aires"});
@@ -169,13 +170,8 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
     pMovements.forEach(m => {
       rows.push([new Date(m.createdAt).toLocaleString("es-AR",{timeZone:"America/Argentina/Buenos_Aires"}), m.productName, "Producción", m.qty]);
     });
-    // ordenar por fecha
-    rows.sort((a,b) => a[0] === "Fecha" ? -1 : new Date(b[0]) - new Date(a[0]));
-    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv" }));
-    a.download = `movimientos-productos-${from}-${to}.csv`;
-    a.click();
+    rows.sort((a,b) => new Date(b[0]) - new Date(a[0]));
+    exportXlsx(headers, rows, `movimientos-productos-${from}-${to}`);
   };
 
   const stockAlert = products.filter(p=>p.active&&!p.kitItems?.length&&p.stock>0&&p.stock<=5).sort((a,b)=>a.stock-b.stock);
@@ -487,7 +483,7 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
         <div className="card">
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
             <div className="section-title" style={{ marginBottom:0 }}>Productos más vendidos</div>
-            {allProductsSold.length>0 && <button className="btn btn-secondary btn-sm" onClick={exportProductsCsv}>↓ CSV</button>}
+            {allProductsSold.length>0 && <button className="btn btn-secondary btn-sm" onClick={exportProductsExcel}>↓ Excel</button>}
           </div>
           {topProducts.length===0 ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin datos</div> :
             topProducts.map(([name,qty])=>(

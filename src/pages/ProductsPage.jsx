@@ -8,7 +8,7 @@
  * Props: products, setProducts, categories, showToast, logAction
  */
 import { useState } from "react";
-import { Ico, Modal, $, uid, useSortable, SortableTh } from "../shared.jsx";
+import { Ico, Modal, $, uid, useSortable, SortableTh, exportXlsx } from "../shared.jsx";
 import { supabase, productToDb } from "../supabase.js";
 
 export default function ProductsPage({ products, setProducts, categories, showToast, logAction }) {
@@ -43,12 +43,10 @@ export default function ProductsPage({ products, setProducts, categories, showTo
   const openNew = () => { setForm(emptyForm); setKitProductId(""); setKitQty(1); setModal("new"); };
   const openEdit = p => { setForm({...p, isKit: p.kitItems?.length > 0, kitItems: p.kitItems || []}); setKitProductId(""); setKitQty(1); setModal(p); };
 
-  const exportCsv = () => {
-    const headers = ["nombre","categoria","precio_minorista","precio_mayorista","unidad","stock","activo","descripcion"];
-    const rows = products.map(p => [p.name, p.category, p.priceRetail, p.priceWholesale, p.unit, p.stock, p.active?"si":"no", p.description||""]);
-    const csv = "\uFEFF" + [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
-    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv;charset=utf-8;" }));
-    a.download = "productos.csv"; a.click();
+  const exportExcel = () => {
+    const headers = ["Nombre","Categoría","Precio Minorista","Precio Mayorista","Unidad","Stock","Activo","Descripción"];
+    const rows = products.map(p => [p.name, p.category, p.priceRetail, p.priceWholesale, p.unit, p.stock, p.active?"Sí":"No", p.description||""]);
+    exportXlsx(headers, rows, "productos");
   };
 
   const save = async () => {
@@ -106,7 +104,7 @@ export default function ProductsPage({ products, setProducts, categories, showTo
       <div className="page-header">
         <div><div className="page-title">Productos</div><div className="page-sub">{products.length} registrados</div></div>
         <div style={{ display:"flex", gap:8 }}>
-          <button className="btn btn-secondary" onClick={exportCsv}><Ico n="download" s={14}/>Exportar CSV</button>
+          <button className="btn btn-secondary" onClick={exportExcel}><Ico n="download" s={14}/>Exportar Excel</button>
           <button className="btn btn-primary" onClick={openNew}><Ico n="plus" s={14}/>Nuevo producto</button>
         </div>
       </div>

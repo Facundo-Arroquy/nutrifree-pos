@@ -12,7 +12,7 @@ import { useState, useEffect } from "react";
 import { Ico } from "../shared.jsx";
 import { supabase } from "../supabase.js";
 
-export default function SettingsPage({ user, categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, settingsSection = "general" }) {
+export default function SettingsPage({ user, categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, settingsSection = "general", setPage }) {
   const [newCat, setNewCat] = useState("");
   const [newExpCat, setNewExpCat] = useState("");
   const [newPass, setNewPass] = useState("");
@@ -22,6 +22,7 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
   const [rStart, setRStart] = useState(reminderStart);
   const [rEnd,   setREnd]   = useState(reminderEnd);
   const [balThreshold, setBalThreshold] = useState(String(alertBalanceThreshold));
+  const [inactiveDaysInput, setInactiveDaysInput] = useState(String(inactiveDayThreshold ?? 0));
   const [frozenInput, setFrozenInput] = useState(String(frozenDiscount));
   const [vatInput, setVatInput] = useState(String(vatRate));
 
@@ -293,6 +294,38 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
           </div>
 
           <div className="card" style={{ maxWidth:420, marginBottom:16 }}>
+            <div className="section-title">Alerta de clientes inactivos</div>
+            <div style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
+              Se mostrará una alerta en el Dashboard cuando un cliente no haya comprado en más de los días indicados. Ingresá 0 para desactivar.
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <div className="form-group" style={{ flex:1, marginBottom:0 }}>
+                <label className="lbl">Días sin compra</label>
+                <input
+                  type="text" inputMode="numeric"
+                  value={inactiveDaysInput}
+                  onChange={e => setInactiveDaysInput(e.target.value.replace(/[^0-9]/g, ""))}
+                  placeholder="Ej: 30"
+                />
+              </div>
+              <button className="btn btn-primary btn-sm" style={{ alignSelf:"flex-end", marginBottom:1 }} onClick={async () => {
+                const v = Math.max(0, Number(inactiveDaysInput) || 0);
+                const { error } = await supabase.from("app_settings")
+                  .upsert({ key: "inactive_days_threshold", value: String(v) }, { onConflict: "key" });
+                if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
+                setInactiveDayThreshold(v);
+                showToast("Umbral de inactividad guardado ✓");
+              }}>
+                <Ico n="check" s={13}/> Guardar
+              </button>
+            </div>
+            {inactiveDayThreshold > 0
+              ? <p style={{ fontSize:".76em", color:"var(--t4)", marginTop:8 }}>Activa: alerta cuando el cliente no compre en más de <strong>{inactiveDayThreshold} días</strong></p>
+              : <p style={{ fontSize:".76em", color:"var(--t4)", marginTop:8 }}>Desactivada (días en 0)</p>
+            }
+          </div>
+
+          <div className="card" style={{ maxWidth:420, marginBottom:16 }}>
             <div className="section-title">Valores comerciales</div>
             <div style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
               Descuento para productos freezados y porcentaje de IVA aplicado en gastos de ingredientes.
@@ -439,6 +472,18 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
           <p style={{ fontSize:".75em", color:"var(--t4)", marginTop:12 }}>
             Los empleados se registran desde el Dashboard de Supabase. Al iniciar sesión por primera vez, aparecen aquí automáticamente.
           </p>
+        </div>
+      )}
+
+      {settingsSection === "empleados" && user?.role === "admin" && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="section-title">Banco de Horas</div>
+          <p style={{ fontSize:".85em", color:"var(--t3)", marginBottom:12 }}>
+            Consultá las horas acumuladas por empleado en producción (cocina y empaque).
+          </p>
+          <button className="btn btn-secondary" onClick={() => setPage("hours-bank")}>
+            Ver Banco de Horas →
+          </button>
         </div>
       )}
 
