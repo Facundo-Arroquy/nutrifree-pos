@@ -138,6 +138,8 @@ export default function App() {
   const [openRecipeId, setOpenRecipeId] = useState(null);
   const [highlightRecipeId, setHighlightRecipeId] = useState(null);
   const [alertBalanceThreshold, setAlertBalanceThreshold] = useState(0);
+  const [inactiveDayThreshold, setInactiveDayThreshold] = useState(0);
+  const [inactiveDismissed, setInactiveDismissed] = useState([]); // [{ customerId, lastSaleAt, dismissedAt, dismissedBy }]
   const [frozenDiscount, setFrozenDiscount] = useState(15);
   const [vatRate, setVatRate] = useState(21);
   const [toast, setToast] = useState(null);
@@ -185,7 +187,7 @@ export default function App() {
   useEffect(() => {
     if (!user || user.isDemo) return;
     const load = async () => {
-      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }, { data: faqs }, { data: faqsMissed }, { data: settings }] = await Promise.all([
+      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }, { data: faqs }, { data: faqsMissed }, { data: settings }, { data: inactiveDis }] = await Promise.all([
         supabase.from("categories").select("*"),
         supabase.from("expense_categories").select("*").order("name"),
         supabase.from("products").select("*"),
@@ -203,6 +205,7 @@ export default function App() {
         supabase.from("faq_entries").select("*").order("created_at", { ascending: false }),
         supabase.from("faq_missed").select("*").order("created_at", { ascending: false }),
         supabase.from("app_settings").select("*"),
+        supabase.from("customer_inactive_dismissed").select("*"),
       ]);
       if (accPaysErr) console.error("[account_payments] Error al cargar:", accPaysErr);
       if (cats) setCategories(cats.map(c => c.name));
@@ -235,7 +238,15 @@ export default function App() {
         if (frozen) setFrozenDiscount(Number(frozen.value) || 15);
         const vat = settings.find(s => s.key === "vat_rate");
         if (vat) setVatRate(Number(vat.value) || 21);
+        const inactiveDays = settings.find(s => s.key === "inactive_days_threshold");
+        if (inactiveDays) setInactiveDayThreshold(Number(inactiveDays.value) || 0);
       }
+      if (inactiveDis) setInactiveDismissed(inactiveDis.map(r => ({
+        customerId: r.customer_id,
+        lastSaleAt: r.last_sale_at,
+        dismissedAt: r.dismissed_at,
+        dismissedBy: r.dismissed_by,
+      })));
     };
     loadDataRef.current = load;
     load();
@@ -285,6 +296,20 @@ export default function App() {
       sub("cash_shifts",       dbToCashShift,       setCashShifts),
     ];
 
+    // Subscripción a dismissed de clientes inactivos (re-fetch completo en cualquier cambio)
+    const dismissedChannel = supabase.channel("rt_customer_inactive_dismissed")
+      .on("postgres_changes", { event: "*", schema: "public", table: "customer_inactive_dismissed" }, () => {
+        supabase.from("customer_inactive_dismissed").select("*").then(({ data }) => {
+          if (data) setInactiveDismissed(data.map(r => ({
+            customerId: r.customer_id,
+            lastSaleAt: r.last_sale_at,
+            dismissedAt: r.dismissed_at,
+            dismissedBy: r.dismissed_by,
+          })));
+        });
+      })
+      .subscribe();
+
     // Recetas: preserva el array local de ingredients al actualizar
     const recipesChannel = supabase.channel("rt_recipes")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "recipes" }, ({ new: row }) =>
@@ -318,7 +343,7 @@ export default function App() {
       .subscribe();
 
     return () => {
-      [...channels, recipesChannel, recIngChannel].forEach(ch => supabase.removeChannel(ch));
+      [...channels, recipesChannel, recIngChannel, dismissedChannel].forEach(ch => supabase.removeChannel(ch));
     };
   }, [user?.email]);
 
@@ -553,7 +578,7 @@ export default function App() {
     window.location.reload();
   };
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction, settingsSection, setSettingsSection };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, inactiveDismissed, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction, settingsSection, setSettingsSection };
 
   return (
     <>
