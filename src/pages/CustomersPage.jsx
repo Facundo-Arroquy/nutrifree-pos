@@ -366,79 +366,46 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
                     </td>
                   </tr>
                   {isExpanded && (() => {
-                    const lastSales = custSalesAll.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,10);
+                    const custMovs = accountPayments
+                      .filter(p => p.customerId === c.id)
+                      .sort((a,b) => new Date(b.createdAt||b.date) - new Date(a.createdAt||a.date))
+                      .slice(0, 20);
                     return (
                       <tr key={c.id+"-expand"}>
                         <td colSpan={8} style={{ padding:0, background:"var(--bg2)", borderBottom:"2px solid var(--border)" }}>
                           <div style={{ padding:"12px 16px" }}>
                             <div style={{ fontSize:".8em", fontWeight:600, color:"var(--t2)", marginBottom:8, textTransform:"uppercase", letterSpacing:".05em" }}>
-                              Últimos pedidos
+                              Historial de pagos
                             </div>
-                            {lastSales.length === 0 ? (
-                              <div style={{ fontSize:".85em", color:"var(--t4)", padding:"8px 0" }}>Sin pedidos registrados.</div>
+                            {custMovs.length === 0 ? (
+                              <div style={{ fontSize:".85em", color:"var(--t4)", padding:"8px 0" }}>Sin movimientos registrados.</div>
                             ) : (
                               <table style={{ width:"100%", fontSize:".85em" }}>
                                 <thead>
                                   <tr style={{ color:"var(--t3)" }}>
-                                    <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}></th>
                                     <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Fecha</th>
-                                    <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Estado</th>
-                                    <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"right" }}>Total</th>
+                                    <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Tipo</th>
                                     <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Método</th>
-                                    <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Pago</th>
+                                    <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"left" }}>Notas</th>
+                                    <th style={{ padding:"4px 8px", fontWeight:500, textAlign:"right" }}>Monto</th>
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {lastSales.map(s => {
-                                    const charge = accountPayments.find(p => p.saleId === s.id && p.type === "charge");
-                                    const ps = (() => {
-                                      if (s.status === "cancelled") return null;
-                                      if (s.status !== "closed") return { label: "Sin cobrar", cls: "badge-gray" };
-                                      if (s.paymentMethod !== "account") return { label: "Pagado", cls: "badge-green" };
-                                      if (!charge) return { label: "Pagado", cls: "badge-green" };
-                                      const paid = accountPayments.filter(p => p.saleId === s.id && p.type === "payment").reduce((sum, p) => sum + p.amount, 0);
-                                      if (paid >= charge.amount) return { label: "Pagado", cls: "badge-green" };
-                                      if (paid > 0) return { label: `Parcial — debe ${$(charge.amount - paid)}`, cls: "badge-amber" };
-                                      return { label: `Pendiente ${$(charge.amount)}`, cls: "badge-red" };
-                                    })();
-                                    return (
-                                    <>
-                                      <tr key={s.id} className="tr-click" onClick={()=>setListExpandedSaleId(listExpandedSaleId===s.id?null:s.id)}
-                                        style={{ borderTop:"1px solid var(--border)" }}>
-                                        <td style={{ padding:"6px 8px", width:28, textAlign:"center" }}>
-                                          <span style={{ display:"inline-block", transition:"transform .15s", transform: listExpandedSaleId===s.id?"rotate(180deg)":"rotate(0deg)" }}>
-                                            <Ico n="chevron" s={11} c="var(--t3)"/>
-                                          </span>
-                                        </td>
-                                        <td style={{ padding:"6px 8px", color:"var(--t3)" }}>{fmtDate(s.createdAt)}</td>
-                                        <td style={{ padding:"6px 8px" }}><span className={`badge ${STATUS_COLORS[s.status]||"badge-gray"}`}>{STATUS_LABELS[s.status]||s.status}</span></td>
-                                        <td style={{ padding:"6px 8px", fontWeight:700, textAlign:"right" }}>{$(s.total)}</td>
-                                        <td style={{ padding:"6px 8px" }}>{PAY_LABELS[s.paymentMethod]||"—"}</td>
-                                        <td style={{ padding:"6px 8px" }}>{ps ? <span className={`badge ${ps.cls}`}>{ps.label}</span> : <span style={{ color:"var(--t4)" }}>—</span>}</td>
-                                      </tr>
-                                      {listExpandedSaleId === s.id && (
-                                        <tr key={s.id+"-items"}>
-                                          <td colSpan={6} style={{ padding:"0 8px 10px 36px", background:"var(--bg1)" }}>
-                                            {s.items.map((item,i)=>(
-                                              <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"4px 8px", borderBottom:"1px solid var(--border)", gap:8, fontSize:".9em" }}>
-                                                <span style={{ color:"var(--t1)", flex:1 }}>{item.name}</span>
-                                                <span style={{ color:"var(--t3)", minWidth:50, textAlign:"center" }}>×{item.qty}</span>
-                                                <span style={{ color:"var(--t2)", minWidth:65, textAlign:"right" }}>{$(item.price)} c/u</span>
-                                                <span style={{ fontWeight:600, minWidth:75, textAlign:"right" }}>{$(item.subtotal)}</span>
-                                              </div>
-                                            ))}
-                                            {s.discountAmount > 0 && (
-                                              <div style={{ display:"flex", justifyContent:"space-between", padding:"4px 8px", color:"var(--amber)", fontSize:".9em" }}>
-                                                <span>Descuento</span><span>-{$(s.discountAmount)}</span>
-                                              </div>
-                                            )}
-                                            <div style={{ display:"flex", justifyContent:"flex-end", padding:"6px 8px 0", fontWeight:700 }}>Total: {$(s.total)}</div>
-                                          </td>
-                                        </tr>
-                                      )}
-                                    </>
-                                    );
-                                  })}
+                                  {custMovs.map(p => (
+                                    <tr key={p.id} style={{ borderTop:"1px solid var(--border)" }}>
+                                      <td style={{ padding:"6px 8px", color:"var(--t3)", whiteSpace:"nowrap" }}>{fmtDate(p.date)}</td>
+                                      <td style={{ padding:"6px 8px" }}>
+                                        <span className={`badge ${p.type==="charge"?"badge-red":"badge-green"}`}>
+                                          {p.type==="charge"?"Cargo":"Pago"}
+                                        </span>
+                                      </td>
+                                      <td style={{ padding:"6px 8px" }}>{PAY_LABELS[p.paymentMethod]||"—"}</td>
+                                      <td style={{ padding:"6px 8px", color:"var(--t3)", fontSize:".82em" }}>{p.notes||"—"}</td>
+                                      <td style={{ padding:"6px 8px", fontWeight:700, textAlign:"right", color: p.type==="charge"?"var(--red)":"var(--green)" }}>
+                                        {p.type==="charge"?"-":"+"}{$(p.amount)}
+                                      </td>
+                                    </tr>
+                                  ))}
                                 </tbody>
                               </table>
                             )}
