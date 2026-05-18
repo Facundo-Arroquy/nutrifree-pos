@@ -16,11 +16,9 @@ import { supabase, saleToDb, accountPaymentToDb } from "../supabase.js";
 import { sendBillingAlert } from "../utils/emailAlerts.js";
 
 export default function POSPage({ products, setProducts, customers, setCustomers, sales, setSales, accountPayments, setAccountPayments, showToast, logAction, frozenDiscount = 15 }) {
-  const custBal = (id) => {
-    const c = customers.find(x => x.id === id);
-    return (c?.balance ?? 0) + accountPayments.filter(p => p.customerId === id)
+  const custBal = (id) =>
+    accountPayments.filter(p => p.customerId === id)
       .reduce((sum, p) => p.type === "payment" ? sum + p.amount : sum - p.amount, 0);
-  };
   const [cart, setCart] = useState([]);
   const [priceList, setPriceList] = useState("retail");
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -39,7 +37,6 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   const [custSearch, setCustSearch] = useState("");
   const [billSale, setBillSale] = useState(false);
   const [posTab, setPosTab] = useState("products"); // mobile: "products" | "cart"
-  const [applyCredit, setApplyCredit] = useState(null); // null | true | false
   const [submitting, setSubmitting] = useState(false);
   const isDelivery = name => /^envio/i.test((name||"").trim());
 
@@ -144,7 +141,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   const clearCart = () => {
     setCart([]); setSelectedCustomer(null); setOrderNotes("");
     setPriceList("retail"); setDiscountType("pct"); setDiscountValue(""); setEditingPrice(null);
-    setBillSale(false); setApplyCredit(null);
+    setBillSale(false);
   };
 
   const completeSale = async (status="closed") => {
@@ -207,21 +204,6 @@ export default function POSPage({ products, setProducts, customers, setCustomers
       if (payErr) { showToast("Error al registrar movimiento: " + payErr.message, "error"); setSubmitting(false); return; }
       setAccountPayments(prev => [...prev, charge]);
 
-      // Si el usuario eligió aplicar su saldo a favor: marcar el pedido como pagado
-      if (applyCredit === true) {
-        const linkedPayment = {
-          id: crypto.randomUUID(), customerId: selectedCustomer.id, saleId: sale.id,
-          amount: total, type: "payment", paymentMethod: "balance",
-          date: todayStr(), notes: "Saldo a favor aplicado",
-        };
-        const { error: credErr } = await supabase.from("account_payments").insert(accountPaymentToDb(linkedPayment));
-        if (credErr) { showToast("Error al aplicar crédito: " + credErr.message, "error"); setSubmitting(false); return; }
-        setAccountPayments(prev => [...prev, linkedPayment]);
-        // Ajustar customer.balance para compensar (el linked payment no debe inflar el saldo)
-        const { data: newBalance, error: balErr } = await supabase.rpc("adjust_customer_balance", { p_id: selectedCustomer.id, p_delta: -total });
-        if (balErr) { showToast("Error al actualizar saldo: " + balErr.message, "error"); setSubmitting(false); return; }
-        setCustomers(prev => prev.map(c => c.id === selectedCustomer.id ? { ...c, balance: newBalance ?? ((c.balance ?? 0) - total) } : c));
-      }
     }
     setSales(prev => [sale, ...prev]);
     const cliente = selectedCustomer?.name || "Anónimo";
@@ -560,41 +542,20 @@ export default function POSPage({ products, setProducts, customers, setCustomers
             {Object.entries(PAY_ORDER_LABELS).map(([k,v]) => (
               (k !== "account" || selectedCustomer) && (
                 <button key={k} className={`btn ${payMethod===k?"btn-primary":"btn-secondary"}`}
-                  onClick={()=>{ setPayMethod(k); setApplyCredit(null); }}>
+                  onClick={()=>{ setPayMethod(k); }}>
                   {payMethod===k && <Ico n="check" s={13}/>}{v}
                 </button>
               )
             ))}
           </div>
           {/* Banner: saldo a favor del cliente */}
-          {payMethod === "account" && selectedCustomer && custBal(selectedCustomer.id) >= total && total > 0 && (
-            <div style={{ background:"var(--amberl)", border:"1px solid var(--amberlb)", borderRadius:8, padding:"12px 14px", marginBottom:16 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-                <span style={{ fontSize:"1.1em" }}>💰</span>
-                <div style={{ fontSize:".88em", fontWeight:600, color:"var(--t1)" }}>
-                  Este cliente tiene <span style={{ color:"var(--green)" }}>{$(custBal(selectedCustomer.id))}</span> a favor.
-                  ¿Aplicar al pedido?
-                </div>
-              </div>
-              <div style={{ display:"flex", gap:8 }}>
-                <button
-                  className={`btn btn-sm ${applyCredit===true?"btn-primary":"btn-secondary"}`}
-                  onClick={()=>setApplyCredit(true)}>
-                  {applyCredit===true && <Ico n="check" s={12}/>}Sí, aplicar saldo
-                </button>
-                <button
-                  className={`btn btn-sm ${applyCredit===false?"btn-secondary":"btn-ghost"}`}
-                  style={applyCredit===false?{opacity:.7}:{}}
-                  onClick={()=>setApplyCredit(false)}>
-                  No, anotar en cuenta
-                </button>
-              </div>
-              {applyCredit===true && (
-                <div style={{ marginTop:8, fontSize:".78em", color:"var(--t3)" }}>
-                  El pedido se anotará en cuenta y se marcará como pagado con el saldo a favor.
-                  Saldo resultante: <strong>{$(custBal(selectedCustomer.id) - total)}</strong>
-                </div>
-              )}
+          {payMethod === "account" && selectedCustomer && custBal(selectedCustomer.id) > 0 && (
+            <div style={{ background:"var(--greenl)", border:"1px solid var(--greenlb)", borderRadius:8, padding:"10px 14px", marginBottom:16, fontSize:".86em" }}>
+              <span style={{ fontWeight:600 }}>💰 Saldo a favor: </span>
+              <span style={{ color:"var(--green)", fontWeight:700 }}>{$(custBal(selectedCustomer.id))}</span>
+              <span style={{ color:"var(--t3)", marginLeft:8 }}>
+                → Saldo resultante: <strong style={{ color: custBal(selectedCustomer.id) - total >= 0 ? "var(--green)" : "var(--red)" }}>{$(custBal(selectedCustomer.id) - total)}</strong>
+              </span>
             </div>
           )}
           <div className="form-group" style={{ marginBottom:16 }}>

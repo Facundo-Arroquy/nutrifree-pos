@@ -12,11 +12,9 @@ import { Ico, Modal, $, fmtDate, uid, PAY_LABELS, STATUS_LABELS, STATUS_COLORS, 
 import { supabase, customerToDb, accountPaymentToDb } from "../supabase.js";
 
 export default function CustomersPage({ customers, setCustomers, sales, accountPayments, setAccountPayments, showToast, logAction }) {
-  const custBal = (id) => {
-    const c = customers.find(x => x.id === id);
-    return (c?.balance ?? 0) + accountPayments.filter(p => p.customerId === id)
+  const custBal = (id) =>
+    accountPayments.filter(p => p.customerId === id)
       .reduce((sum, p) => p.type === "payment" ? sum + p.amount : sum - p.amount, 0);
-  };
 
   // Saldo pendiente de un pedido: lo que queda por pagar (charge - sum de payments parciales)
   const getOrderBalance = (saleId) => {
@@ -40,16 +38,10 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
       .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
   // Calcula cómo se aplica el crédito disponible a cada pedido pendiente (de más antiguo a más nuevo).
-  // Fuentes de crédito separadas para no mezclar customer.balance con las cargas de account_payments:
-  //   1. customer.balance (crédito pre-existente guardado en la tabla customers)
-  //   2. excedente positivo de account_payments (pagos > cargos, p.ej. pago en exceso anterior)
   const computeAllocations = (customerId) => {
-    const customer = customers.find(c => c.id === customerId);
-    const balance = customer?.balance ?? 0;
-    const netApBalance = accountPayments
+    const totalBalance = accountPayments
       .filter(p => p.customerId === customerId)
       .reduce((sum, p) => p.type === "payment" ? sum + p.amount : sum - p.amount, 0);
-    const totalBalance = balance + netApBalance;
     const initialDebt = Math.max(0, -totalBalance);
     let creditLeft = Math.max(0, totalBalance);
     const result = [];
@@ -70,7 +62,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
 
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState(null); // null | "new" | customer
-  const [form, setForm] = useState({ name:"", phone:"", address:"", notes:"", priceList:"retail", balance:0, discountPct:0, email:"", cuit:"", defaultBilling:false });
+  const [form, setForm] = useState({ name:"", phone:"", address:"", notes:"", priceList:"retail", discountPct:0, email:"", cuit:"", defaultBilling:false });
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
   const [payModal, setPayModal] = useState(null); // customer object
   const [payForm, setPayForm] = useState({ amount:"", paymentMethod:"cash", notes:"" });
@@ -140,13 +132,13 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
     setSaving(true);
     try {
       if (modal==="new") {
-        const newCustomer = {...form, id:uid(), balance:Number(form.balance)||0};
+        const newCustomer = {...form, id:uid()};
         const { error } = await supabase.from("customers").insert(customerToDb(newCustomer));
         if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
         setCustomers(p => [...p, newCustomer]);
         logAction?.("crear", "cliente", `Creó "${newCustomer.name}" — lista ${newCustomer.priceList}`);
       } else {
-        const updated = {...form, balance:Number(form.balance)||0};
+        const updated = {...form};
         const { error } = await supabase.from("customers").update(customerToDb(updated)).eq("id", modal.id);
         if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
         setCustomers(p => p.map(c => c.id===modal.id ? {...c,...updated} : c));
@@ -170,16 +162,6 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
     }
   };
 
-  const adjustBalance = async (id, amount) => {
-    const customer = customers.find(c => c.id === id);
-    if (!customer) return;
-    const newBalance = customer.balance + Number(amount);
-    const { error } = await supabase.from("customers").update({ balance: newBalance }).eq("id", id);
-    if (error) { showToast("Error al ajustar saldo: " + error.message, "error"); return; }
-    setCustomers(p => p.map(c => c.id===id ? {...c, balance: newBalance} : c));
-    logAction?.("ajuste_saldo", "cuenta_corriente", `"${customer.name}" ajuste $${amount} → nuevo saldo $${newBalance}`);
-    showToast("Saldo actualizado");
-  };
 
   const registerPayment = async () => {
     if (paying) return;
@@ -606,7 +588,6 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
               </select>
             </div>
             <div className="form-group full"><label className="lbl">Dirección</label><input value={form.address} onChange={e=>set("address",e.target.value)}/></div>
-            <div className="form-group"><label className="lbl">Saldo inicial ($)</label><input type="number" value={form.balance} onChange={e=>set("balance",e.target.value)}/></div>
             <div className="form-group"><label className="lbl">Descuento por defecto (%)</label><input type="number" min="0" max="100" value={form.discountPct||0} onChange={e=>set("discountPct",e.target.value)}/></div>
             <div className="form-group">
               <label className="lbl">Facturación por defecto</label>
@@ -627,18 +608,6 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
             </div>
             <div className="form-group full"><label className="lbl">Notas</label><textarea value={form.notes} onChange={e=>set("notes",e.target.value)}/></div>
           </div>
-          {modal!=="new" && (
-            <div style={{ marginBottom:14 }}>
-              <div className="section-title">Ajuste de saldo</div>
-              <div className="input-group">
-                <input type="number" id="bal-adj" placeholder="Monto (positivo o negativo)"/>
-                <button className="btn btn-amber" onClick={()=>{
-                  const v=document.getElementById("bal-adj").value;
-                  if(v) adjustBalance(modal.id, v);
-                }}>Aplicar</button>
-              </div>
-            </div>
-          )}
           {modal!=="new" && (() => {
             const movements = accountPayments
               .filter(p => p.customerId === modal.id)
