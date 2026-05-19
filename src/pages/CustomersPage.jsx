@@ -217,16 +217,8 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
       if (applied <= 0) break;
       cashLeft -= applied;
       if (isInitialDebt) {
-        // Formalizar la deuda preexistente en AP + registrar el pago efectivo
-        const debtRecord = {
-          id: crypto.randomUUID(), customerId: payModal.id, saleId: null,
-          amount: applied, type: "charge", paymentMethod: null,
-          date: todayStr(), notes: "Deuda histórica (saldo previo)",
-        };
-        const { error: de } = await supabase.from("account_payments").insert(accountPaymentToDb(debtRecord));
-        if (de) { showToast("Error al registrar deuda: " + de.message, "error"); return; }
-        allNewPayments.push(debtRecord);
-
+        // La deuda ya está registrada en AP (como charge sin saleId, ej. "Saldo apertura").
+        // Solo registrar el pago; no crear un charge adicional para evitar duplicar la deuda.
         const payRecord = {
           id: crypto.randomUUID(), customerId: payModal.id, saleId: null,
           amount: applied, type: "payment", paymentMethod: payForm.paymentMethod,
@@ -235,8 +227,6 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
         const { error: pe } = await supabase.from("account_payments").insert(accountPaymentToDb(payRecord));
         if (pe) { showToast("Error al registrar pago: " + pe.message, "error"); return; }
         allNewPayments.push(payRecord);
-
-        balanceDelta += applied; // limpia customers.balance (la deuda queda en AP)
       } else {
         const p = {
           id: crypto.randomUUID(), customerId: payModal.id, saleId: sale.id,
