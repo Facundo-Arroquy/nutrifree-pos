@@ -150,7 +150,7 @@ export default function DashboardPage({ sales, products, cashShifts, customers, 
       </div>
 
       {/* KPIs */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, marginBottom:22 }}>
+      <div className="stats-row" style={{ gap:16, marginBottom:22 }}>
         <StatCard label={`Ventas · ${periodLabel}`} value={$(rangeTotal)} sub={`${rangeSales.length} transacciones`} color="green"/>
         <StatCard label="Efectivo" value={$(rangeCash)} sub="Ventas en efectivo" color="amber"/>
         <StatCard label="Transferencias" value={$(rangeTransfer)} sub="Ventas digitales" color="blue"/>

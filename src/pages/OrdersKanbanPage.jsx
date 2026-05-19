@@ -333,7 +333,8 @@ export default function OrdersKanbanPage({
       </div>
 
       {/* ─── Kanban ──────────────────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, alignItems: "start" }}>
+      <div className="kanban-board-wrap">
+      <div className="kanban-board">
         {COLUMNS.map(col => {
           const orders = colOrders(col.id);
           const isOver = dragOverCol === col.id;
@@ -419,6 +420,7 @@ export default function OrdersKanbanPage({
             </div>
           );
         })}
+      </div>
       </div>
 
       {/* ─── Modal detalle / cobro ─────────────────────────────────────────── */}
@@ -535,7 +537,7 @@ export default function OrdersKanbanPage({
 
             <div style={{ flex: 1, overflowY: "auto", padding: "0 4px 8px" }}>
               {/* Fila superior: cliente / fecha / lista de precios */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 180px auto", gap: 12, marginBottom: 16 }}>
+              <div className="kanban-new-top-grid" style={{ display: "grid", gridTemplateColumns: "1fr 180px auto", gap: 12, marginBottom: 16 }}>
                 {/* Cliente */}
                 <div style={{ position: "relative" }}>
                   <label className="lbl">Cliente (opcional)</label>
@@ -583,7 +585,7 @@ export default function OrdersKanbanPage({
               </div>
 
               {/* Productos + Carrito */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 16 }}>
+              <div className="kanban-new-body-grid" style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 16 }}>
                 {/* Catálogo */}
                 <div>
                   <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>

@@ -283,6 +283,10 @@ tbody tr:hover td{background:var(--s1)}
 .demo-banner-btn{background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.4);color:white;border-radius:6px;padding:3px 10px;font-size:.82em;font-weight:600;cursor:pointer;transition:background .13s}
 .demo-banner-btn:hover{background:rgba(255,255,255,.35)}
 
+/* KANBAN */
+.kanban-board-wrap{width:100%}
+.kanban-board{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start}
+
 /* MISC */
 .divider{height:1px;background:var(--border);margin:16px 0}
 .empty{text-align:center;padding:52px 20px;color:var(--t3)}
@@ -333,6 +337,11 @@ tbody tr:hover td{background:var(--s1)}
   .modal-lg{max-width:100%}
   .btn-sm{padding:7px 12px;font-size:.78em}
   .toast{left:16px;right:16px;bottom:16px;text-align:center}
+  /* Kanban: iPad/tablet — 3 columnas compactas */
+  .kanban-board{grid-template-columns:repeat(3,1fr);gap:10px}
+  /* Modal nuevo pedido */
+  .kanban-new-top-grid{grid-template-columns:1fr !important}
+  .kanban-new-body-grid{grid-template-columns:1fr !important}
 }
 @media(max-width:600px){
   .form-grid-3{grid-template-columns:1fr}
@@ -343,6 +352,8 @@ tbody tr:hover td{background:var(--s1)}
   .modal-bg{align-items:flex-end;padding:0}
   .modal{border-radius:18px 18px 0 0;padding:20px 16px 28px;max-width:100%;position:fixed;bottom:0;left:0;right:0;max-height:92vh;animation:sheetIn .22s cubic-bezier(.22,1,.36,1)}
   .modal-lg{max-width:100%}
+  /* Kanban: columnas apiladas verticalmente en mobile */
+  .kanban-board{grid-template-columns:1fr;gap:10px}
 
   /* TABLAS → CARDS */
   .table-wrap{border:none;background:transparent;border-radius:0}
