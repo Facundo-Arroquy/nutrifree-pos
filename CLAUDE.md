@@ -7,7 +7,7 @@
 - siempre actualiza el archivo de TABLAS.md si es necesario.
 - siempre actualiza el archivo de FUNCIONES.md si es necesario.
 - a menos que se indique, se breve para responder
-
+- crea testes para todo lo que sea posible
 Use the following files to create a new extension:
 
 - /Users/facundoarroquy/Desktop/Agentes/skills/frontend_desing.md

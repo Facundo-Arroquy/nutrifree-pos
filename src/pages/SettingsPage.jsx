@@ -11,6 +11,7 @@
 import { useState, useEffect } from "react";
 import { Ico } from "../shared.jsx";
 import { supabase } from "../supabase.js";
+import { getLastAuditResult, auditIsDue, runAudit, sendAuditEmail } from "../utils/auditCheck.js";
 
 export default function SettingsPage({ user, categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, settingsSection = "general", setPage }) {
   const [newCat, setNewCat] = useState("");
@@ -564,6 +565,12 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
       )}
 
       {/* ── MI CUENTA ───────────────────────────────────────────────── */}
+      {/* ── BACKUP ──────────────────────────────────────────────────── */}
+      {settingsSection === "backup" && user?.role === "admin" && (
+        <BackupSection user={user} showToast={showToast} />
+      )}
+
+      {/* ── MI CUENTA ───────────────────────────────────────────────── */}
       {settingsSection === "cuenta" && !user?.isDemo && (
         <div className="card" style={{ maxWidth:420 }}>
           <div className="section-title">Cambiar contraseña</div>
@@ -593,6 +600,190 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
         <div className="card" style={{ maxWidth:420 }}>
           <div className="section-title">Mi cuenta</div>
           <p style={{ fontSize:".84em", color:"var(--t3)" }}>No disponible en modo demo.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Backup Section ───────────────────────────────────────────────────────────
+const BACKUP_TABLES = [
+  "customers", "sales", "account_payments", "products", "expenses",
+  "supplier_payments", "stock_movements", "cash_shifts", "suppliers",
+  "ingredients", "recipes", "recipe_ingredients", "categories",
+  "expense_categories", "app_settings",
+];
+
+function BackupSection({ user, showToast }) {
+  const [loading, setLoading] = useState(false);
+  const [lastBackup, setLastBackup] = useState(
+    localStorage.getItem("last_backup_date") || null
+  );
+  const [auditResult, setAuditResult] = useState(getLastAuditResult);
+  const [auditing, setAuditing] = useState(false);
+
+  const handleRunAudit = async () => {
+    if (user?.isDemo) return;
+    setAuditing(true);
+    try {
+      const result = await runAudit();
+      setAuditResult(result);
+      if (result.ok) {
+        showToast("Auditoría completada: todo OK ✓");
+      } else {
+        showToast(`Auditoría: ${result.orphanedCredits.length + result.uncoveredSales.length} problema(s) encontrado(s)`, "error");
+        sendAuditEmail(result).catch(() => {});
+      }
+    } catch (err) {
+      showToast("Error en auditoría: " + err.message, "error");
+    } finally {
+      setAuditing(false);
+    }
+  };
+
+  const handleExport = async () => {
+    if (user?.isDemo) { showToast("No disponible en modo demo", "error"); return; }
+    setLoading(true);
+    try {
+      const backup = { exported_at: new Date().toISOString(), tables: {} };
+
+      for (const table of BACKUP_TABLES) {
+        const { data, error } = await supabase.from(table).select("*");
+        if (error) throw new Error(`Error en tabla ${table}: ${error.message}`);
+        backup.tables[table] = data ?? [];
+      }
+
+      const json = JSON.stringify(backup, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const url  = URL.createObjectURL(blob);
+      const ts   = new Date().toISOString().slice(0, 16).replace("T", "_").replace(":", "-");
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `nutrifree_backup_${ts}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      const dateStr = new Date().toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" });
+      localStorage.setItem("last_backup_date", dateStr);
+      setLastBackup(dateStr);
+      showToast("Backup exportado correctamente ✓");
+    } catch (err) {
+      showToast("Error al exportar: " + err.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalRows = {
+    customers: "clientes", sales: "ventas", account_payments: "movimientos C/C",
+    products: "productos", expenses: "gastos", supplier_payments: "pagos proveedores",
+    stock_movements: "movimientos stock", cash_shifts: "turnos caja",
+  };
+
+  return (
+    <div className="card" style={{ maxWidth: 520 }}>
+      <div className="section-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Ico n="download" s={15} c="var(--t2)" />
+        Backup de datos
+        <span style={{ marginLeft: "auto", fontSize: ".75em", fontWeight: 400, color: "var(--t4)" }}>
+          Solo administradores
+        </span>
+      </div>
+
+      <p style={{ fontSize: ".84em", color: "var(--t3)", marginBottom: 16 }}>
+        Descargá un archivo <strong>.json</strong> con todos los datos del sistema.
+        Incluye clientes, ventas, cuentas corrientes, productos, gastos, stock y más.
+      </p>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 20 }}>
+        {Object.entries(totalRows).map(([, label]) => (
+          <span key={label} style={{
+            fontSize: ".75em", padding: "2px 8px", borderRadius: 4,
+            background: "var(--surface2)", color: "var(--t3)", border: "1px solid var(--border)"
+          }}>
+            {label}
+          </span>
+        ))}
+        <span style={{
+          fontSize: ".75em", padding: "2px 8px", borderRadius: 4,
+          background: "var(--surface2)", color: "var(--t3)", border: "1px solid var(--border)"
+        }}>
+          + más tablas
+        </span>
+      </div>
+
+      <button
+        className="btn btn-primary"
+        onClick={handleExport}
+        disabled={loading || user?.isDemo}
+        style={{ display: "flex", alignItems: "center", gap: 8 }}
+      >
+        <Ico n="download" s={14} />
+        {loading ? "Exportando..." : "Exportar backup completo"}
+      </button>
+
+      {lastBackup && (
+        <p style={{ fontSize: ".75em", color: "var(--t4)", marginTop: 12 }}>
+          Último backup: <strong>{lastBackup}</strong>
+        </p>
+      )}
+
+      {user?.isDemo && (
+        <p style={{ fontSize: ".8em", color: "var(--t4)", marginTop: 10, fontStyle: "italic" }}>
+          No disponible en modo demo.
+        </p>
+      )}
+
+      {/* Panel de auditoría */}
+      {!user?.isDemo && (
+        <div style={{ marginTop: 24, borderTop: "1px solid var(--border)", paddingTop: 18 }}>
+          <div className="section-title" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <Ico n="check" s={14} c="var(--t2)" />
+            Auditoría de integridad
+            {auditIsDue() && !auditResult && (
+              <span style={{ marginLeft: 6, fontSize: ".72em", padding: "1px 6px", borderRadius: 4, background: "var(--amber-bg,#451a03)", color: "var(--amber)" }}>
+                pendiente
+              </span>
+            )}
+          </div>
+
+          {auditResult && (
+            <div style={{
+              borderRadius: 6, padding: "10px 14px", marginBottom: 12, fontSize: ".84em",
+              background: auditResult.ok ? "var(--greenl,#052e16)" : "var(--redl,#450a0a)",
+              border: `1px solid ${auditResult.ok ? "var(--greenlb,#166534)" : "var(--redlb,#991b1b)"}`,
+            }}>
+              <div style={{ fontWeight: 600, marginBottom: 4, color: auditResult.ok ? "var(--green)" : "var(--red)" }}>
+                {auditResult.ok ? "✓ Sin problemas detectados" : `⚠️ ${auditResult.orphanedCredits.length + auditResult.uncoveredSales.length} problema(s) detectado(s)`}
+              </div>
+              {!auditResult.ok && (
+                <ul style={{ margin: "4px 0 0 16px", color: "var(--t3)", lineHeight: 1.7 }}>
+                  {auditResult.orphanedCredits.length > 0 && (
+                    <li>{auditResult.orphanedCredits.length} crédito(s) sin cargo de consumo</li>
+                  )}
+                  {auditResult.uncoveredSales.length > 0 && (
+                    <li>{auditResult.uncoveredSales.length} venta(s) en cuenta sin cargo registrado</li>
+                  )}
+                </ul>
+              )}
+              <div style={{ fontSize: ".8em", color: "var(--t4)", marginTop: 6 }}>
+                Última ejecución: {auditResult.date}
+              </div>
+            </div>
+          )}
+
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={handleRunAudit}
+            disabled={auditing}
+            style={{ display: "flex", alignItems: "center", gap: 7 }}
+          >
+            <Ico n="check" s={13} />
+            {auditing ? "Verificando..." : "Ejecutar auditoría ahora"}
+          </button>
+          <p style={{ fontSize: ".75em", color: "var(--t4)", marginTop: 8 }}>
+            Se ejecuta automáticamente cada 7 días al iniciar sesión.
+          </p>
         </div>
       )}
     </div>

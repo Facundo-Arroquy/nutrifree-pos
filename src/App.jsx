@@ -54,6 +54,7 @@ import ProductionLogPage from "./pages/ProductionLogPage.jsx";
 import HoursBankPage from "./pages/HoursBankPage.jsx";
 import OrdersKanbanPage from "./pages/OrdersKanbanPage.jsx";
 import ChatWidget from "./components/ChatWidget.jsx";
+import { auditIsDue, runAudit, sendAuditEmail } from "./utils/auditCheck.js";
 
 // ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
 const sessionToUser = (session) => {
@@ -377,6 +378,23 @@ export default function App() {
     } catch (_) { /* fallo silencioso */ }
   };
 
+  // ─── Auditoría semanal de integridad (solo admin) ──────────────────────────
+  const auditChecked = useRef(false);
+  useEffect(() => {
+    if (!user || user.isDemo || user.role !== "admin" || auditChecked.current) return;
+    if (!auditIsDue()) return;
+    auditChecked.current = true;
+    runAudit().then(result => {
+      if (!result.ok) {
+        showToast(
+          `⚠️ Auditoría: ${result.orphanedCredits.length + result.uncoveredSales.length} problema(s) detectado(s). Revisá AUDITORIA.md.`,
+          "error"
+        );
+        sendAuditEmail(result).catch(() => {});
+      }
+    }).catch(() => {});
+  }, [user]);
+
   // ─── Route guards ──────────────────────────────────────────────────────────
   const PAGE_ROLES = { reports: ["admin"], import: ["admin"], "help-admin": ["admin"], "hours-bank": ["admin"] };
   const canAccess = (pageId) => {
@@ -562,6 +580,7 @@ export default function App() {
     { id:"sistema",   label:"Sistema",          roles:["admin","vendor"] },
     { id:"empleados", label:"Empleados",        roles:["admin"] },
     { id:"notas",     label:"Notas internas",   roles:["admin"] },
+    { id:"backup",    label:"Backup",           roles:["admin"] },
     { id:"cuenta",    label:"Mi cuenta",        roles:["admin","vendor"] },
   ];
   const sidebarSections = [

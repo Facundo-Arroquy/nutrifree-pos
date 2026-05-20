@@ -38,9 +38,11 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
       .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
   // Calcula cómo se aplica el crédito disponible a cada pedido pendiente (de más antiguo a más nuevo).
+  // Usa solo movimientos SIN saleId para calcular la deuda/crédito "desvinculada" (apertura, pagos manuales).
+  // Los pedidos vinculados se muestran por separado mediante getUnpaidOrders — evita contarlos dos veces.
   const computeAllocations = (customerId) => {
     const totalBalance = accountPayments
-      .filter(p => p.customerId === customerId)
+      .filter(p => p.customerId === customerId && !p.saleId)
       .reduce((sum, p) => p.type === "payment" ? sum + p.amount : sum - p.amount, 0);
     const initialDebt = Math.max(0, -totalBalance);
     let creditLeft = Math.max(0, totalBalance);
@@ -184,7 +186,9 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
     const allNewPayments = [];
     let balanceDelta = 0; // cambio acumulado en customers.balance
 
-    // 1. Crédito → pedidos: crear AP payment por pedido, consume saldo positivo
+    // 1. Crédito → pedidos: crear AP payment por pedido + cargo de consumo de crédito (sin saleId).
+    // El payment marca el pedido como pagado; el charge consume el crédito desvinculado.
+    // Efecto neto en custBal: 0 (se cancelan). Solo cambia el crédito disponible no vinculado.
     for (const { sale, creditApplied } of creditForOrders) {
       const p = {
         id: crypto.randomUUID(), customerId: payModal.id, saleId: sale.id,
@@ -194,7 +198,15 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
       const { error } = await supabase.from("account_payments").insert(accountPaymentToDb(p));
       if (error) { showToast("Error al registrar pago con saldo: " + error.message, "error"); return; }
       allNewPayments.push(p);
-      balanceDelta -= creditApplied;
+
+      const consumption = {
+        id: crypto.randomUUID(), customerId: payModal.id, saleId: null,
+        amount: creditApplied, type: "charge", paymentMethod: "balance",
+        date: todayStr(), notes: "Crédito consumido",
+      };
+      const { error: ce } = await supabase.from("account_payments").insert(accountPaymentToDb(consumption));
+      if (ce) { showToast("Error al consumir crédito: " + ce.message, "error"); return; }
+      allNewPayments.push(consumption);
     }
 
     // 2. Crédito → deuda inicial: crear AP charge para consumir el excedente AP, reduce la deuda
