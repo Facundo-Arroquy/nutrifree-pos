@@ -250,6 +250,16 @@ export default function OrdersKanbanPage({
     ));
   };
 
+  // Recalcular precios del carrito cuando cambia la lista de precios (igual que POSPage)
+  useEffect(() => {
+    setNewCart(prev => prev.map(i => {
+      const prod = products.find(p => p.id === i.productId);
+      if (!prod) return i;
+      const price = newPriceList === "retail" ? prod.priceRetail : prod.priceWholesale;
+      return { ...i, price, subtotal: i.qty * price };
+    }));
+  }, [newPriceList]);
+
   const newTotal = newCart.reduce((a, b) => a + b.subtotal, 0);
 
   const openNew = () => {
@@ -557,7 +567,7 @@ export default function OrdersKanbanPage({
                       {filteredCusts.slice(0, 8).map(c => (
                         <div key={c.id}
                           style={{ padding: "8px 12px", cursor: "pointer", borderBottom: "1px solid var(--border)", fontSize: ".88em" }}
-                          onMouseDown={() => { setNewCustomer(c); setNewCustSearch(c.name); setShowCustDrop(false); }}>
+                          onMouseDown={() => { setNewCustomer(c); setNewCustSearch(c.name); setShowCustDrop(false); setNewPriceList(c.priceList || "retail"); }}>
                           {c.name}
                         </div>
                       ))}

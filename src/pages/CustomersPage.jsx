@@ -184,7 +184,6 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
     try {
 
     const allNewPayments = [];
-    let balanceDelta = 0; // cambio acumulado en customers.balance
 
     // 1. Crédito → pedidos: crear AP payment por pedido + cargo de consumo de crédito (sin saleId).
     // El payment marca el pedido como pagado; el charge consume el crédito desvinculado.
@@ -219,7 +218,6 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
       const { error } = await supabase.from("account_payments").insert(accountPaymentToDb(p));
       if (error) { showToast("Error al aplicar crédito a deuda inicial: " + error.message, "error"); return; }
       allNewPayments.push(p);
-      balanceDelta += creditForInitial;
     }
 
     // 3. Efectivo/transferencia por cada ítem seleccionado
@@ -261,15 +259,6 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
       const { error } = await supabase.from("account_payments").insert(accountPaymentToDb(p));
       if (error) { showToast("Error al registrar excedente: " + error.message, "error"); return; }
       allNewPayments.push(p);
-    }
-
-    // 4. Actualizar customers.balance en un solo paso
-    if (balanceDelta !== 0) {
-      const customer = customers.find(c => c.id === payModal.id);
-      const newBalance = (customer?.balance ?? 0) + balanceDelta;
-      const { error } = await supabase.from("customers").update({ balance: newBalance }).eq("id", payModal.id);
-      if (error) { showToast("Error al actualizar saldo: " + error.message, "error"); return; }
-      setCustomers(prev => prev.map(c => c.id === payModal.id ? { ...c, balance: newBalance } : c));
     }
 
     if (allNewPayments.length > 0) setAccountPayments(prev => [...prev, ...allNewPayments]);

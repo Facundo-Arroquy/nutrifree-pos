@@ -100,8 +100,9 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
     .reduce((a, b) => a + b.total, 0);
 
   // Account payments received in period (customer paying their debt)
+  // Excluye paymentMethod === "balance" (son aplicaciones internas de crédito, no dinero real recibido)
   const pAccountPayments = (accountPayments || []).filter(p =>
-    p.type === "payment" && p.paymentMethod && p.date >= from && p.date <= to
+    p.type === "payment" && p.paymentMethod && p.paymentMethod !== "balance" && p.date >= from && p.date <= to
   );
   const accountIncome = pAccountPayments.reduce((a, b) => a + b.amount, 0);
 
