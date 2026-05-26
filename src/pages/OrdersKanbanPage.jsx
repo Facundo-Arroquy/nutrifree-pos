@@ -180,13 +180,45 @@ export default function OrdersKanbanPage({
         s.id === detail.id ? { ...s, status: "closed", paymentMethod: payMethod } : s
       ));
       if (payMethod === "account" && detail.customerId) {
+        const newPayments = [];
+
         const charge = {
           id: crypto.randomUUID(), customerId: detail.customerId, saleId: detail.id,
           amount: detail.total, type: "charge", paymentMethod: null, date: todayStr(), notes: "",
         };
         const { error: payErr } = await supabase.from("account_payments").insert(accountPaymentToDb(charge));
         if (payErr) throw payErr;
-        setAccountPayments(prev => [...prev, charge]);
+        newPayments.push(charge);
+
+        // Auto-aplicar saldo a favor si existe
+        const availableCredit = accountPayments
+          .filter(p => p.customerId === detail.customerId)
+          .reduce((sum, p) => p.type === "payment" ? sum + p.amount : sum - p.amount, 0);
+        if (availableCredit > 0) {
+          const creditToApply = Math.min(availableCredit, detail.total);
+          const creditPayment = {
+            id: crypto.randomUUID(), customerId: detail.customerId, saleId: detail.id,
+            amount: creditToApply, type: "payment", paymentMethod: "balance",
+            date: todayStr(), notes: "Saldo a favor aplicado automáticamente",
+          };
+          const { error: cpErr } = await supabase.from("account_payments").insert(accountPaymentToDb(creditPayment));
+          if (cpErr) throw cpErr;
+          newPayments.push(creditPayment);
+
+          const creditConsumption = {
+            id: crypto.randomUUID(), customerId: detail.customerId, saleId: null,
+            amount: creditToApply, type: "charge", paymentMethod: "balance",
+            date: todayStr(), notes: "Crédito consumido",
+          };
+          const { error: ccErr } = await supabase.from("account_payments").insert(accountPaymentToDb(creditConsumption));
+          if (ccErr) throw ccErr;
+          newPayments.push(creditConsumption);
+        }
+
+        setAccountPayments(prev => {
+          const ids = new Set(prev.map(p => p.id));
+          return [...prev, ...newPayments.filter(p => !ids.has(p.id))];
+        });
       }
       showToast("Pedido cobrado ✓");
       setDetail(null);

@@ -261,7 +261,10 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
       allNewPayments.push(p);
     }
 
-    if (allNewPayments.length > 0) setAccountPayments(prev => [...prev, ...allNewPayments]);
+    if (allNewPayments.length > 0) setAccountPayments(prev => {
+      const ids = new Set(prev.map(p => p.id));
+      return [...prev, ...allNewPayments.filter(p => !ids.has(p.id))];
+    });
 
     const desc = [
       totalCreditUsed > 0 ? `saldo $${totalCreditUsed}` : "",

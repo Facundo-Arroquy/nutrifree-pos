@@ -198,12 +198,39 @@ export default function POSPage({ products, setProducts, customers, setCustomers
     if (saleErr) { showToast("Error al guardar venta: " + saleErr.message, "error"); setSubmitting(false); return; }
     // if closed sale with account payment → record charge in account_payments
     if (status === "closed" && payMethod === "account" && selectedCustomer) {
+      const newPayments = [];
+
       const charge = { id: crypto.randomUUID(), customerId: selectedCustomer.id, saleId: sale.id,
         amount: total, type: "charge", paymentMethod: null, date: todayStr(), notes: "" };
       const { error: payErr } = await supabase.from("account_payments").insert(accountPaymentToDb(charge));
       if (payErr) { showToast("Error al registrar movimiento: " + payErr.message, "error"); setSubmitting(false); return; }
-      setAccountPayments(prev => [...prev, charge]);
+      newPayments.push(charge);
 
+      // Auto-aplicar saldo a favor si existe
+      const availableCredit = accountPayments
+        .filter(p => p.customerId === selectedCustomer.id)
+        .reduce((sum, p) => p.type === "payment" ? sum + p.amount : sum - p.amount, 0);
+      if (availableCredit > 0) {
+        const creditToApply = Math.min(availableCredit, total);
+        const creditPayment = { id: crypto.randomUUID(), customerId: selectedCustomer.id, saleId: sale.id,
+          amount: creditToApply, type: "payment", paymentMethod: "balance",
+          date: todayStr(), notes: "Saldo a favor aplicado automáticamente" };
+        const { error: cpErr } = await supabase.from("account_payments").insert(accountPaymentToDb(creditPayment));
+        if (cpErr) { showToast("Error al aplicar crédito: " + cpErr.message, "error"); setSubmitting(false); return; }
+        newPayments.push(creditPayment);
+
+        const creditConsumption = { id: crypto.randomUUID(), customerId: selectedCustomer.id, saleId: null,
+          amount: creditToApply, type: "charge", paymentMethod: "balance",
+          date: todayStr(), notes: "Crédito consumido" };
+        const { error: ccErr } = await supabase.from("account_payments").insert(accountPaymentToDb(creditConsumption));
+        if (ccErr) { showToast("Error al consumir crédito: " + ccErr.message, "error"); setSubmitting(false); return; }
+        newPayments.push(creditConsumption);
+      }
+
+      setAccountPayments(prev => {
+        const ids = new Set(prev.map(p => p.id));
+        return [...prev, ...newPayments.filter(p => !ids.has(p.id))];
+      });
     }
     setSales(prev => [sale, ...prev]);
     const cliente = selectedCustomer?.name || "Anónimo";

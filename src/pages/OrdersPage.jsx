@@ -79,11 +79,39 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
       setSales(prev => prev.map(s => s.id===sale.id ? {...s, status:"closed"} : s));
       setSelected(prev => prev ? {...prev, status:"closed"} : prev);
       if (sale.paymentMethod === "account" && sale.customerId) {
+        const newPayments = [];
+
         const charge = { id: crypto.randomUUID(), customerId: sale.customerId, saleId: sale.id,
           amount: sale.total, type: "charge", paymentMethod: null, date: todayStr(), notes: "" };
         const { error: payErr } = await supabase.from("account_payments").insert(accountPaymentToDb(charge));
         if (payErr) { showToast("Error al registrar movimiento: " + payErr.message, "error"); return; }
-        setAccountPayments(prev => [...prev, charge]);
+        newPayments.push(charge);
+
+        // Auto-aplicar saldo a favor si existe
+        const availableCredit = accountPayments
+          .filter(p => p.customerId === sale.customerId)
+          .reduce((sum, p) => p.type === "payment" ? sum + p.amount : sum - p.amount, 0);
+        if (availableCredit > 0) {
+          const creditToApply = Math.min(availableCredit, sale.total);
+          const creditPayment = { id: crypto.randomUUID(), customerId: sale.customerId, saleId: sale.id,
+            amount: creditToApply, type: "payment", paymentMethod: "balance",
+            date: todayStr(), notes: "Saldo a favor aplicado automáticamente" };
+          const { error: cpErr } = await supabase.from("account_payments").insert(accountPaymentToDb(creditPayment));
+          if (cpErr) { showToast("Error al aplicar crédito: " + cpErr.message, "error"); return; }
+          newPayments.push(creditPayment);
+
+          const creditConsumption = { id: crypto.randomUUID(), customerId: sale.customerId, saleId: null,
+            amount: creditToApply, type: "charge", paymentMethod: "balance",
+            date: todayStr(), notes: "Crédito consumido" };
+          const { error: ccErr } = await supabase.from("account_payments").insert(accountPaymentToDb(creditConsumption));
+          if (ccErr) { showToast("Error al consumir crédito: " + ccErr.message, "error"); return; }
+          newPayments.push(creditConsumption);
+        }
+
+        setAccountPayments(prev => {
+          const ids = new Set(prev.map(p => p.id));
+          return [...prev, ...newPayments.filter(p => !ids.has(p.id))];
+        });
       }
       showToast("Pedido cerrado");
     } finally {
