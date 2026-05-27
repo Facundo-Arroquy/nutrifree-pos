@@ -481,7 +481,6 @@ export default function POSPage({ products, setProducts, customers, setCustomers
                   setPriceList(c.priceList);
                   if ((c.discountPct||0) > 0) { setDiscountType("pct"); setDiscountValue(String(c.discountPct)); }
                   setBillSale(c.defaultBilling || false);
-                  setApplyCredit(null);
                   setCustModal(false);
                   setCustSearch("");
                 }}>

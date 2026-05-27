@@ -60,12 +60,10 @@ export default function DashboardPage({ sales, products, cashShifts, customers, 
 
   const openShift = cashShifts.find(s => s.status === "open") || null;
 
-  const custBal = (id) => {
-    const c = (customers || []).find(x => x.id === id);
-    return (c?.balance ?? 0) + (accountPayments || [])
+  const custBal = (id) =>
+    (accountPayments || [])
       .filter(p => p.customerId === id)
       .reduce((sum, p) => p.type === "payment" ? sum + p.amount : sum - p.amount, 0);
-  };
 
   const debtAlerts = alertBalanceThreshold > 0
     ? (customers || [])
