@@ -190,12 +190,13 @@ export default function POSPage({ products, setProducts, customers, setCustomers
     }
     const { data: stockResults, error: stockErr } = await supabase.rpc("complete_sale_stocks", { p_stock_deltas: stockDeltas });
     if (stockErr) { showToast("Error al descontar stock: " + stockErr.message, "error"); setSubmitting(false); return; }
+    const { error: saleErr } = await supabase.from("sales").insert(saleToDb(sale));
+    if (saleErr) { showToast("Error al guardar venta: " + saleErr.message, "error"); setSubmitting(false); return; }
+    // Actualizar UI de stock solo después de confirmar que la venta se guardó correctamente
     setProducts(prev => prev.map(p => {
       const upd = (stockResults || []).find(r => r.id === p.id);
       return upd ? { ...p, stock: upd.stock } : p;
     }));
-    const { error: saleErr } = await supabase.from("sales").insert(saleToDb(sale));
-    if (saleErr) { showToast("Error al guardar venta: " + saleErr.message, "error"); setSubmitting(false); return; }
     // if closed sale with account payment → record charge in account_payments
     if (status === "closed" && payMethod === "account" && selectedCustomer) {
       const newPayments = [];
@@ -254,7 +255,8 @@ export default function POSPage({ products, setProducts, customers, setCustomers
 
   const saveDeliveryDate = async () => {
     if (!deliveryDate || !deliveryModal) { setDeliveryModal(null); return; }
-    await supabase.from("sales").update({ delivery_date: deliveryDate }).eq("id", deliveryModal.id);
+    const { error } = await supabase.from("sales").update({ delivery_date: deliveryDate }).eq("id", deliveryModal.id);
+    if (error) { showToast("Error al guardar fecha: " + error.message, "error"); return; }
     setSales(prev => prev.map(s => s.id === deliveryModal.id ? { ...s, deliveryDate } : s));
     setDeliveryModal(null);
     showToast("Fecha de entrega guardada ✓");

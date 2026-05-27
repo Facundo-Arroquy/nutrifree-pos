@@ -38,7 +38,7 @@ export default function CashShiftPage({ sales, expenses, accountPayments, user, 
 
   // Cobros de cuenta corriente durante el turno (pagos reales de deuda)
   const shiftAccPayments = openShift
-    ? accountPayments.filter(p => p.type === "payment" && p.createdAt && new Date(p.createdAt) >= shiftStart)
+    ? (accountPayments || []).filter(p => p.type === "payment" && p.createdAt && new Date(p.createdAt) >= shiftStart)
     : [];
   const apCash     = shiftAccPayments.filter(p => p.paymentMethod === "cash").reduce((sum,p) => sum + p.amount, 0);
   const apTransfer = shiftAccPayments.filter(p => p.paymentMethod === "transfer").reduce((sum,p) => sum + p.amount, 0);
