@@ -27,9 +27,14 @@ export default function CashShiftPage({ sales, expenses, accountPayments, user, 
   const openShift = cashShifts.find(s => s.status === "open") || null;
   const shiftStart = openShift ? new Date(openShift.openedAt) : null;
 
-  // Ventas del turno (cerradas/entregadas)
+  // Ventas del turno (cerradas/entregadas).
+  // Usa paidAt si existe (pedidos del Kanban cobrados después de crearse),
+  // sino createdAt (ventas del POS donde ambos coinciden).
   const shiftSales = openShift
-    ? sales.filter(s => new Date(s.createdAt) >= shiftStart && ["closed","delivered"].includes(s.status))
+    ? sales.filter(s =>
+        ["closed","delivered"].includes(s.status) &&
+        new Date(s.paidAt || s.createdAt) >= shiftStart
+      )
     : [];
   const sCash     = shiftSales.filter(s => s.paymentMethod === "cash").reduce((sum,s) => sum + s.total, 0);
   const sTransfer = shiftSales.filter(s => s.paymentMethod === "transfer").reduce((sum,s) => sum + s.total, 0);
