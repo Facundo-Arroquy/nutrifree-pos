@@ -157,6 +157,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
         setSubmitting(false); return;
       }
     }
+    const now = new Date().toISOString();
     const sale = {
       id: uid(),
       customerId: selectedCustomer?.id || null,
@@ -167,7 +168,8 @@ export default function POSPage({ products, setProducts, customers, setCustomers
       paymentMethod: payMethod,
       status,
       notes: orderNotes,
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      paidAt: status === "closed" ? now : null,
       discountType,
       discountValue: Number(discountValue) || 0,
       discountAmount: discountAmt,

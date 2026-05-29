@@ -172,12 +172,13 @@ export default function OrdersKanbanPage({
     if (!payMethod) { showToast("Seleccioná un método de pago", "error"); return; }
     setSubmitting(true);
     try {
+      const paidAt = new Date().toISOString();
       const { error } = await supabase.from("sales")
-        .update({ status: "closed", payment_method: payMethod })
+        .update({ status: "closed", payment_method: payMethod, paid_at: paidAt })
         .eq("id", detail.id);
       if (error) throw error;
       setSales(prev => prev.map(s =>
-        s.id === detail.id ? { ...s, status: "closed", paymentMethod: payMethod } : s
+        s.id === detail.id ? { ...s, status: "closed", paymentMethod: payMethod, paidAt } : s
       ));
       if (payMethod === "account" && detail.customerId) {
         const newPayments = [];
