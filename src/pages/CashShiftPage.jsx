@@ -65,6 +65,7 @@ export default function CashShiftPage({ sales, expenses, accountPayments, user, 
 
   const doOpenShift = async () => {
     if (submitting) return;
+    if (openShift) { showToast("Ya hay un turno abierto", "error"); return; }
     setSubmitting(true);
     try {
       const initial = Number(openForm.initialCash) || 0;

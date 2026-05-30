@@ -80,7 +80,11 @@ export default function ProductsPage({ products, setProducts, categories, showTo
 
   const del = async (id) => {
     const product = products.find(p => p.id === id);
-    if (confirm("¿Eliminar producto?")) {
+    const kitsUsing = products.filter(p => p.kitItems?.some(k => k.productId === id)).map(p => p.name);
+    const msg = kitsUsing.length
+      ? `"${product?.name}" es componente de los kits: ${kitsUsing.join(", ")}. ¿Eliminar de todas formas?`
+      : "¿Eliminar producto?";
+    if (confirm(msg)) {
       const { error } = await supabase.from("products").delete().eq("id", id);
       if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
       setProducts(p=>p.filter(x=>x.id!==id));

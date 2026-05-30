@@ -13,7 +13,7 @@ import { Ico } from "../shared.jsx";
 import { supabase } from "../supabase.js";
 import { getLastAuditResult, auditIsDue, runAudit, sendAuditEmail } from "../utils/auditCheck.js";
 
-export default function SettingsPage({ user, categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, settingsSection = "general", setPage }) {
+export default function SettingsPage({ user, products, categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, settingsSection = "general", setPage }) {
   const [newCat, setNewCat] = useState("");
   const [newExpCat, setNewExpCat] = useState("");
   const [newPass, setNewPass] = useState("");
@@ -94,6 +94,9 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
   };
 
   const delCat = async (c) => {
+    const inUse = products?.some(p => p.category === c);
+    const msg = inUse ? `Hay productos asignados a "${c}". ¿Eliminar categoría de todas formas?` : `¿Eliminar categoría "${c}"?`;
+    if (!confirm(msg)) return;
     const { error } = await supabase.from("categories").delete().eq("name", c);
     if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
     setCategories(p => p.filter(x => x !== c));
