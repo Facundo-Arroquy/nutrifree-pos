@@ -343,8 +343,55 @@ export default function App() {
       )
       .subscribe();
 
+    // Categorías de productos (re-fetch en cualquier cambio)
+    const catsChannel = supabase.channel("rt_categories")
+      .on("postgres_changes", { event: "*", schema: "public", table: "categories" }, () => {
+        supabase.from("categories").select("*").then(({ data }) => { if (data) setCategories(data.map(c => c.name)); });
+      }).subscribe();
+
+    // Categorías de gastos (re-fetch en cualquier cambio)
+    const expCatsChannel = supabase.channel("rt_expense_categories")
+      .on("postgres_changes", { event: "*", schema: "public", table: "expense_categories" }, () => {
+        supabase.from("expense_categories").select("*").order("name").then(({ data }) => { if (data) setExpenseCategories(data.map(c => c.name)); });
+      }).subscribe();
+
+    // Configuración global (IVA, umbrales, descuentos) — re-fetch en cualquier cambio
+    const settingsChannel = supabase.channel("rt_app_settings")
+      .on("postgres_changes", { event: "*", schema: "public", table: "app_settings" }, () => {
+        supabase.from("app_settings").select("*").then(({ data: s }) => {
+          if (!s) return;
+          const bal = s.find(x => x.key === "balance_alert_threshold"); if (bal) setAlertBalanceThreshold(Number(bal.value) || 0);
+          const frozen = s.find(x => x.key === "frozen_discount");       if (frozen) setFrozenDiscount(Number(frozen.value) || 15);
+          const vat = s.find(x => x.key === "vat_rate");                 if (vat) setVatRate(Number(vat.value) || 21);
+          const inact = s.find(x => x.key === "inactive_days_threshold"); if (inact) setInactiveDayThreshold(Number(inact.value) || 0);
+        });
+      }).subscribe();
+
+    // FAQ
+    const faqChannel = supabase.channel("rt_faq_entries")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "faq_entries" }, ({ new: row }) =>
+        setFaqEntries(prev => prev.some(x => x.id === row.id) ? prev : [dbToFaqEntry(row), ...prev])
+      )
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "faq_entries" }, ({ new: row }) =>
+        setFaqEntries(prev => prev.map(x => x.id === row.id ? dbToFaqEntry(row) : x))
+      )
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "faq_entries" }, ({ old: row }) =>
+        setFaqEntries(prev => prev.filter(x => x.id !== row.id))
+      ).subscribe();
+
+    const faqMissedChannel = supabase.channel("rt_faq_missed")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "faq_missed" }, ({ new: row }) =>
+        setFaqMissed(prev => prev.some(x => x.id === row.id) ? prev : [dbToFaqMissed(row), ...prev])
+      )
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "faq_missed" }, ({ new: row }) =>
+        setFaqMissed(prev => prev.map(x => x.id === row.id ? dbToFaqMissed(row) : x))
+      )
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "faq_missed" }, ({ old: row }) =>
+        setFaqMissed(prev => prev.filter(x => x.id !== row.id))
+      ).subscribe();
+
     return () => {
-      [...channels, recipesChannel, recIngChannel, dismissedChannel].forEach(ch => supabase.removeChannel(ch));
+      [...channels, recipesChannel, recIngChannel, dismissedChannel, catsChannel, expCatsChannel, settingsChannel, faqChannel, faqMissedChannel].forEach(ch => supabase.removeChannel(ch));
     };
   }, [user?.email]);
 
