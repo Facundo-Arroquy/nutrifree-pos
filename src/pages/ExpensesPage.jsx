@@ -60,6 +60,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
   const [submitting, setSubmitting] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCat, setFilterCat] = useState("Todos");
+  const [filterSupplier, setFilterSupplier] = useState("Todos");
   const today = todayStr();
   const [dateFrom, setDateFrom] = useState(today.slice(0,7) + "-01");
   const [dateTo,   setDateTo]   = useState(today);
@@ -103,6 +104,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
   const filtered = dateFiltered
     .filter(e => filterStatus==="all" || e.paymentStatus===filterStatus)
     .filter(e => filterCat==="Todos" || e.category===filterCat)
+    .filter(e => filterSupplier==="Todos" || (filterSupplier==="_none" ? !e.supplierId : e.supplierId===filterSupplier))
     .sort((a, b) => {
       let av, bv;
       if      (sortBy === "date")          { av = a.date ?? ""; bv = b.date ?? ""; }
@@ -155,6 +157,27 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
     return updatedRecipes;
   };
 
+  // Sincroniza el cargo en supplier_payments cuando un gasto pendiente es editado.
+  // Crea, actualiza o elimina el cargo según el estado actual del gasto.
+  const syncExpenseCharge = async (expenseId, supplierId, total, date, concept) => {
+    const existing = supplierPayments.find(p => p.expenseId === expenseId && p.type === "charge");
+    if (!supplierId) {
+      if (existing) {
+        await supabase.from("supplier_payments").delete().eq("id", existing.id);
+        setSupplierPayments(prev => prev.filter(p => p.id !== existing.id));
+      }
+    } else if (existing) {
+      if (existing.supplierId !== supplierId || existing.amount !== total) {
+        await supabase.from("supplier_payments").update({ supplier_id: supplierId, amount: total }).eq("id", existing.id);
+        setSupplierPayments(prev => prev.map(p => p.id === existing.id ? { ...p, supplierId, amount: total } : p));
+      }
+    } else {
+      const charge = { id:crypto.randomUUID(), supplierId, expenseId, amount:total, type:"charge", paymentMethod:null, date, notes:concept };
+      await supabase.from("supplier_payments").insert(supplierPaymentToDb(charge));
+      setSupplierPayments(prev => [...prev, charge]);
+    }
+  };
+
   const save = async () => {
     if (submitting) return;
     setSubmitting(true);
@@ -183,9 +206,17 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
           setSupplierPayments(prev => [...prev, charge]);
         }
       } else {
+        const prevStatus = modal.paymentStatus;
         const { error } = await supabase.from("expenses").update(expenseToDb(data)).eq("id", modal.id);
         if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
         setExpenses(p => p.map(e => e.id===modal.id ? {...e,...data} : e));
+        if (prevStatus === "pending" && data.paymentStatus === "paid" && data.supplierId) {
+          const payment = { id:crypto.randomUUID(), supplierId:data.supplierId, expenseId:modal.id, amount:data.total, type:"payment", paymentMethod:data.paymentMethod||"cash", date:todayStr(), notes:"Pago de gasto" };
+          await supabase.from("supplier_payments").insert(supplierPaymentToDb(payment));
+          setSupplierPayments(prev => [...prev, payment]);
+        } else if (data.paymentStatus === "pending") {
+          await syncExpenseCharge(modal.id, data.supplierId, data.total, data.date, concept);
+        }
       }
       // Actualizar stock (relativo+atómico) y unit_cost de cada ingrediente
       for (const line of validLines) {
@@ -241,9 +272,17 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
         setSupplierPayments(prev => [...prev, charge]);
       }
     } else {
+      const prevStatus = modal.paymentStatus;
       const { error } = await supabase.from("expenses").update(expenseToDb(data)).eq("id", modal.id);
       if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
       setExpenses(p => p.map(e => e.id===modal.id ? {...e,...data} : e));
+      if (prevStatus === "pending" && data.paymentStatus === "paid" && data.supplierId) {
+        const payment = { id:crypto.randomUUID(), supplierId:data.supplierId, expenseId:modal.id, amount:data.total, type:"payment", paymentMethod:data.paymentMethod||"cash", date:todayStr(), notes:"Pago de gasto" };
+        await supabase.from("supplier_payments").insert(supplierPaymentToDb(payment));
+        setSupplierPayments(prev => [...prev, payment]);
+      } else if (data.paymentStatus === "pending") {
+        await syncExpenseCharge(modal.id, data.supplierId, data.total, data.date, data.concept);
+      }
     }
     logAction?.(modal==="new" ? "crear" : "editar", "gasto", `"${data.concept}" — $${data.total} (${data.category})`);
     if (data.category==="Ingredientes" && data.unitPrice > 0) {
@@ -265,6 +304,9 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       const { error } = await supabase.from("expenses").delete().eq("id", id);
       if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
       setExpenses(p => p.filter(e => e.id!==id));
+      // Limpiar movimientos de cuenta corriente asociados a este gasto
+      await supabase.from("supplier_payments").delete().eq("expense_id", id);
+      setSupplierPayments(prev => prev.filter(p => p.expenseId !== id));
       logAction?.("eliminar", "gasto", `Eliminó "${expense?.concept}" — $${expense?.total}`);
       showToast("Eliminado");
     }
@@ -308,11 +350,21 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
           <button key={v} className={`btn btn-sm ${filterStatus===v?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterStatus(v)}>{l}</button>
         ))}
       </div>
-      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:16, alignItems:"center" }}>
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8, alignItems:"center" }}>
         <span style={{ fontSize:".74em", fontWeight:700, color:"var(--t4)", textTransform:"uppercase", letterSpacing:".5px" }}>Cat.:</span>
         {cats.map(c => (
           <button key={c} className={`btn btn-sm ${filterCat===c?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterCat(c)}>{c}</button>
         ))}
+      </div>
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:16, alignItems:"center" }}>
+        <span style={{ fontSize:".74em", fontWeight:700, color:"var(--t4)", textTransform:"uppercase", letterSpacing:".5px" }}>Proveedor:</span>
+        <select value={filterSupplier} onChange={e=>setFilterSupplier(e.target.value)} style={{ minWidth:180 }}>
+          <option value="Todos">Todos</option>
+          <option value="_none">Sin proveedor</option>
+          {[...suppliers].sort((a,b)=>a.name.localeCompare(b.name)).map(s=>(
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
       </div>
 
       <div className="table-wrap">

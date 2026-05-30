@@ -71,6 +71,8 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
       if (error) { showToast("Error al eliminar movimientos: " + error.message, "error"); return; }
       setSupplierPayments(p => p.filter(x => x.supplierId !== id));
     }
+    // Desvincular expenses que apuntaban a este proveedor
+    await supabase.from("expenses").update({ supplier_id: null, supplier: null }).eq("supplier_id", id);
     const { error } = await supabase.from("suppliers").delete().eq("id", id);
     if (error) { showToast("Error: " + error.message, "error"); return; }
     setSuppliers(p => p.filter(s => s.id !== id));

@@ -155,7 +155,16 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
 
   const del = async (id) => {
     const customer = customers.find(c => c.id === id);
-    if (confirm("¿Eliminar cliente?")) {
+    const hasPayments = accountPayments.some(p => p.customerId === id);
+    const msg = hasPayments
+      ? "Este cliente tiene movimientos en cuenta corriente. ¿Eliminar cliente y todos sus movimientos?"
+      : "¿Eliminar cliente?";
+    if (confirm(msg)) {
+      if (hasPayments) {
+        const { error } = await supabase.from("account_payments").delete().eq("customer_id", id);
+        if (error) { showToast("Error al eliminar movimientos: " + error.message, "error"); return; }
+        setAccountPayments(p => p.filter(x => x.customerId !== id));
+      }
       const { error } = await supabase.from("customers").delete().eq("id", id);
       if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
       setCustomers(p=>p.filter(c=>c.id!==id));
