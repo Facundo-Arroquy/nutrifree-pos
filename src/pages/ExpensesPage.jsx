@@ -219,20 +219,47 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
         }
       }
       // Actualizar stock (relativo+atómico) y unit_cost de cada ingrediente
+      const isNew = modal === "new";
+      const prevLines = isNew ? [] : (modal.ingredientLines || []);
+
       for (const line of validLines) {
-        const price = Number(line.unitPrice);
-        const qty   = Number(line.qty || 0);
+        const price    = Number(line.unitPrice);
+        const qty      = Number(line.qty || 0);
+        const prevLine = prevLines.find(l => l.ingredientId === line.ingredientId);
+        const prevQty  = prevLine ? Number(prevLine.qty || 0) : 0;
+        const delta    = isNew ? qty : qty - prevQty;
+
+        // Si no hay cambio de stock ni de precio, no tocar nada
+        if (delta === 0 && !price) continue;
+
         const { data: newStock, error: stockErr } = await supabase.rpc("adjust_ingredient_stock", {
           p_id:        line.ingredientId,
-          p_delta:     qty,
+          p_delta:     delta,
           p_unit_cost: price || null,
         });
         if (stockErr) showToast("Error al actualizar stock: " + stockErr.message, "error");
         setIngredients(prev => prev.map(i => i.id === line.ingredientId
-          ? { ...i, unitCost: price || i.unitCost, stock: newStock ?? (i.stock + qty) }
+          ? { ...i, unitCost: price || i.unitCost, stock: newStock ?? (i.stock + delta) }
           : i
         ));
         if (price) await supabase.from("recipe_ingredients").update({ cost: price }).eq("ingredient_id", line.ingredientId);
+      }
+
+      // Revertir stock de ingredientes que fueron eliminados de las líneas (solo al editar)
+      if (!isNew) {
+        for (const prevLine of prevLines) {
+          const stillExists = validLines.find(l => l.ingredientId === prevLine.ingredientId);
+          if (!stillExists && Number(prevLine.qty || 0) > 0) {
+            const delta = -Number(prevLine.qty);
+            const { data: newStock, error: stockErr } = await supabase.rpc("adjust_ingredient_stock", {
+              p_id: prevLine.ingredientId, p_delta: delta, p_unit_cost: null,
+            });
+            if (stockErr) showToast("Error al revertir stock: " + stockErr.message, "error");
+            setIngredients(prev => prev.map(i => i.id === prevLine.ingredientId
+              ? { ...i, stock: newStock ?? (i.stock + delta) } : i
+            ));
+          }
+        }
       }
       // Actualizar estado local de recetas (batch)
       setRecipes(prev => prev.map(r => {
