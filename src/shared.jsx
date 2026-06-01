@@ -119,16 +119,18 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ff);font-size:15px;m
 
 /* LAYOUT */
 .app{display:flex;min-height:100vh}
-.sidebar{width:244px;background:var(--s0);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;height:100vh;z-index:40;overflow-y:auto}
+.sidebar{width:244px;background:var(--s0);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;height:100vh;z-index:40;overflow-y:auto;overflow-x:hidden}
 .content{flex:1;margin-left:244px;display:flex;flex-direction:column;min-height:100vh;overflow-x:hidden}
+.sb-resize-handle{position:absolute;top:0;right:0;width:5px;height:100%;cursor:col-resize;z-index:10}
+.sb-resize-handle:hover,.sb-resize-handle:active{background:var(--green);opacity:.35}
 
 /* SIDEBAR */
 .sb-logo{padding:18px 16px 14px}
 .sb-logo h1{font-size:.92em;font-weight:700;color:var(--t1);letter-spacing:-.01em;display:flex;align-items:center;gap:8px;line-height:1.2}
 .sb-logo p{font-size:.74em;color:var(--t4);margin-top:3px;padding-left:2px;letter-spacing:.01em}
-.sb-nav{padding:2px 8px;flex:1}
-.sb-section{font-size:.66em;font-weight:600;text-transform:uppercase;letter-spacing:.9px;color:var(--t4);padding:16px 10px 4px}
-.ni{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;color:var(--t3);transition:background .1s,color .1s;font-size:.88em;font-weight:500;border:none;background:none;width:100%;text-align:left;margin-bottom:1px;position:relative}
+.sb-nav{padding:2px 0;flex:1}
+.sb-section{font-size:.66em;font-weight:600;text-transform:uppercase;letter-spacing:.9px;color:var(--t4);padding:16px 16px 4px}
+.ni{display:flex;align-items:center;justify-content:flex-start;gap:8px;padding:8px 16px;border-radius:8px;cursor:pointer;color:var(--t3);transition:background .1s,color .1s;font-size:.88em;font-weight:500;border:none;background:none;width:100%;text-align:left;margin-bottom:1px;position:relative}
 .ni:hover{background:var(--s2);color:var(--t2)}
 .ni.active{background:var(--greenl);color:var(--green);font-weight:600}
 .ni svg{flex-shrink:0;opacity:.65}

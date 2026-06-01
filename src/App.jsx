@@ -120,6 +120,7 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [page, setPage] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(244);
   const [settingsSection, setSettingsSection] = useState("general");
   const [settingsExpanded, setSettingsExpanded] = useState(false);
   const [products, setProducts] = useState([]);
@@ -657,6 +658,21 @@ export default function App() {
     window.location.reload();
   };
 
+  const startResize = (e) => {
+    e.preventDefault();
+    const onMove = (e) => setSidebarWidth(Math.min(Math.max(e.clientX, 180), 420));
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+
   const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, inactiveDismissed, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction, settingsSection, setSettingsSection };
 
   return (
@@ -667,7 +683,8 @@ export default function App() {
         <div className={`sidebar-overlay${sidebarOpen ? " open" : ""}`} onClick={() => setSidebarOpen(false)} />
 
         {/* SIDEBAR */}
-        <aside className={`sidebar${sidebarOpen ? " open" : ""}`}>
+        <aside className={`sidebar${sidebarOpen ? " open" : ""}`} style={{ width: sidebarWidth }}>
+          <div className="sb-resize-handle" onMouseDown={startResize} />
           <div className="sb-logo">
             <h1><img src="/logo.jpg" alt="Nutrifree" style={{ height:28, verticalAlign:"middle", marginRight:7, borderRadius:6 }}/>Nutrifree Manager</h1>
             <p>Sistema de gestión</p>
@@ -737,7 +754,7 @@ export default function App() {
         </aside>
 
         {/* CONTENT */}
-        <div className="content">
+        <div className="content" style={{ marginLeft: sidebarWidth }}>
           {/* HEADER MOBILE */}
           <div className="mob-header">
             <button className="ham-btn" onClick={() => setSidebarOpen(o => !o)} aria-label="Menú">
