@@ -1,0 +1,33 @@
+<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#fff8e1"/><stop offset="100%" stop-color="#ffecb3"/>
+  </linearGradient>
+</defs>
+<rect width="400" height="280" fill="url(#bg)"/>
+<ellipse cx="200" cy="248" rx="118" ry="11" fill="rgba(0,0,0,.1)"/>
+<!-- chip 1 left -->
+<ellipse cx="148" cy="195" rx="62" ry="18" fill="#d4a05a"/>
+<rect x="86" y="140" width="124" height="56" rx="8" fill="#d4a05a"/>
+<ellipse cx="148" cy="140" rx="62" ry="18" fill="#e8b870"/>
+<!-- filling l -->
+<rect x="89" y="153" width="118" height="20" fill="#ffcc80" opacity=".8"/>
+<rect x="89" y="163" width="118" height="10" fill="#ef9a9a" opacity=".7"/>
+<!-- chip 2 right -->
+<ellipse cx="258" cy="195" rx="62" ry="18" fill="#d4a05a"/>
+<rect x="196" y="140" width="124" height="56" rx="8" fill="#d4a05a"/>
+<ellipse cx="258" cy="140" rx="62" ry="18" fill="#e8b870"/>
+<!-- filling r -->
+<rect x="199" y="153" width="118" height="20" fill="#ffcc80" opacity=".8"/>
+<rect x="199" y="163" width="118" height="10" fill="#ef9a9a" opacity=".7"/>
+<!-- golden top shine -->
+<path d="M92,145 Q148,132 204,145" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" opacity=".4"/>
+<path d="M202,145 Q258,132 314,145" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" opacity=".4"/>
+<!-- sesame -->
+<circle cx="118" cy="137" r="4" fill="#8b5e1a" opacity=".6"/>
+<circle cx="148" cy="132" r="4" fill="#8b5e1a" opacity=".6"/>
+<circle cx="178" cy="137" r="4" fill="#8b5e1a" opacity=".6"/>
+<circle cx="228" cy="137" r="4" fill="#8b5e1a" opacity=".6"/>
+<circle cx="258" cy="132" r="4" fill="#8b5e1a" opacity=".6"/>
+<circle cx="288" cy="137" r="4" fill="#8b5e1a" opacity=".6"/>
+</svg>

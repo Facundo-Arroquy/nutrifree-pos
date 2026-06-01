@@ -1,0 +1,30 @@
+<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#efebe9"/><stop offset="100%" stop-color="#d7ccc8"/>
+  </linearGradient>
+</defs>
+<rect width="400" height="280" fill="url(#bg)"/>
+<ellipse cx="200" cy="248" rx="108" ry="11" fill="rgba(0,0,0,.1)"/>
+<!-- rosca ring -->
+<circle cx="200" cy="175" r="98" fill="#c4772a"/>
+<circle cx="200" cy="175" r="56" fill="url(#bg)"/>
+<!-- top shine ring -->
+<circle cx="200" cy="175" r="98" fill="none" stroke="#e8a84a" stroke-width="12" opacity=".5"/>
+<!-- icing drizzle -->
+<path d="M128,128 Q160,112 200,118 Q240,124 270,112" stroke="white" stroke-width="6" fill="none" stroke-linecap="round" opacity=".85"/>
+<path d="M115,148 Q155,136 195,142 Q235,148 272,136" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" opacity=".5"/>
+<!-- cherries -->
+<circle cx="148" cy="110" r="12" fill="#e53935"/>
+<circle cx="200" cy="100" r="12" fill="#ffb300"/>
+<circle cx="252" cy="110" r="12" fill="#e53935"/>
+<circle cx="148" cy="110" r="8" fill="#ef5350"/>
+<circle cx="200" cy="100" r="8" fill="#ffca28"/>
+<circle cx="252" cy="110" r="8" fill="#ef5350"/>
+<path d="M148,98 Q146,88 150,82" stroke="#4caf50" stroke-width="2" fill="none"/>
+<path d="M200,88 Q198,78 202,72" stroke="#4caf50" stroke-width="2" fill="none"/>
+<path d="M252,98 Q250,88 254,82" stroke="#4caf50" stroke-width="2" fill="none"/>
+<!-- score lines on ring -->
+<path d="M282,130 Q294,160 290,192" stroke="#a05a1a" stroke-width="2.5" fill="none" opacity=".4"/>
+<path d="M118,130 Q106,160 110,192" stroke="#a05a1a" stroke-width="2.5" fill="none" opacity=".4"/>
+</svg>

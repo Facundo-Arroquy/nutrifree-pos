@@ -1,0 +1,35 @@
+<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#efebe9"/><stop offset="100%" stop-color="#d7ccc8"/>
+  </linearGradient>
+</defs>
+<rect width="400" height="280" fill="url(#bg)"/>
+<ellipse cx="200" cy="248" rx="115" ry="10" fill="rgba(0,0,0,.1)"/>
+<!-- three truffles -->
+<!-- left -->
+<circle cx="145" cy="190" r="48" fill="#3e2723"/>
+<circle cx="145" cy="190" r="42" fill="#4e342e"/>
+<circle cx="130" cy="178" r="6" fill="#6d4c41" opacity=".6"/>
+<circle cx="158" cy="175" r="4" fill="#6d4c41" opacity=".6"/>
+<circle cx="140" cy="198" r="5" fill="#6d4c41" opacity=".6"/>
+<ellipse cx="133" cy="178" rx="8" ry="5" fill="white" opacity=".12" transform="rotate(-30,133,178)"/>
+<!-- right -->
+<circle cx="255" cy="190" r="48" fill="#3e2723"/>
+<circle cx="255" cy="190" r="42" fill="#4e342e"/>
+<circle cx="240" cy="178" r="6" fill="#6d4c41" opacity=".6"/>
+<circle cx="268" cy="175" r="4" fill="#6d4c41" opacity=".6"/>
+<circle cx="250" cy="198" r="5" fill="#6d4c41" opacity=".6"/>
+<ellipse cx="243" cy="178" rx="8" ry="5" fill="white" opacity=".12" transform="rotate(-30,243,178)"/>
+<!-- center front -->
+<circle cx="200" cy="210" r="52" fill="#3e2723"/>
+<circle cx="200" cy="210" r="46" fill="#4e342e"/>
+<circle cx="184" cy="197" r="7" fill="#6d4c41" opacity=".6"/>
+<circle cx="215" cy="193" r="5" fill="#6d4c41" opacity=".6"/>
+<circle cx="195" cy="220" r="6" fill="#6d4c41" opacity=".6"/>
+<ellipse cx="186" cy="197" rx="10" ry="6" fill="white" opacity=".13" transform="rotate(-30,186,197)"/>
+<!-- cocoa dust -->
+<circle cx="170" cy="150" r="3" fill="#6d4c41" opacity=".4"/>
+<circle cx="228" cy="148" r="2" fill="#6d4c41" opacity=".4"/>
+<circle cx="200" cy="145" r="2.5" fill="#6d4c41" opacity=".4"/>
+</svg>

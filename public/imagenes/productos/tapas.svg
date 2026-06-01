@@ -1,0 +1,35 @@
+<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#fff8e1"/><stop offset="100%" stop-color="#ffecb3"/>
+  </linearGradient>
+</defs>
+<rect width="400" height="280" fill="url(#bg)"/>
+<ellipse cx="200" cy="248" rx="118" ry="11" fill="rgba(0,0,0,.1)"/>
+<!-- stacked circle tapas -->
+<!-- bottom 3 stacked -->
+<ellipse cx="200" cy="232" rx="112" ry="16" fill="#d4b880"/>
+<ellipse cx="200" cy="218" rx="112" ry="16" fill="#e8c890"/>
+<ellipse cx="200" cy="205" rx="112" ry="16" fill="#f0d498"/>
+<ellipse cx="200" cy="192" rx="112" ry="16" fill="#e8c890"/>
+<!-- top tapa (visible) -->
+<ellipse cx="200" cy="178" rx="112" ry="16" fill="#f5e0a8"/>
+<ellipse cx="200" cy="168" rx="108" ry="14" fill="#faecc0"/>
+<!-- edge crimp marks -->
+<path d="M92,172 Q96,160 92,148" stroke="#d4a840" stroke-width="3" fill="none" stroke-linecap="round"/>
+<path d="M308,172 Q304,160 308,148" stroke="#d4a840" stroke-width="3" fill="none" stroke-linecap="round"/>
+<!-- flour circle on top -->
+<circle cx="200" cy="163" r="38" fill="white" opacity=".25"/>
+<circle cx="200" cy="163" r="28" fill="white" opacity=".2"/>
+<circle cx="200" cy="163" r="16" fill="white" opacity=".15"/>
+<!-- rolling pin deco -->
+<rect x="140" y="118" width="120" height="20" rx="10" fill="#d4b880"/>
+<ellipse cx="140" cy="128" rx="14" ry="10" fill="#b89860"/>
+<ellipse cx="260" cy="128" rx="14" ry="10" fill="#b89860"/>
+<line x1="100" y1="128" x2="140" y2="128" stroke="#8b7050" stroke-width="6" stroke-linecap="round"/>
+<line x1="260" y1="128" x2="300" y2="128" stroke="#8b7050" stroke-width="6" stroke-linecap="round"/>
+<!-- TACC-free stamp -->
+<circle cx="332" cy="78" r="30" fill="#89b8ad" opacity=".9"/>
+<text x="332" y="72" text-anchor="middle" font-family="Arial" font-size="10" font-weight="bold" fill="white">SIN</text>
+<text x="332" y="84" text-anchor="middle" font-family="Arial" font-size="10" font-weight="bold" fill="white">TACC</text>
+</svg>

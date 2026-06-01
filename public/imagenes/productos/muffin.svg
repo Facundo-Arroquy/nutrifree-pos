@@ -1,0 +1,33 @@
+<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#fff8e1"/><stop offset="100%" stop-color="#ffecb3"/>
+  </linearGradient>
+</defs>
+<rect width="400" height="280" fill="url(#bg)"/>
+<ellipse cx="200" cy="248" rx="90" ry="10" fill="rgba(0,0,0,.1)"/>
+<!-- cup wrapper -->
+<path d="M140,200 L260,200 L248,248 L152,248 Z" fill="#e8d0a0"/>
+<path d="M140,200 L260,200 L258,210 L142,210 Z" fill="#d4b880"/>
+<!-- stripes on cup -->
+<line x1="162" y1="200" x2="155" y2="248" stroke="#c4a860" stroke-width="1.5" opacity=".5"/>
+<line x1="185" y1="200" x2="180" y2="248" stroke="#c4a860" stroke-width="1.5" opacity=".5"/>
+<line x1="200" y1="200" x2="200" y2="248" stroke="#c4a860" stroke-width="1.5" opacity=".5"/>
+<line x1="215" y1="200" x2="220" y2="248" stroke="#c4a860" stroke-width="1.5" opacity=".5"/>
+<line x1="238" y1="200" x2="245" y2="248" stroke="#c4a860" stroke-width="1.5" opacity=".5"/>
+<!-- muffin body -->
+<ellipse cx="200" cy="170" rx="75" ry="55" fill="#c4772a"/>
+<ellipse cx="200" cy="150" rx="70" ry="50" fill="#d4882a"/>
+<ellipse cx="200" cy="138" rx="65" ry="42" fill="#e8a850"/>
+<!-- dome top -->
+<ellipse cx="200" cy="125" rx="60" ry="32" fill="#d4882a"/>
+<ellipse cx="200" cy="115" rx="55" ry="27" fill="#e8a850"/>
+<!-- blueberry chips -->
+<circle cx="182" cy="112" r="7" fill="#5c35b0"/>
+<circle cx="210" cy="106" r="7" fill="#5c35b0"/>
+<circle cx="195" cy="128" r="6" fill="#5c35b0"/>
+<circle cx="220" cy="122" r="6" fill="#5c35b0"/>
+<circle cx="170" cy="128" r="5" fill="#5c35b0"/>
+<!-- crack line -->
+<path d="M175,115 Q200,105 225,115" stroke="#c47020" stroke-width="3" fill="none"/>
+</svg>

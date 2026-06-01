@@ -54,6 +54,7 @@ import ProductionLogPage from "./pages/ProductionLogPage.jsx";
 import HoursBankPage from "./pages/HoursBankPage.jsx";
 import OrdersKanbanPage from "./pages/OrdersKanbanPage.jsx";
 import ChatWidget from "./components/ChatWidget.jsx";
+import MenuPage from "./pages/MenuPage.jsx";
 import { auditIsDue, runAudit, sendAuditEmail } from "./utils/auditCheck.js";
 
 // ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
@@ -531,6 +532,18 @@ export default function App() {
     }).length;
   }, [products, recipes]);
 
+  // Menú público en /
+  const currentPath = window.location.pathname;
+  if (currentPath === "/" && !user) {
+    if (authLoading) return (
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#f3faf8", flexDirection:"column", gap:16 }}>
+        <img src="/imagenes/logo.png" style={{ height:60, opacity:0.7 }} alt="NutriFree" />
+        <div style={{ fontFamily:"Arial, sans-serif", fontSize:".9em", color:"#89b8ad" }}>Cargando…</div>
+      </div>
+    );
+    return <MenuPage onGoToLogin={() => { window.location.href = "/login"; }} />;
+  }
+
   if (authLoading) return (
     <>
       <style>{CSS}</style>
@@ -678,7 +691,7 @@ export default function App() {
                             setSidebarOpen(false);
                           }}>
                             <Ico n="settings" s={15}/>Configuración
-                            <span style={{ marginLeft:"auto", display:"flex", alignItems:"center", transform: expanded ? "none" : "rotate(-90deg)", transition:"transform .2s" }}>
+                            <span style={{ position:"absolute", right:10, display:"flex", alignItems:"center", transform: expanded ? "none" : "rotate(-90deg)", transition:"transform .2s" }}>
                               <Ico n="chevron" s={11}/>
                             </span>
                           </button>
@@ -701,7 +714,7 @@ export default function App() {
                       }}>
                         <Ico n={n.icon} s={15}/>{n.label}
                         {n.id === "reports" && marginAlertCount > 0 && (
-                          <span style={{ marginLeft:"auto", background:"var(--red)", color:"white", borderRadius:99, minWidth:17, height:17, fontSize:".6em", fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px", flexShrink:0 }}>
+                          <span style={{ position:"absolute", right:10, background:"var(--red)", color:"white", borderRadius:99, minWidth:17, height:17, fontSize:".6em", fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px", flexShrink:0 }}>
                             {marginAlertCount}
                           </span>
                         )}

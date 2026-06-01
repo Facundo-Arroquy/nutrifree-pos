@@ -1,0 +1,27 @@
+<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#fffde7"/><stop offset="100%" stop-color="#fff9c4"/>
+  </linearGradient>
+</defs>
+<rect width="400" height="280" fill="url(#bg)"/>
+<ellipse cx="200" cy="248" rx="108" ry="11" fill="rgba(0,0,0,.1)"/>
+<!-- scon body -->
+<ellipse cx="200" cy="230" rx="105" ry="18" fill="#c4873a"/>
+<rect x="95" y="162" width="210" height="70" rx="8" fill="#c4873a"/>
+<ellipse cx="200" cy="162" rx="105" ry="22" fill="#d4983a"/>
+<ellipse cx="200" cy="152" rx="98" ry="18" fill="#e8b050"/>
+<!-- split line -->
+<path d="M100,175 L300,175" stroke="#a07030" stroke-width="2" stroke-dasharray="5,4" opacity=".5"/>
+<!-- cheese filling peek -->
+<path d="M100,175 Q200,182 300,175" stroke="#ffd54f" stroke-width="5" fill="none" stroke-linecap="round" opacity=".75"/>
+<!-- top texture -->
+<path d="M118,150 Q165,140 200,143 Q235,146 282,140" stroke="#f0c860" stroke-width="3" fill="none" stroke-linecap="round" opacity=".5"/>
+<!-- flour dots -->
+<circle cx="145" cy="148" r="5" fill="white" opacity=".5"/>
+<circle cx="200" cy="143" r="5" fill="white" opacity=".5"/>
+<circle cx="255" cy="148" r="5" fill="white" opacity=".5"/>
+<!-- seeds on top -->
+<ellipse cx="160" cy="145" rx="4" ry="2" fill="#8b5e1a" opacity=".5" transform="rotate(-15,160,145)"/>
+<ellipse cx="218" cy="141" rx="4" ry="2" fill="#8b5e1a" opacity=".5" transform="rotate(10,218,141)"/>
+</svg>

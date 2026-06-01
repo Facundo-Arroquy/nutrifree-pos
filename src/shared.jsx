@@ -127,9 +127,9 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ff);font-size:15px;m
 .sb-logo h1{font-size:.92em;font-weight:700;color:var(--t1);letter-spacing:-.01em;display:flex;align-items:center;gap:8px;line-height:1.2}
 .sb-logo p{font-size:.74em;color:var(--t4);margin-top:3px;padding-left:2px;letter-spacing:.01em}
 .sb-nav{padding:2px 8px;flex:1}
-.sb-section{font-size:.66em;font-weight:600;text-transform:uppercase;letter-spacing:.9px;color:var(--t4);padding:16px 10px 4px}
-.ni{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;color:var(--t3);transition:background .1s,color .1s;font-size:.88em;font-weight:500;border:none;background:none;width:100%;text-align:left;margin-bottom:1px}
-.ni:hover{background:var(--s2);color:var(--t2);transform:translateX(1px)}
+.sb-section{font-size:.66em;font-weight:600;text-transform:uppercase;letter-spacing:.9px;color:var(--t4);padding:16px 10px 4px;text-align:center}
+.ni{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;color:var(--t3);transition:background .1s,color .1s;font-size:.88em;font-weight:500;border:none;background:none;width:100%;text-align:center;margin-bottom:1px;position:relative}
+.ni:hover{background:var(--s2);color:var(--t2)}
 .ni.active{background:var(--greenl);color:var(--green);font-weight:600}
 .ni svg{flex-shrink:0;opacity:.65}
 .ni:hover svg,.ni.active svg{opacity:1}

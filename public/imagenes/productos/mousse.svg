@@ -1,0 +1,31 @@
+<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#efebe9"/><stop offset="100%" stop-color="#d7ccc8"/>
+  </linearGradient>
+</defs>
+<rect width="400" height="280" fill="url(#bg)"/>
+<ellipse cx="200" cy="248" rx="75" ry="10" fill="rgba(0,0,0,.1)"/>
+<!-- glass cup -->
+<path d="M142,175 L258,175 L242,248 L158,248 Z" fill="#e8d5c0" opacity=".9"/>
+<path d="M142,175 L258,175 L256,188 L144,188 Z" fill="#d4c0a8"/>
+<!-- mousse layers -->
+<ellipse cx="200" cy="175" rx="58" ry="16" fill="#5d4037"/>
+<ellipse cx="200" cy="163" rx="56" ry="14" fill="#6d4c41"/>
+<ellipse cx="200" cy="152" rx="54" ry="13" fill="#7b5e52"/>
+<!-- whipped cream -->
+<ellipse cx="200" cy="144" rx="52" ry="17" fill="white"/>
+<ellipse cx="172" cy="134" rx="28" ry="16" fill="white"/>
+<ellipse cx="228" cy="134" rx="28" ry="16" fill="white"/>
+<ellipse cx="200" cy="126" rx="22" ry="13" fill="white"/>
+<!-- chocolate shavings -->
+<rect x="186" y="114" width="26" height="5" rx="2" fill="#5d4037" transform="rotate(-22,199,116)"/>
+<rect x="178" y="120" width="20" height="4" rx="2" fill="#5d4037" transform="rotate(18,188,122)"/>
+<rect x="198" y="110" width="22" height="4" rx="2" fill="#5d4037" transform="rotate(-8,209,112)"/>
+<!-- berry on top -->
+<circle cx="226" cy="122" r="9" fill="#e53935"/>
+<path d="M222,114 Q226,107 230,114" fill="#4caf50"/>
+<!-- spoon -->
+<rect x="264" y="138" width="6" height="60" rx="3" fill="#b0a090"/>
+<ellipse cx="267" cy="135" rx="8" ry="12" fill="#c8b8a8"/>
+</svg>

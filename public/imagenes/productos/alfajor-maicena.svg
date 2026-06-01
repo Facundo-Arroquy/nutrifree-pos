@@ -1,0 +1,28 @@
+<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#fffde7"/><stop offset="100%" stop-color="#fff9c4"/>
+  </linearGradient>
+</defs>
+<rect width="400" height="280" fill="url(#bg)"/>
+<ellipse cx="200" cy="248" rx="105" ry="11" fill="rgba(0,0,0,.1)"/>
+<!-- bottom cookie -->
+<ellipse cx="200" cy="225" rx="98" ry="18" fill="#e8d0a0"/>
+<rect x="102" y="182" width="196" height="44" rx="4" fill="#e8d0a0"/>
+<ellipse cx="200" cy="182" rx="98" ry="18" fill="#f5e4b8"/>
+<!-- DDL filling -->
+<rect x="105" y="190" width="190" height="18" fill="#c4802a"/>
+<!-- top cookie -->
+<ellipse cx="200" cy="192" rx="98" ry="18" fill="#e8d0a0"/>
+<rect x="102" y="144" width="196" height="50" rx="4" fill="#e8d0a0"/>
+<ellipse cx="200" cy="144" rx="98" ry="18" fill="#f5e4b8"/>
+<!-- powdered sugar on top -->
+<ellipse cx="200" cy="138" rx="90" ry="12" fill="white" opacity=".7"/>
+<!-- sugar dots -->
+<circle cx="160" cy="137" r="4" fill="white" opacity=".8"/>
+<circle cx="185" cy="133" r="4" fill="white" opacity=".8"/>
+<circle cx="210" cy="134" r="4" fill="white" opacity=".8"/>
+<circle cx="235" cy="137" r="3" fill="white" opacity=".8"/>
+<!-- side edge texture -->
+<path d="M102,165 Q200,158 298,165" stroke="#d4b880" stroke-width="2" fill="none" opacity=".5"/>
+</svg>

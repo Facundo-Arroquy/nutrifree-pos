@@ -1,0 +1,30 @@
+<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#efebe9"/><stop offset="100%" stop-color="#d7ccc8"/>
+  </linearGradient>
+  <linearGradient id="b" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#5d4037"/><stop offset="100%" stop-color="#3e2723"/>
+  </linearGradient>
+</defs>
+<rect width="400" height="280" fill="url(#bg)"/>
+<ellipse cx="200" cy="245" rx="110" ry="11" fill="rgba(0,0,0,.12)"/>
+<!-- brownie block -->
+<rect x="90" y="130" width="220" height="110" rx="8" fill="url(#b)"/>
+<rect x="90" y="130" width="220" height="16" rx="4" fill="#6d4c41"/>
+<!-- cracked top -->
+<path d="M110,133 Q160,125 210,133 Q260,140 300,133" stroke="#7b5e55" stroke-width="3" fill="none"/>
+<!-- DDL drizzle -->
+<path d="M105,148 Q150,138 195,148 Q235,158 295,142" stroke="#c4802a" stroke-width="5" fill="none" stroke-linecap="round"/>
+<path d="M100,165 Q155,155 205,165 Q250,175 300,160" stroke="#c4802a" stroke-width="3" fill="none" stroke-linecap="round"/>
+<!-- meringue on top -->
+<ellipse cx="200" cy="128" rx="95" ry="22" fill="white"/>
+<ellipse cx="160" cy="116" rx="38" ry="20" fill="white"/>
+<ellipse cx="200" cy="112" rx="38" ry="20" fill="white"/>
+<ellipse cx="240" cy="116" rx="38" ry="20" fill="white"/>
+<ellipse cx="200" cy="100" rx="26" ry="15" fill="white"/>
+<!-- torch marks -->
+<circle cx="160" cy="102" r="5" fill="#c4802a" opacity=".7"/>
+<circle cx="200" cy="88" r="5" fill="#c4802a" opacity=".7"/>
+<circle cx="240" cy="102" r="5" fill="#c4802a" opacity=".7"/>
+</svg>

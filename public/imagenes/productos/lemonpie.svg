@@ -1,0 +1,37 @@
+<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#fffde7"/><stop offset="100%" stop-color="#fff9c4"/>
+  </linearGradient>
+</defs>
+<rect width="400" height="280" fill="url(#bg)"/>
+<ellipse cx="200" cy="248" rx="118" ry="12" fill="rgba(0,0,0,.1)"/>
+<!-- pie plate -->
+<ellipse cx="200" cy="230" rx="128" ry="18" fill="#d4c0a0"/>
+<!-- crust -->
+<ellipse cx="200" cy="220" rx="120" ry="20" fill="#c4873a"/>
+<ellipse cx="200" cy="210" rx="115" ry="16" fill="#d4983a"/>
+<!-- lemon curd filling -->
+<ellipse cx="200" cy="200" rx="108" ry="20" fill="#fff176"/>
+<ellipse cx="200" cy="188" rx="108" ry="20" fill="#ffee58"/>
+<!-- meringue peaks -->
+<ellipse cx="155" cy="175" rx="38" ry="22" fill="white"/>
+<ellipse cx="200" cy="168" rx="38" ry="22" fill="white"/>
+<ellipse cx="245" cy="175" rx="38" ry="22" fill="white"/>
+<ellipse cx="178" cy="158" rx="26" ry="16" fill="white"/>
+<ellipse cx="222" cy="158" rx="26" ry="16" fill="white"/>
+<ellipse cx="200" cy="148" rx="22" ry="14" fill="white"/>
+<!-- toasted tips -->
+<circle cx="155" cy="158" r="5" fill="#d4a017" opacity=".6"/>
+<circle cx="200" cy="138" r="5" fill="#d4a017" opacity=".6"/>
+<circle cx="245" cy="158" r="5" fill="#d4a017" opacity=".6"/>
+<circle cx="178" cy="145" r="4" fill="#d4a017" opacity=".5"/>
+<circle cx="222" cy="145" r="4" fill="#d4a017" opacity=".5"/>
+<!-- lemon slice deco -->
+<circle cx="326" cy="68" r="28" fill="#ffee58"/>
+<circle cx="326" cy="68" r="22" fill="#fff176"/>
+<line x1="326" y1="48" x2="326" y2="88" stroke="#fdd835" stroke-width="1.5"/>
+<line x1="306" y1="68" x2="346" y2="68" stroke="#fdd835" stroke-width="1.5"/>
+<line x1="312" y1="54" x2="340" y2="82" stroke="#fdd835" stroke-width="1.5"/>
+<line x1="340" y1="54" x2="312" y2="82" stroke="#fdd835" stroke-width="1.5"/>
+</svg>
