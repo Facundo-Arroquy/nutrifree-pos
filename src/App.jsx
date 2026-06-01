@@ -54,6 +54,7 @@ import ProductionLogPage from "./pages/ProductionLogPage.jsx";
 import HoursBankPage from "./pages/HoursBankPage.jsx";
 import OrdersKanbanPage from "./pages/OrdersKanbanPage.jsx";
 import ChatWidget from "./components/ChatWidget.jsx";
+import MenuPage from "./pages/MenuPage.jsx";
 import { auditIsDue, runAudit, sendAuditEmail } from "./utils/auditCheck.js";
 
 // ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
@@ -530,6 +531,18 @@ export default function App() {
       return ((price - costPerUnit) / price) * 100 < Number(recipe.minMargin);
     }).length;
   }, [products, recipes]);
+
+  // Menú público en /
+  const currentPath = window.location.pathname;
+  if (currentPath === "/" && !user) {
+    if (authLoading) return (
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#f3faf8", flexDirection:"column", gap:16 }}>
+        <img src="/imagenes/logo.png" style={{ height:60, opacity:0.7 }} alt="NutriFree" />
+        <div style={{ fontFamily:"Arial, sans-serif", fontSize:".9em", color:"#89b8ad" }}>Cargando…</div>
+      </div>
+    );
+    return <MenuPage onGoToLogin={() => { window.location.href = "/login"; }} />;
+  }
 
   if (authLoading) return (
     <>

@@ -1,0 +1,26 @@
+<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#fff8e1"/><stop offset="100%" stop-color="#ffecb3"/>
+  </linearGradient>
+  <linearGradient id="cr" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#e8a84a"/><stop offset="100%" stop-color="#c4772a"/>
+  </linearGradient>
+</defs>
+<rect width="400" height="280" fill="url(#bg)"/>
+<ellipse cx="200" cy="248" rx="115" ry="11" fill="rgba(0,0,0,.1)"/>
+<!-- croissant body -->
+<path d="M72,195 Q60,140 100,108 Q148,75 205,100 Q260,125 272,165 Q284,205 250,222 Q210,238 168,220 Q115,205 72,195 Z" fill="url(#cr)"/>
+<!-- layers -->
+<path d="M88,185 Q78,140 112,115 Q155,88 208,112" stroke="#e8c060" stroke-width="6" fill="none" stroke-linecap="round" opacity=".55"/>
+<path d="M100,190 Q90,148 122,124 Q162,100 210,122" stroke="#e8c060" stroke-width="4" fill="none" stroke-linecap="round" opacity=".4"/>
+<!-- tips -->
+<path d="M72,195 Q55,182 65,165 Q80,178 92,182 Z" fill="#c4772a"/>
+<path d="M250,222 Q268,218 272,200 Q258,205 248,212 Z" fill="#c4772a"/>
+<!-- shine -->
+<path d="M100,145 Q145,118 200,128" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" opacity=".3"/>
+<!-- sesame dots -->
+<ellipse cx="138" cy="128" rx="4" ry="2" fill="#8b5e1a" opacity=".6" transform="rotate(-25,138,128)"/>
+<ellipse cx="170" cy="116" rx="4" ry="2" fill="#8b5e1a" opacity=".6" transform="rotate(-15,170,116)"/>
+<ellipse cx="205" cy="112" rx="4" ry="2" fill="#8b5e1a" opacity=".6" transform="rotate(5,205,112)"/>
+</svg>

@@ -1,0 +1,37 @@
+<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#efebe9"/><stop offset="100%" stop-color="#d7ccc8"/>
+  </linearGradient>
+  <linearGradient id="choco" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#5d4037"/><stop offset="100%" stop-color="#3e2723"/>
+  </linearGradient>
+</defs>
+<rect width="400" height="280" fill="url(#bg)"/>
+<ellipse cx="200" cy="248" rx="118" ry="12" fill="rgba(0,0,0,.12)"/>
+<!-- choco layers -->
+<rect x="82" y="180" width="236" height="60" rx="4" fill="url(#choco)"/>
+<ellipse cx="200" cy="180" rx="118" ry="14" fill="#6d4c41"/>
+<!-- DDL layer -->
+<rect x="82" y="155" width="236" height="27" fill="#c4802a"/>
+<rect x="82" y="148" width="236" height="9" fill="#d4902a"/>
+<!-- top brownie layer -->
+<rect x="82" y="110" width="236" height="40" rx="4" fill="url(#choco)"/>
+<ellipse cx="200" cy="110" rx="118" ry="14" fill="#6d4c41"/>
+<!-- meringue -->
+<ellipse cx="200" cy="110" rx="118" ry="14" fill="white"/>
+<ellipse cx="148" cy="100" rx="35" ry="20" fill="white"/>
+<ellipse cx="200" cy="95" rx="35" ry="20" fill="white"/>
+<ellipse cx="252" cy="100" rx="35" ry="20" fill="white"/>
+<ellipse cx="175" cy="88" rx="24" ry="15" fill="white"/>
+<ellipse cx="225" cy="88" rx="24" ry="15" fill="white"/>
+<ellipse cx="200" cy="78" rx="20" ry="13" fill="white"/>
+<!-- toasted -->
+<circle cx="148" cy="85" r="5" fill="#d4a017" opacity=".65"/>
+<circle cx="200" cy="68" r="5" fill="#d4a017" opacity=".65"/>
+<circle cx="252" cy="85" r="5" fill="#d4a017" opacity=".65"/>
+<!-- choco drip -->
+<path d="M100,122 Q98,138 101,152" stroke="#3e2723" stroke-width="5" fill="none" stroke-linecap="round"/>
+<path d="M295,120 Q298,136 294,152" stroke="#3e2723" stroke-width="5" fill="none" stroke-linecap="round"/>
+<path d="M178,122 Q176,140 179,154" stroke="#3e2723" stroke-width="4" fill="none" stroke-linecap="round"/>
+</svg>

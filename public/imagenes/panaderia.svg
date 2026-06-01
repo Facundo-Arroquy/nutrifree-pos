@@ -1,0 +1,67 @@
+<svg viewBox="0 0 500 300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFF3E0"/>
+      <stop offset="100%" style="stop-color:#FFE0B2"/>
+    </linearGradient>
+    <linearGradient id="breadGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#E8A84A"/>
+      <stop offset="100%" style="stop-color:#C4772A"/>
+    </linearGradient>
+  </defs>
+  <rect width="500" height="300" fill="url(#bg)" rx="20"/>
+
+  <!-- Croissant / medialuna -->
+  <g transform="translate(55, 80)">
+    <ellipse cx="90" cy="148" rx="85" ry="10" fill="rgba(0,0,0,0.1)"/>
+    <!-- Body -->
+    <path d="M10,100 Q0,60 30,40 Q60,20 90,35 Q120,50 130,80 Q140,110 120,120 Q90,130 60,120 Q30,115 10,100 Z" fill="url(#breadGrad)"/>
+    <!-- Shine layers -->
+    <path d="M25,80 Q20,55 45,42 Q70,30 95,40" stroke="#F0C060" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.6"/>
+    <path d="M35,90 Q30,68 52,55 Q75,42 98,52" stroke="#F0C060" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.4"/>
+    <!-- Tip left -->
+    <path d="M10,100 Q-5,85 5,70 Q15,80 25,88 Z" fill="#D4882A"/>
+    <!-- Tip right -->
+    <path d="M120,120 Q138,112 140,96 Q126,100 118,110 Z" fill="#D4882A"/>
+  </g>
+
+  <!-- Chipa -->
+  <g transform="translate(215, 95)">
+    <ellipse cx="70" cy="135" rx="65" ry="10" fill="rgba(0,0,0,0.1)"/>
+    <!-- Ring shape -->
+    <circle cx="70" cy="110" r="55" fill="#E8B850"/>
+    <circle cx="70" cy="110" r="35" fill="url(#bg)"/>
+    <!-- Texture / cheese bubbles -->
+    <circle cx="48" cy="68" r="6" fill="#F0C860" opacity="0.7"/>
+    <circle cx="92" cy="65" r="5" fill="#F0C860" opacity="0.7"/>
+    <circle cx="112" cy="90" r="6" fill="#F0C860" opacity="0.7"/>
+    <circle cx="108" cy="125" r="5" fill="#F0C860" opacity="0.7"/>
+    <circle cx="88" cy="148" r="6" fill="#F0C860" opacity="0.7"/>
+    <circle cx="50" cy="148" r="5" fill="#F0C860" opacity="0.7"/>
+    <circle cx="28" cy="125" r="6" fill="#F0C860" opacity="0.7"/>
+    <circle cx="25" cy="88" r="5" fill="#F0C860" opacity="0.7"/>
+    <!-- Shine -->
+    <path d="M38,72 Q70,58 100,72" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.4"/>
+  </g>
+
+  <!-- Scons -->
+  <g transform="translate(360, 110)">
+    <ellipse cx="65" cy="130" rx="60" ry="9" fill="rgba(0,0,0,0.1)"/>
+    <!-- Scon body -->
+    <ellipse cx="65" cy="120" rx="55" ry="13" fill="#C4873A"/>
+    <rect x="10" y="72" width="110" height="50" rx="6" fill="#C4873A"/>
+    <ellipse cx="65" cy="72" rx="55" ry="18" fill="#D4983A"/>
+    <ellipse cx="65" cy="65" rx="50" ry="14" fill="#E8B050"/>
+    <!-- Cut line -->
+    <path d="M15,90 L115,90" stroke="#B07030" stroke-width="2" stroke-dasharray="4,3" opacity="0.5"/>
+    <!-- Flour texture -->
+    <circle cx="40" cy="62" r="3" fill="white" opacity="0.4"/>
+    <circle cx="65" cy="58" r="3" fill="white" opacity="0.4"/>
+    <circle cx="88" cy="62" r="3" fill="white" opacity="0.4"/>
+    <!-- Cheese filling peek -->
+    <path d="M15,90 Q65,95 115,90" stroke="#FFD54F" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.7"/>
+  </g>
+
+  <!-- Text -->
+  <text x="250" y="282" text-anchor="middle" font-family="Georgia, serif" font-size="26" font-weight="bold" fill="#8B4500">Panadería</text>
+</svg>

@@ -1,0 +1,30 @@
+<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#f3faf8"/><stop offset="100%" stop-color="#e4f2ef"/>
+  </linearGradient>
+</defs>
+<rect width="400" height="280" fill="url(#bg)"/>
+<!-- tray -->
+<ellipse cx="200" cy="240" rx="155" ry="18" fill="rgba(0,0,0,.08)"/>
+<rect x="50" y="195" width="300" height="44" rx="12" fill="#d4c8b8"/>
+<ellipse cx="200" cy="195" rx="150" ry="16" fill="#e8dcc8"/>
+<!-- mini alfajor -->
+<ellipse cx="118" cy="172" rx="32" ry="32" fill="#a0622a"/>
+<ellipse cx="118" cy="162" rx="30" ry="30" fill="#c4843a"/>
+<ellipse cx="118" cy="155" rx="28" ry="16" fill="white" opacity=".3"/>
+<!-- mini budin -->
+<ellipse cx="200" cy="178" rx="38" ry="18" fill="#c4772a"/>
+<rect x="162" y="148" width="76" height="32" rx="5" fill="#c4772a"/>
+<ellipse cx="200" cy="148" rx="38" ry="18" fill="#e8a84a"/>
+<path d="M170,148 Q200,138 230,148" stroke="#f0c060" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".5"/>
+<!-- mini cookie -->
+<ellipse cx="286" cy="172" rx="30" ry="30" fill="#b87333"/>
+<ellipse cx="286" cy="163" rx="28" ry="28" fill="#c4843a"/>
+<circle cx="275" cy="160" r="5" fill="#3e2723"/>
+<circle cx="292" cy="155" r="5" fill="#3e2723"/>
+<circle cx="284" cy="168" r="4" fill="#3e2723"/>
+<!-- bow / ribbon -->
+<path d="M185,118 Q200,108 215,118 Q200,128 185,118 Z" fill="#89b8ad"/>
+<path d="M192,118 L208,118" stroke="#5a8a82" stroke-width="2"/>
+</svg>

@@ -1,0 +1,37 @@
+<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#fff8e1"/><stop offset="100%" stop-color="#ffecb3"/>
+  </linearGradient>
+  <linearGradient id="loaf" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#e8a84a"/><stop offset="100%" stop-color="#c4772a"/>
+  </linearGradient>
+</defs>
+<rect width="400" height="280" fill="url(#bg)"/>
+<ellipse cx="200" cy="248" rx="128" ry="13" fill="rgba(0,0,0,.1)"/>
+<!-- loaf -->
+<rect x="62" y="155" width="276" height="88" rx="10" fill="#c4772a"/>
+<ellipse cx="200" cy="155" rx="138" ry="32" fill="url(#loaf)"/>
+<ellipse cx="200" cy="145" rx="128" ry="26" fill="#e8a84a"/>
+<!-- score cracks -->
+<path d="M108,128 L108,162" stroke="#c4772a" stroke-width="3" stroke-linecap="round"/>
+<path d="M148,120 L148,155" stroke="#c4772a" stroke-width="3" stroke-linecap="round"/>
+<path d="M200,117 L200,152" stroke="#c4772a" stroke-width="3" stroke-linecap="round"/>
+<path d="M252,120 L252,155" stroke="#c4772a" stroke-width="3" stroke-linecap="round"/>
+<path d="M292,128 L292,162" stroke="#c4772a" stroke-width="3" stroke-linecap="round"/>
+<!-- glaze drip -->
+<path d="M80,162 Q110,154 140,160 Q170,166 200,158 Q230,150 260,158 Q290,166 318,158" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" opacity=".55"/>
+<!-- orange slice deco -->
+<circle cx="168" cy="133" r="16" fill="#ff8f00" opacity=".85"/>
+<circle cx="168" cy="133" r="11" fill="#ffa726"/>
+<line x1="168" y1="122" x2="168" y2="144" stroke="#e65100" stroke-width="1.2" opacity=".6"/>
+<line x1="157" y1="133" x2="179" y2="133" stroke="#e65100" stroke-width="1.2" opacity=".6"/>
+<circle cx="232" cy="130" r="14" fill="#ff8f00" opacity=".85"/>
+<circle cx="232" cy="130" r="9" fill="#ffa726"/>
+<line x1="232" y1="121" x2="232" y2="139" stroke="#e65100" stroke-width="1.2" opacity=".6"/>
+<line x1="223" y1="130" x2="241" y2="130" stroke="#e65100" stroke-width="1.2" opacity=".6"/>
+<!-- powdered sugar -->
+<circle cx="120" cy="132" r="4" fill="white" opacity=".5"/>
+<circle cx="200" cy="126" r="4" fill="white" opacity=".5"/>
+<circle cx="278" cy="132" r="4" fill="white" opacity=".5"/>
+</svg>

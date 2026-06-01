@@ -1,0 +1,26 @@
+<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#fff8e1"/><stop offset="100%" stop-color="#ffecb3"/>
+  </linearGradient>
+</defs>
+<rect width="400" height="280" fill="url(#bg)"/>
+<ellipse cx="200" cy="248" rx="115" ry="11" fill="rgba(0,0,0,.1)"/>
+<!-- bottom bun -->
+<ellipse cx="200" cy="232" rx="118" ry="18" fill="#c4772a"/>
+<rect x="82" y="194" width="236" height="40" rx="4" fill="#c4772a"/>
+<ellipse cx="200" cy="194" rx="118" ry="18" fill="#d4882a"/>
+<!-- top bun dome -->
+<ellipse cx="200" cy="178" rx="118" ry="20" fill="#c4772a"/>
+<rect x="82" y="132" width="236" height="48" rx="6" fill="#c4772a"/>
+<ellipse cx="200" cy="132" rx="118" ry="30" fill="#d4882a"/>
+<ellipse cx="200" cy="120" rx="108" ry="26" fill="#e8a84a"/>
+<!-- sesame seeds -->
+<ellipse cx="160" cy="112" rx="8" ry="4" fill="#c4772a" transform="rotate(-20,160,112)"/>
+<ellipse cx="200" cy="106" rx="8" ry="4" fill="#c4772a" transform="rotate(5,200,106)"/>
+<ellipse cx="240" cy="112" rx="8" ry="4" fill="#c4772a" transform="rotate(20,240,112)"/>
+<ellipse cx="178" cy="118" rx="7" ry="3" fill="#c4772a" transform="rotate(-10,178,118)"/>
+<ellipse cx="222" cy="118" rx="7" ry="3" fill="#c4772a" transform="rotate(10,222,118)"/>
+<!-- shine -->
+<path d="M130,116 Q178,102 230,110" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" opacity=".3"/>
+</svg>

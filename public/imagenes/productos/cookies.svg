@@ -1,0 +1,30 @@
+<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#fff8e1"/><stop offset="100%" stop-color="#ffecb3"/>
+  </linearGradient>
+</defs>
+<rect width="400" height="280" fill="url(#bg)"/>
+<!-- cookie stack -->
+<ellipse cx="200" cy="245" rx="88" ry="10" fill="rgba(0,0,0,.1)"/>
+<!-- bottom -->
+<ellipse cx="200" cy="232" rx="85" ry="15" fill="#a0622a"/>
+<!-- mid -->
+<ellipse cx="200" cy="210" rx="85" ry="15" fill="#b87333"/>
+<ellipse cx="200" cy="200" rx="82" ry="13" fill="#c4843a"/>
+<!-- top cookie -->
+<ellipse cx="200" cy="182" rx="85" ry="15" fill="#b87333"/>
+<ellipse cx="200" cy="172" rx="82" ry="13" fill="#c4843a"/>
+<!-- choco chips top cookie -->
+<circle cx="178" cy="167" r="7" fill="#3e2723"/>
+<circle cx="205" cy="161" r="7" fill="#3e2723"/>
+<circle cx="195" cy="175" r="6" fill="#3e2723"/>
+<circle cx="222" cy="168" r="6" fill="#3e2723"/>
+<circle cx="165" cy="172" r="5" fill="#3e2723"/>
+<circle cx="230" cy="178" r="5" fill="#3e2723"/>
+<!-- texture cracks -->
+<path d="M165,170 Q185,165 205,170" stroke="#a0622a" stroke-width="2" fill="none"/>
+<path d="M196,162 Q210,158 224,162" stroke="#a0622a" stroke-width="1.5" fill="none"/>
+<!-- shine -->
+<ellipse cx="178" cy="163" r="8" fill="white" opacity=".12"/>
+</svg>

@@ -1,0 +1,26 @@
+<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#fffde7"/><stop offset="100%" stop-color="#fff9c4"/>
+  </linearGradient>
+</defs>
+<rect width="400" height="280" fill="url(#bg)"/>
+<ellipse cx="200" cy="248" rx="115" ry="12" fill="rgba(0,0,0,.1)"/>
+<!-- crust base -->
+<path d="M85,240 L315,240 L280,145 L120,145 Z" fill="#c4873a"/>
+<!-- cheesecake body (slice triangle) -->
+<path d="M120,145 L280,145 L250,90 L150,90 Z" fill="#fff9e6"/>
+<path d="M150,90 L250,90 L240,80 L160,80 Z" fill="#fffde7"/>
+<!-- berry topping -->
+<ellipse cx="180" cy="80" rx="14" ry="10" fill="#e53935"/>
+<ellipse cx="210" cy="77" rx="12" ry="9" fill="#e53935"/>
+<ellipse cx="200" cy="68" rx="10" ry="8" fill="#c62828"/>
+<!-- blueberries -->
+<circle cx="193" cy="83" r="5" fill="#5c35b0"/>
+<circle cx="218" cy="80" r="5" fill="#5c35b0"/>
+<!-- cream drip -->
+<path d="M170,90 Q168,105 172,118" stroke="white" stroke-width="5" fill="none" stroke-linecap="round" opacity=".7"/>
+<path d="M230,90 Q232,108 228,120" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" opacity=".7"/>
+<!-- side texture -->
+<path d="M120,145 L280,145 L278,152 L122,152 Z" fill="#d4983a" opacity=".5"/>
+</svg>
