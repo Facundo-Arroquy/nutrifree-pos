@@ -49,7 +49,7 @@ VALUES (gen_random_uuid(), '<customer_id>', null, <amount>, 'charge', 'balance',
 (sih1ak2, vk18hgt, mh0skfv). El código en `registerPayment` fue corregido para
 que no vuelva a ocurrir. Ver `CAMBIOS_2026-05-20.md`.
 
----
+--- 
 
 ## 2. Cuenta Corriente — Balance calculado vs almacenado
 

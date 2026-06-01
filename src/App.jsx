@@ -691,7 +691,7 @@ export default function App() {
                             setSidebarOpen(false);
                           }}>
                             <Ico n="settings" s={15}/>Configuración
-                            <span style={{ marginLeft:"auto", display:"flex", alignItems:"center", transform: expanded ? "none" : "rotate(-90deg)", transition:"transform .2s" }}>
+                            <span style={{ position:"absolute", right:10, display:"flex", alignItems:"center", transform: expanded ? "none" : "rotate(-90deg)", transition:"transform .2s" }}>
                               <Ico n="chevron" s={11}/>
                             </span>
                           </button>
@@ -714,7 +714,7 @@ export default function App() {
                       }}>
                         <Ico n={n.icon} s={15}/>{n.label}
                         {n.id === "reports" && marginAlertCount > 0 && (
-                          <span style={{ marginLeft:"auto", background:"var(--red)", color:"white", borderRadius:99, minWidth:17, height:17, fontSize:".6em", fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px", flexShrink:0 }}>
+                          <span style={{ position:"absolute", right:10, background:"var(--red)", color:"white", borderRadius:99, minWidth:17, height:17, fontSize:".6em", fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px", flexShrink:0 }}>
                             {marginAlertCount}
                           </span>
                         )}
