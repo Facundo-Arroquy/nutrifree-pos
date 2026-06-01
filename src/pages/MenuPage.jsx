@@ -44,7 +44,7 @@ export default function MenuPage({ onGoToLogin }) {
   useEffect(() => {
     Promise.all([
       supabase.from("categories").select("*").order("name"),
-      supabase.from("products").select("*").eq("active", true).order("name"),
+      supabase.from("products").select("*").eq("show_in_menu", true).order("name"),
     ]).then(([{ data: cats }, { data: prods }]) => {
       setCategories(cats?.map(c => c.name) ?? []);
       setProducts(prods?.map(dbToProduct) ?? []);

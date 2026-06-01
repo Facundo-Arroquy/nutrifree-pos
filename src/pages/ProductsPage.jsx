@@ -103,6 +103,15 @@ export default function ProductsPage({ products, setProducts, categories, showTo
     logAction?.("estado", "producto", `"${product.name}" → ${active ? "activo" : "inactivo"}`);
   };
 
+  const toggleMenu = async (id) => {
+    const product = products.find(p => p.id === id);
+    if (!product) return;
+    const showInMenu = !product.showInMenu;
+    const { error } = await supabase.from("products").update({ show_in_menu: showInMenu }).eq("id", id);
+    if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
+    setProducts(p => p.map(x => x.id===id ? {...x, showInMenu} : x));
+  };
+
   return (
     <div className="page">
       <div className="page-header">
@@ -129,7 +138,7 @@ export default function ProductsPage({ products, setProducts, categories, showTo
             <SortableTh col="priceRetail" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>P. Minorista</SortableTh>
             <SortableTh col="priceWholesale" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>P. Mayorista</SortableTh>
             <SortableTh col="stock" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Stock</SortableTh>
-            <th>Estado</th><th></th>
+            <th>Estado</th><th>Menú</th><th></th>
           </tr></thead>
           <tbody>
             {filtered.map(p => (
@@ -152,12 +161,17 @@ export default function ProductsPage({ products, setProducts, categories, showTo
                     {p.active?"Activo":"Inactivo"}
                   </button>
                 </td>
+                <td data-label="Menú">
+                  <button className={`badge ${p.showInMenu?"badge-blue":"badge-gray"}`} onClick={e=>{e.stopPropagation();toggleMenu(p.id);}}>
+                    {p.showInMenu?"En menú":"Oculto"}
+                  </button>
+                </td>
                 <td data-label="" style={{ whiteSpace:"nowrap", textAlign:"right" }}>
                   <button className="btn btn-ghost btn-icon btn-sm" onClick={e=>{e.stopPropagation();del(p.id);}}><Ico n="trash" s={13} c="var(--red)"/></button>
                 </td>
               </tr>
             ))}
-            {filtered.length===0&&<tr><td colSpan={7}><div className="empty"><div className="empty-icon">📦</div><h3>Sin productos</h3></div></td></tr>}
+            {filtered.length===0&&<tr><td colSpan={8}><div className="empty"><div className="empty-icon">📦</div><h3>Sin productos</h3></div></td></tr>}
           </tbody>
         </table>
       </div>

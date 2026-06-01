@@ -44,6 +44,7 @@ export const dbToProduct = r => ({
   photo: r.photo, description: r.description,
   kitItems: r.kit_items || [],
   isFavorite: r.is_favorite ?? false,
+  showInMenu: r.show_in_menu ?? false,
 });
 
 export const productToDb = p => ({
@@ -53,6 +54,7 @@ export const productToDb = p => ({
   photo: p.photo, description: p.description,
   kit_items: p.kitItems || [],
   is_favorite: p.isFavorite ?? false,
+  show_in_menu: p.showInMenu ?? false,
 });
 
 export const dbToCustomer = r => ({
