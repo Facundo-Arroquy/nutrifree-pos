@@ -146,7 +146,7 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
 
       {selected && (
         <Modal title={`Pedido #${selected.id.toUpperCase()}`} onClose={()=>setSelected(null)} lg>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:16 }}>
+          <div className="resp-2col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:16 }}>
             <div><label className="lbl">Cliente</label><div style={{ marginTop:4 }}>{selected.customerName}</div></div>
             <div><label className="lbl">Estado</label><div style={{ marginTop:4 }}><span className={`badge ${STATUS_COLORS[selected.status]}`}>{STATUS_LABELS[selected.status]}</span></div></div>
             <div><label className="lbl">Fecha</label><div style={{ marginTop:4, fontSize:".88em" }}>{fmtDT(selected.createdAt)}</div></div>
@@ -176,7 +176,7 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
               <thead><tr><th>Producto</th><th>Cant.</th><th>P. Unit.</th><th>Subtotal</th></tr></thead>
               <tbody>
                 {selected.items.map((i,idx)=>(
-                  <tr key={idx}><td>{i.name}</td><td>{i.qty}</td><td>{$(i.price)}</td><td style={{ fontWeight:700 }}>{$(i.subtotal)}</td></tr>
+                  <tr key={idx}><td data-label="Producto">{i.name}</td><td data-label="Cant.">{i.qty}</td><td data-label="P. Unit.">{$(i.price)}</td><td data-label="Subtotal" style={{ fontWeight:700 }}>{$(i.subtotal)}</td></tr>
                 ))}
               </tbody>
             </table>

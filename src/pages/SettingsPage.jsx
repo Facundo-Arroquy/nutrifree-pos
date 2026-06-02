@@ -88,7 +88,7 @@ export default function SettingsPage({ user, categories, setCategories, expenseC
         <div><div className="page-title">Configuración</div></div>
       </div>
 
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
+      <div className="resp-2col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
         <div className="card">
           <div className="section-title">Categorías de productos</div>
           {categories.map(c=>(
