@@ -137,10 +137,10 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
               const bal = supplierBal(s.id);
               return (
                 <tr key={s.id} className="tr-click" onClick={()=>openEdit(s)}>
-                  <td style={{ fontWeight:700 }}>{s.name}</td>
-                  <td style={{ color:"var(--t3)", fontSize:".85em" }}>{s.phone||"—"}</td>
-                  <td style={{ color:"var(--t3)", fontSize:".85em" }}>{s.email||"—"}</td>
-                  <td>
+                  <td data-label="Nombre" style={{ fontWeight:700 }}>{s.name}</td>
+                  <td data-label="Teléfono" style={{ color:"var(--t3)", fontSize:".85em" }}>{s.phone||"—"}</td>
+                  <td data-label="Email" style={{ color:"var(--t3)", fontSize:".85em" }}>{s.email||"—"}</td>
+                  <td data-label="Saldo">
                     {bal === 0
                       ? <span className="badge badge-green">Al día</span>
                       : bal < 0
@@ -148,7 +148,7 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
                         : <span className="badge" style={{ background:"var(--bluel)", color:"var(--blue)", fontWeight:700 }}>A favor {$(bal)}</span>
                     }
                   </td>
-                  <td onClick={ev=>ev.stopPropagation()} style={{ whiteSpace:"nowrap" }}>
+                  <td data-label="" onClick={ev=>ev.stopPropagation()} style={{ whiteSpace:"nowrap" }}>
                     <div style={{ display:"flex", gap:4, alignItems:"center", justifyContent:"flex-end" }}>
                       <button className="btn btn-sm btn-secondary" onClick={()=>{ setAccountModal(s); }}>Ver cuenta</button>
                       <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>del(s.id)}><Ico n="trash" s={13} c="var(--red)"/></button>
@@ -206,17 +206,17 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
                 <tbody>
                   {movements.map(m => (
                     <tr key={m.id}>
-                      <td style={{ fontSize:".82em", color:"var(--t3)", whiteSpace:"nowrap" }}>{fmtDate(m.date)}</td>
-                      <td>
+                      <td data-label="Fecha" style={{ fontSize:".82em", color:"var(--t3)", whiteSpace:"nowrap" }}>{fmtDate(m.date)}</td>
+                      <td data-label="Tipo">
                         {m.type==="charge"
                           ? <span className="badge badge-amber">Cargo</span>
                           : <span className="badge badge-green">Pago</span>}
                       </td>
-                      <td style={{ fontWeight:700, color: m.type==="charge" ? "var(--red)" : "var(--green)" }}>
+                      <td data-label="Monto" style={{ fontWeight:700, color: m.type==="charge" ? "var(--red)" : "var(--green)" }}>
                         {m.type==="charge" ? "-" : "+"}{$(m.amount)}
                       </td>
-                      <td style={{ fontSize:".82em", color:"var(--t3)" }}>{m.paymentMethod ? PAY_LABELS[m.paymentMethod]||m.paymentMethod : "—"}</td>
-                      <td style={{ fontSize:".82em", color:"var(--t3)" }}>{m.notes||"—"}</td>
+                      <td data-label="Método" style={{ fontSize:".82em", color:"var(--t3)" }}>{m.paymentMethod ? PAY_LABELS[m.paymentMethod]||m.paymentMethod : "—"}</td>
+                      <td data-label="Notas" style={{ fontSize:".82em", color:"var(--t3)" }}>{m.notes||"—"}</td>
                     </tr>
                   ))}
                   {movements.length===0 && <tr><td colSpan={5} style={{ textAlign:"center", color:"var(--t4)", padding:"20px 0" }}>Sin movimientos</td></tr>}

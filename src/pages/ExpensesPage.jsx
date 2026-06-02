@@ -357,7 +357,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
     <div className="page">
       <div className="page-header">
         <div><div className="page-title">Gastos</div><div className="page-sub">{dateFiltered.length} en el período</div></div>
-        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
           <label style={{ fontSize:".8em", color:"var(--t3)", whiteSpace:"nowrap" }}>Desde</label>
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ width:140 }}/>
           <label style={{ fontSize:".8em", color:"var(--t3)", whiteSpace:"nowrap" }}>Hasta</label>
@@ -410,20 +410,20 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
           <tbody>
             {filtered.map(e => (
               <tr key={e.id} className="tr-click" onClick={()=>openEdit(e)}>
-                <td style={{ fontSize:".82em", color:"var(--t3)", whiteSpace:"nowrap" }}>{fmtDate(e.date)}</td>
-                <td style={{ fontWeight:600 }}>{e.supplier||"—"}</td>
-                <td>{e.concept}</td>
-                <td style={{ color:"var(--t2)", whiteSpace:"nowrap" }}>{e.quantity} {e.unit}</td>
-                <td style={{ color:"var(--t2)" }}>{$(e.unitPrice)}</td>
-                <td style={{ fontWeight:700, color:"var(--red)" }}>{$(e.total)}</td>
-                <td><span className="tag">{e.category}</span></td>
-                <td style={{ fontSize:".82em", color:"var(--t3)" }}>{e.paymentMethod ? PAY_LABELS[e.paymentMethod]||e.paymentMethod : <span style={{color:"var(--t4)"}}>—</span>}</td>
-                <td>
+                <td data-label="Fecha" style={{ fontSize:".82em", color:"var(--t3)", whiteSpace:"nowrap" }}>{fmtDate(e.date)}</td>
+                <td data-label="Proveedor" style={{ fontWeight:600 }}>{e.supplier||"—"}</td>
+                <td data-label="Concepto">{e.concept}</td>
+                <td data-label="Cant." style={{ color:"var(--t2)", whiteSpace:"nowrap" }}>{e.quantity} {e.unit}</td>
+                <td data-label="P. Unit." style={{ color:"var(--t2)" }}>{$(e.unitPrice)}</td>
+                <td data-label="Total" style={{ fontWeight:700, color:"var(--red)" }}>{$(e.total)}</td>
+                <td data-label="Categoría"><span className="tag">{e.category}</span></td>
+                <td data-label="Método" style={{ fontSize:".82em", color:"var(--t3)" }}>{e.paymentMethod ? PAY_LABELS[e.paymentMethod]||e.paymentMethod : <span style={{color:"var(--t4)"}}>—</span>}</td>
+                <td data-label="Estado">
                   {e.paymentStatus==="paid"
                     ? <span className="badge badge-green">Pagado</span>
                     : <span className="badge badge-amber">Pendiente</span>}
                 </td>
-                <td onClick={ev=>ev.stopPropagation()} style={{ whiteSpace:"nowrap" }}>
+                <td data-label="" onClick={ev=>ev.stopPropagation()} style={{ whiteSpace:"nowrap" }}>
                   <div style={{ display:"flex", gap:4, alignItems:"center", justifyContent:"flex-end" }}>
                     {e.paymentStatus==="pending" && (
                       <button className="btn btn-sm btn-primary" style={{ fontSize:".76em", padding:"4px 9px" }} onClick={()=>setPayModal(e)}>

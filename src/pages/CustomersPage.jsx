@@ -625,13 +625,13 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
                     <tbody>
                       {movements.map(p => (
                         <tr key={p.id}>
-                          <td style={{ fontSize:".82em", color:"var(--t3)" }}>{fmtDate(p.date)}</td>
-                          <td><span className={`badge ${p.type==="charge"?"badge-red":"badge-green"}`}>{p.type==="charge"?"Cargo":"Pago"}</span></td>
-                          <td style={{ fontWeight:700, color: p.type==="charge"?"var(--red)":"var(--green)" }}>
+                          <td data-label="Fecha" style={{ fontSize:".82em", color:"var(--t3)" }}>{fmtDate(p.date)}</td>
+                          <td data-label="Tipo"><span className={`badge ${p.type==="charge"?"badge-red":"badge-green"}`}>{p.type==="charge"?"Cargo":"Pago"}</span></td>
+                          <td data-label="Monto" style={{ fontWeight:700, color: p.type==="charge"?"var(--red)":"var(--green)" }}>
                             {p.type==="charge"?"-":"+"}{$(p.amount)}
                           </td>
-                          <td style={{ fontSize:".84em" }}>{PAY_LABELS[p.paymentMethod]||"—"}</td>
-                          <td style={{ fontSize:".82em", color:"var(--t3)" }}>{p.notes||"—"}</td>
+                          <td data-label="Método" style={{ fontSize:".84em" }}>{PAY_LABELS[p.paymentMethod]||"—"}</td>
+                          <td data-label="Notas" style={{ fontSize:".82em", color:"var(--t3)" }}>{p.notes||"—"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -672,12 +672,12 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
                         return (
                         <>
                           <tr key={s.id} className="tr-click" onClick={() => setExpandedSaleId(expandedSaleId === s.id ? null : s.id)}>
-                            <td style={{ fontSize:".82em", color:"var(--t3)" }}>{fmtDate(s.createdAt)}</td>
-                            <td><span className={`badge ${STATUS_COLORS[s.status]||"badge-gray"}`}>{STATUS_LABELS[s.status]||s.status}</span></td>
-                            <td style={{ fontWeight:700 }}>{$(s.total)}</td>
-                            <td style={{ fontSize:".84em" }}>{PAY_LABELS[s.paymentMethod]||"—"}</td>
-                            <td>{ps ? <span className={`badge ${ps.cls}`}>{ps.label}</span> : <span style={{ color:"var(--t4)" }}>—</span>}</td>
-                            <td style={{ textAlign:"center" }}>
+                            <td data-label="Fecha" style={{ fontSize:".82em", color:"var(--t3)" }}>{fmtDate(s.createdAt)}</td>
+                            <td data-label="Estado"><span className={`badge ${STATUS_COLORS[s.status]||"badge-gray"}`}>{STATUS_LABELS[s.status]||s.status}</span></td>
+                            <td data-label="Total" style={{ fontWeight:700 }}>{$(s.total)}</td>
+                            <td data-label="Método" style={{ fontSize:".84em" }}>{PAY_LABELS[s.paymentMethod]||"—"}</td>
+                            <td data-label="Pago">{ps ? <span className={`badge ${ps.cls}`}>{ps.label}</span> : <span style={{ color:"var(--t4)" }}>—</span>}</td>
+                            <td data-label="" style={{ textAlign:"center" }}>
                               <span style={{ display:"inline-block", transition:"transform .15s", transform: expandedSaleId===s.id ? "rotate(180deg)" : "rotate(0deg)" }}>
                                 <Ico n="chevron" s={13} c="var(--t3)"/>
                               </span>
@@ -685,7 +685,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
                           </tr>
                           {expandedSaleId === s.id && (
                             <tr key={s.id+"-detail"}>
-                              <td colSpan={6} style={{ padding:"0 8px 10px 8px", background:"var(--bg2)" }}>
+                              <td data-label="" colSpan={6} style={{ padding:"0 8px 10px 8px", background:"var(--bg2)" }}>
                                 <div style={{ padding:"8px 4px", fontSize:".85em" }}>
                                   {s.items.map((item, i) => (
                                     <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"4px 8px", borderBottom:"1px solid var(--border)", gap:8 }}>

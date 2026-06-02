@@ -224,7 +224,7 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
     <div className="page">
       <div className="page-header">
         <div><div className="page-title">Recetas</div><div className="page-sub">Fichas técnicas de productos</div></div>
-        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+        <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
           <div className="search-wrap" style={{ minWidth:220 }}>
             <div className="search-ico"><Ico n="search" s={14}/></div>
             <input placeholder="Buscar receta..." value={search} onChange={e=>setSearch(e.target.value)}/>
@@ -350,7 +350,7 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
       {/* VIEW MODAL */}
       {viewModal && (
         <Modal title={products.find(p=>p.id===viewModal.productId)?.name||"Receta"} onClose={()=>setViewModal(null)} lg>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:16 }}>
+          <div className="resp-2col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:16 }}>
             {[["Tiempo prep.",viewModal.prepTime+" min"],["Tiempo cocción",viewModal.cookTime+" min"],["Rendimiento",viewModal.yield+" unidades"]].map(([l,v])=>(
               <div key={l} style={{ background:"var(--s2)", borderRadius:8, padding:"10px 12px" }}>
                 <div style={{ fontSize:".72em", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".4px" }}>{l}</div>
@@ -370,11 +370,16 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
               <thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Costo</th></tr></thead>
               <tbody>
                 {viewModal.ingredients.map((i,idx)=>(
-                  <tr key={idx}><td>{i.name}</td><td>{i.qty}</td><td>{i.unit}</td><td>{$(ingredientCost(i))}</td></tr>
+                  <tr key={idx}>
+                    <td data-label="Ingrediente">{i.name}</td>
+                    <td data-label="Cantidad">{i.qty}</td>
+                    <td data-label="Unidad">{i.unit}</td>
+                    <td data-label="Costo">{$(ingredientCost(i))}</td>
+                  </tr>
                 ))}
                 <tr style={{ background:"var(--greenl)" }}>
-                  <td colSpan={3} style={{ fontWeight:700 }}>TOTAL</td>
-                  <td style={{ fontWeight:700, color:"var(--green)" }}>{$(totalCost(viewModal.ingredients))}</td>
+                  <td data-label="" colSpan={3} style={{ fontWeight:700 }}>TOTAL</td>
+                  <td data-label="" style={{ fontWeight:700, color:"var(--green)" }}>{$(totalCost(viewModal.ingredients))}</td>
                 </tr>
               </tbody>
             </table>
@@ -385,7 +390,7 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
             return (
               <>
                 <div className="section-title" style={{ marginBottom:12 }}>Información Nutricional <span style={{ fontSize:".76em", fontWeight:400, color:"var(--t3)" }}>por 100g</span></div>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:16 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(90px,1fr))", gap:8, marginBottom:16 }}>
                   {NUTR_FIELDS.map(({ key, label, unit }) => (
                     <div key={key} style={{ background:"var(--s2)", borderRadius:8, padding:"8px 10px", textAlign:"center" }}>
                       <div style={{ fontSize:".68em", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".4px", marginBottom:4 }}>{label}</div>
