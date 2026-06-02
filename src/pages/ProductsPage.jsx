@@ -11,7 +11,7 @@ import { useState } from "react";
 import { Ico, Modal, $, uid, useSortable, SortableTh, exportXlsx } from "../shared.jsx";
 import { supabase, productToDb } from "../supabase.js";
 
-export default function ProductsPage({ products, setProducts, categories, showToast, logAction }) {
+export default function ProductsPage({ products, setProducts, categories, recipes, ingredients, showToast, logAction }) {
   const [modal, setModal] = useState(null);
   const [filterCat, setFilterCat] = useState("Todos");
   const [search, setSearch] = useState("");
@@ -43,9 +43,30 @@ export default function ProductsPage({ products, setProducts, categories, showTo
   const openNew = () => { setForm(emptyForm); setKitProductId(""); setKitQty(1); setModal("new"); };
   const openEdit = p => { setForm({...p, isKit: p.kitItems?.length > 0, kitItems: p.kitItems || []}); setKitProductId(""); setKitQty(1); setModal(p); };
 
+  const getRecipeCost = (product) => {
+    const recipe = (recipes || []).find(r => r.productId === product.id);
+    if (!recipe || !recipe.ingredients?.length) return "";
+    const total = recipe.ingredients.reduce((sum, i) => {
+      const ing = i.ingredientId
+        ? (ingredients || []).find(x => x.id === i.ingredientId)
+        : (ingredients || []).find(x => x.name?.toLowerCase() === i.name?.toLowerCase());
+      return sum + (ing ? i.qty * ing.unitCost : Number(i.cost) || 0);
+    }, 0);
+    return recipe.yield > 0 ? total / recipe.yield : total;
+  };
+
   const exportExcel = () => {
-    const headers = ["Nombre","Categoría","Precio Minorista","Precio Mayorista","Unidad","Stock","Activo","Descripción"];
-    const rows = products.map(p => [p.name, p.category, p.priceRetail, p.priceWholesale, p.unit, p.stock, p.active?"Sí":"No", p.description||""]);
+    const headers = ["Nombre","Categoría","Precio Minorista","Precio Mayorista","Costo (receta)","Margen Minorista (%)","Margen Mayorista (%)","Unidad","Stock","Activo","Descripción"];
+    const rows = products.map(p => {
+      const cost = getRecipeCost(p);
+      const marginRetail = cost !== "" && p.priceRetail > 0
+        ? (((p.priceRetail - cost) / p.priceRetail) * 100).toFixed(1)
+        : "";
+      const marginWholesale = cost !== "" && p.priceWholesale > 0
+        ? (((p.priceWholesale - cost) / p.priceWholesale) * 100).toFixed(1)
+        : "";
+      return [p.name, p.category, p.priceRetail, p.priceWholesale, cost !== "" ? Number(cost.toFixed(2)) : "", marginRetail, marginWholesale, p.unit, p.stock, p.active?"Sí":"No", p.description||""];
+    });
     exportXlsx(headers, rows, "productos");
   };
 
