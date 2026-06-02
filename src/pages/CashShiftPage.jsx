@@ -130,7 +130,7 @@ export default function CashShiftPage({ sales, expenses, accountPayments, user, 
           </div>
 
           {/* Dos paneles: EFECTIVO | DIGITAL */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:22 }}>
+          <div className="resp-2col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:22 }}>
 
             {/* Panel EFECTIVO */}
             <div style={{ background:"var(--s0)", border:"2px solid var(--greenlb)", borderRadius:"var(--rl)", padding:20 }}>
@@ -215,10 +215,10 @@ export default function CashShiftPage({ sales, expenses, accountPayments, user, 
                   <tbody>
                     {shiftSales.slice(0,15).map(s => (
                       <tr key={s.id}>
-                        <td style={{ color:"var(--t3)", fontSize:".82em", whiteSpace:"nowrap" }}>{fmtTime(s.createdAt)}</td>
-                        <td>{s.customerName || "Anónimo"}</td>
-                        <td><span className={`badge ${s.paymentMethod==="cash"?"badge-green":s.paymentMethod==="transfer"?"badge-blue":s.paymentMethod==="account"?"badge-amber":"badge-gray"}`}>{PAY_LABELS[s.paymentMethod] || s.paymentMethod}</span></td>
-                        <td style={{ fontWeight:700 }}>{$(s.total)}</td>
+                        <td data-label="Hora" style={{ color:"var(--t3)", fontSize:".82em", whiteSpace:"nowrap" }}>{fmtTime(s.createdAt)}</td>
+                        <td data-label="Cliente">{s.customerName || "Anónimo"}</td>
+                        <td data-label="Método"><span className={`badge ${s.paymentMethod==="cash"?"badge-green":s.paymentMethod==="transfer"?"badge-blue":s.paymentMethod==="account"?"badge-amber":"badge-gray"}`}>{PAY_LABELS[s.paymentMethod] || s.paymentMethod}</span></td>
+                        <td data-label="Total" style={{ fontWeight:700 }}>{$(s.total)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -238,10 +238,10 @@ export default function CashShiftPage({ sales, expenses, accountPayments, user, 
                   <tbody>
                     {shiftAccPayments.map(p => (
                       <tr key={p.id}>
-                        <td style={{ color:"var(--t3)", fontSize:".82em", whiteSpace:"nowrap" }}>{fmtTime(p.createdAt)}</td>
-                        <td style={{ color:"var(--t3)", fontSize:".85em" }}>{p.notes || "—"}</td>
-                        <td><span className={`badge ${p.paymentMethod==="cash"?"badge-green":"badge-blue"}`}>{PAY_LABELS[p.paymentMethod] || p.paymentMethod}</span></td>
-                        <td style={{ fontWeight:700, color:"var(--green)" }}>{$(p.amount)}</td>
+                        <td data-label="Hora" style={{ color:"var(--t3)", fontSize:".82em", whiteSpace:"nowrap" }}>{fmtTime(p.createdAt)}</td>
+                        <td data-label="Notas" style={{ color:"var(--t3)", fontSize:".85em" }}>{p.notes || "—"}</td>
+                        <td data-label="Método"><span className={`badge ${p.paymentMethod==="cash"?"badge-green":"badge-blue"}`}>{PAY_LABELS[p.paymentMethod] || p.paymentMethod}</span></td>
+                        <td data-label="Monto" style={{ fontWeight:700, color:"var(--green)" }}>{$(p.amount)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -260,10 +260,10 @@ export default function CashShiftPage({ sales, expenses, accountPayments, user, 
                   <tbody>
                     {shiftExpenses.map(e => (
                       <tr key={e.id}>
-                        <td>{e.concept || "—"}</td>
-                        <td style={{ color:"var(--t3)", fontSize:".82em" }}>{e.category}</td>
-                        <td><span className={`badge ${e.paymentMethod==="cash"?"badge-green":e.paymentMethod==="transfer"?"badge-blue":"badge-gray"}`}>{PAY_LABELS[e.paymentMethod] || e.paymentMethod || "—"}</span></td>
-                        <td style={{ fontWeight:700, color:"var(--red)" }}>{$(e.total)}</td>
+                        <td data-label="Concepto">{e.concept || "—"}</td>
+                        <td data-label="Categoría" style={{ color:"var(--t3)", fontSize:".82em" }}>{e.category}</td>
+                        <td data-label="Método"><span className={`badge ${e.paymentMethod==="cash"?"badge-green":e.paymentMethod==="transfer"?"badge-blue":"badge-gray"}`}>{PAY_LABELS[e.paymentMethod] || e.paymentMethod || "—"}</span></td>
+                        <td data-label="Total" style={{ fontWeight:700, color:"var(--red)" }}>{$(e.total)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -287,14 +287,14 @@ export default function CashShiftPage({ sales, expenses, accountPayments, user, 
                 <tbody>
                   {closedShifts.map(s => (
                     <tr key={s.id}>
-                      <td style={{ fontSize:".82em", color:"var(--t3)", whiteSpace:"nowrap" }}>{fmtDT(s.openedAt)}</td>
-                      <td>{s.openedBy}</td>
-                      <td>{$(s.initialCash)}</td>
-                      <td>{$(s.salesCash)}</td>
-                      <td style={{ color:"var(--red)" }}>{$(s.expensesCash)}</td>
-                      <td>{$(s.expectedCash)}</td>
-                      <td>{$(s.countedCash)}</td>
-                      <td>
+                      <td data-label="Apertura" style={{ fontSize:".82em", color:"var(--t3)", whiteSpace:"nowrap" }}>{fmtDT(s.openedAt)}</td>
+                      <td data-label="Responsable">{s.openedBy}</td>
+                      <td data-label="Inicial">{$(s.initialCash)}</td>
+                      <td data-label="Ef. recibido">{$(s.salesCash)}</td>
+                      <td data-label="Egresos ef." style={{ color:"var(--red)" }}>{$(s.expensesCash)}</td>
+                      <td data-label="Esperado">{$(s.expectedCash)}</td>
+                      <td data-label="Contado">{$(s.countedCash)}</td>
+                      <td data-label="Diferencia">
                         {s.difference === 0
                           ? <span className="badge badge-green">Exacto</span>
                           : s.difference < 0
@@ -329,7 +329,7 @@ export default function CashShiftPage({ sales, expenses, accountPayments, user, 
       {closeModal && openShift && (
         <Modal title="Cerrar turno" onClose={() => setCloseModal(false)} lg>
           {/* Resumen en dos columnas */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:20 }}>
+          <div className="resp-2col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:20 }}>
 
             {/* Columna EFECTIVO */}
             <div style={{ background:"var(--greenl)", border:"1px solid var(--greenlb)", borderRadius:"var(--r)", padding:16 }}>

@@ -80,7 +80,7 @@ export default function DashboardPage({ sales, products, cashShifts, customers, 
           <div className="page-sub">{new Date().toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div>
         </div>
         {/* Filtro de fechas */}
-        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
           <label style={{ fontSize:".8em", color:"var(--t3)", whiteSpace:"nowrap" }}>Desde</label>
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
             style={{ width:140 }}/>
@@ -96,7 +96,7 @@ export default function DashboardPage({ sales, products, cashShifts, customers, 
       </div>
 
       {/* KPIs */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, marginBottom:22 }}>
+      <div className="stats-row" style={{ gap:16, marginBottom:22 }}>
         <StatCard label={`Ventas · ${periodLabel}`} value={$(rangeTotal)} sub={`${rangeSales.length} transacciones`} color="green"/>
         <StatCard label="Efectivo" value={$(rangeCash)} sub="Ventas en efectivo" color="amber"/>
         <StatCard label="Transferencias" value={$(rangeTransfer)} sub="Ventas digitales" color="blue"/>
@@ -139,9 +139,9 @@ export default function DashboardPage({ sales, products, cashShifts, customers, 
               <tbody>
                 {debtAlerts.map(c => (
                   <tr key={c.id}>
-                    <td style={{ fontWeight:600, fontSize:".88em" }}>{c.name}</td>
-                    <td style={{ color:"var(--t3)", fontSize:".82em" }}>{c.phone || "—"}</td>
-                    <td style={{ textAlign:"right", fontWeight:700, color:"var(--red)" }}>{$(c.realBalance)}</td>
+                    <td data-label="Cliente" style={{ fontWeight:600, fontSize:".88em" }}>{c.name}</td>
+                    <td data-label="Teléfono" style={{ color:"var(--t3)", fontSize:".82em" }}>{c.phone || "—"}</td>
+                    <td data-label="Saldo" style={{ textAlign:"right", fontWeight:700, color:"var(--red)" }}>{$(c.realBalance)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -166,10 +166,10 @@ export default function DashboardPage({ sales, products, cashShifts, customers, 
                   <tbody>
                     {recentSales.map(s => (
                       <tr key={s.id}>
-                        <td style={{ color:"var(--t3)", fontSize:".82em", whiteSpace:"nowrap" }}>{fmtTime(s.createdAt)}</td>
-                        <td style={{ fontSize:".88em" }}>{s.customerName || "Anónimo"}</td>
-                        <td><span className={`badge ${s.paymentMethod==="cash"?"badge-green":s.paymentMethod==="transfer"?"badge-blue":s.paymentMethod==="account"?"badge-amber":"badge-gray"}`}>{PAY_LABELS[s.paymentMethod]||s.paymentMethod}</span></td>
-                        <td style={{ fontWeight:700 }}>{$(s.total)}</td>
+                        <td data-label="Hora" style={{ color:"var(--t3)", fontSize:".82em", whiteSpace:"nowrap" }}>{fmtTime(s.createdAt)}</td>
+                        <td data-label="Cliente" style={{ fontSize:".88em" }}>{s.customerName || "Anónimo"}</td>
+                        <td data-label="Método"><span className={`badge ${s.paymentMethod==="cash"?"badge-green":s.paymentMethod==="transfer"?"badge-blue":s.paymentMethod==="account"?"badge-amber":"badge-gray"}`}>{PAY_LABELS[s.paymentMethod]||s.paymentMethod}</span></td>
+                        <td data-label="Total" style={{ fontWeight:700 }}>{$(s.total)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -197,9 +197,9 @@ export default function DashboardPage({ sales, products, cashShifts, customers, 
                   <tbody>
                     {lowStock.slice(0, 8).map(p => (
                       <tr key={p.id}>
-                        <td style={{ fontSize:".88em" }}>{p.name}</td>
-                        <td style={{ color:"var(--t3)", fontSize:".82em" }}>{p.category}</td>
-                        <td>
+                        <td data-label="Producto" style={{ fontSize:".88em" }}>{p.name}</td>
+                        <td data-label="Categoría" style={{ color:"var(--t3)", fontSize:".82em" }}>{p.category}</td>
+                        <td data-label="Stock">
                           <span className={`badge ${p.stock <= 0 ? "badge-red" : "badge-amber"}`}>
                             {p.stock <= 0 ? "Sin stock" : `${p.stock} ${p.unit||""}`}
                           </span>

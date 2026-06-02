@@ -133,9 +133,9 @@ export default function HelpAdminPage({ faqEntries, setFaqEntries, faqMissed, se
             <tbody>
               {faqEntries.map(e => (
                 <tr key={e.id}>
-                  <td style={{ fontWeight: 500 }}>{e.question}</td>
-                  <td style={{ color: "var(--t3)", fontSize: ".88em" }}>{e.answer}</td>
-                  <td>
+                  <td data-label="Pregunta" style={{ fontWeight: 500 }}>{e.question}</td>
+                  <td data-label="Respuesta" style={{ color: "var(--t3)", fontSize: ".88em" }}>{e.answer}</td>
+                  <td data-label="">
                     <div style={{ display: "flex", gap: 6 }}>
                       <button className="btn btn-ghost btn-icon btn-sm" onClick={() => openEdit(e)} title="Editar">
                         <Ico n="edit" s={14}/>
@@ -183,11 +183,11 @@ export default function HelpAdminPage({ faqEntries, setFaqEntries, faqMissed, se
               <tbody>
                 {faqMissed.map(m => (
                   <tr key={m.id}>
-                    <td style={{ fontWeight: 500 }}>{m.question}</td>
-                    <td style={{ color: "var(--t3)", fontSize: ".82em", whiteSpace: "nowrap" }}>
+                    <td data-label="Pregunta" style={{ fontWeight: 500 }}>{m.question}</td>
+                    <td data-label="Fecha" style={{ color: "var(--t3)", fontSize: ".82em", whiteSpace: "nowrap" }}>
                       {new Date(m.date).toLocaleDateString("es-AR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })}
                     </td>
-                    <td>
+                    <td data-label="">
                       <div style={{ display: "flex", gap: 6 }}>
                         <button
                           className="btn btn-secondary btn-sm"
