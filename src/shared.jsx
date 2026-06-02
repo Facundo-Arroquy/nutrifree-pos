@@ -329,7 +329,7 @@ tbody tr:hover td{background:var(--s1)}
   .pos-cart{height:calc(100vh - 52px - 46px);display:flex;flex-direction:column;border-left:none}
   .sidebar{transform:translateX(-100%)}
   .sidebar.open{transform:translateX(0)}
-  .content{margin-left:0}
+  .content{margin-left:0!important}
   .pos-layout{grid-template-columns:1fr}
   .stats-row{grid-template-columns:1fr 1fr}
   .form-grid{grid-template-columns:1fr}
