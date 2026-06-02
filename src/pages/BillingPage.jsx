@@ -159,21 +159,21 @@ export default function BillingPage({ sales, setSales, customers, showToast }) {
                       onClick={() => toggleExpand(s.id)}
                       style={{ cursor:"pointer", background: isExpanded ? "var(--s2)" : undefined }}
                     >
-                      <td style={{ whiteSpace:"nowrap", fontSize:".84em", color:"var(--t3)" }}>
+                      <td data-label="Fecha" style={{ whiteSpace:"nowrap", fontSize:".84em", color:"var(--t3)" }}>
                         <span style={{ marginRight:6, fontSize:".8em", color:"var(--t4)" }}>{isExpanded ? "▾" : "▸"}</span>
                         {fmtDate(s.createdAt)}
                       </td>
-                      <td style={{ fontWeight:600 }}>{s.customerName}</td>
-                      <td style={{ fontSize:".83em", color: cust?.cuit ? "var(--t1)" : "var(--t4)" }}>
+                      <td data-label="Cliente" style={{ fontWeight:600 }}>{s.customerName}</td>
+                      <td data-label="CUIT" style={{ fontSize:".83em", color: cust?.cuit ? "var(--t1)" : "var(--t4)" }}>
                         {cust?.cuit || <span style={{ fontStyle:"italic" }}>—</span>}
                       </td>
-                      <td style={{ fontSize:".83em", color: cust?.email ? "var(--t1)" : "var(--t4)" }}>
+                      <td data-label="Email" style={{ fontSize:".83em", color: cust?.email ? "var(--t1)" : "var(--t4)" }}>
                         {cust?.email || <span style={{ fontStyle:"italic" }}>—</span>}
                       </td>
-                      <td style={{ fontSize:".82em", color:"var(--t2)", maxWidth:220 }}>{fmtItems(s.items)}</td>
-                      <td style={{ textAlign:"right", fontWeight:700, color:"var(--green)", whiteSpace:"nowrap" }}>{$(s.total)}</td>
-                      <td style={{ textAlign:"center" }}><StatusBadge status={s.billingStatus} /></td>
-                      <td style={{ textAlign:"center" }} onClick={e => e.stopPropagation()}>
+                      <td data-label="Items" style={{ fontSize:".82em", color:"var(--t2)", maxWidth:220 }}>{fmtItems(s.items)}</td>
+                      <td data-label="Total" style={{ textAlign:"right", fontWeight:700, color:"var(--green)", whiteSpace:"nowrap" }}>{$(s.total)}</td>
+                      <td data-label="Estado" style={{ textAlign:"center" }}><StatusBadge status={s.billingStatus} /></td>
+                      <td data-label="" style={{ textAlign:"center" }} onClick={e => e.stopPropagation()}>
                         {s.billingStatus === "pending" ? (
                           <div style={{ display:"flex", gap:6, justifyContent:"center" }}>
                             <button
@@ -195,7 +195,7 @@ export default function BillingPage({ sales, setSales, customers, showToast }) {
                     </tr>
                     {isExpanded && (
                       <tr key={`${s.id}-detail`} style={{ background:"var(--s2)" }}>
-                        <td colSpan={8} style={{ padding:"0 16px 14px 36px" }}>
+                        <td data-label="" colSpan={8} style={{ padding:"0 16px 14px 36px" }}>
                           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:".81em" }}>
                             <thead>
                               <tr>

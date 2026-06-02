@@ -387,7 +387,7 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
           </button>
         </div>
 
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+        <div className="resp-2col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
           {/* Ventas por categoría */}
           <div>
             <div style={{ fontSize:".78em", fontWeight:700, textTransform:"uppercase", letterSpacing:".6px", color:"var(--t3)", marginBottom:10 }}>Vendido</div>
@@ -427,7 +427,7 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
         </div>
       </div>
 
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
+      <div className="resp-2col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
         <div className="card">
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
             <div className="section-title" style={{ marginBottom:0 }}>Productos más vendidos</div>
@@ -485,7 +485,7 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
         }
       </div>
 
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
+      <div className="resp-2col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
         <div className="card">
           <div className="section-title">Gastos por categoría</div>
           {Object.keys(expByCat).length===0
@@ -572,22 +572,22 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
               <tbody>
                 {top5Profitable.map((p, i) => (
                   <tr key={p.id}>
-                    <td>
+                    <td data-label="#">
                       <div style={{ width:22, height:22, borderRadius:6, background:i===0?"var(--green)":i===1?"var(--amber)":i===2?"var(--blue)":"var(--s2)", color:i<3?"white":"var(--t3)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:".75em" }}>
                         {i+1}
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Producto">
                       <div style={{ fontWeight:600, fontSize:".88em" }}>{p.name}</div>
                       <div style={{ fontSize:".74em", color:"var(--t4)" }}>{p.category}</div>
                     </td>
-                    <td style={{ textAlign:"right", fontWeight:600 }}>{p.unitsSold}</td>
-                    <td style={{ textAlign:"right", color:"var(--green)", fontWeight:600 }}>{$(p.totalRevenue)}</td>
-                    <td style={{ textAlign:"right", color:"var(--red)", fontWeight:600 }}>{$(p.totalCost)}</td>
-                    <td style={{ textAlign:"right", fontWeight:700, fontSize:".95em", color:p.totalProfit>=0?"var(--green)":"var(--red)" }}>
+                    <td data-label="Uds." style={{ textAlign:"right", fontWeight:600 }}>{p.unitsSold}</td>
+                    <td data-label="Ingresos" style={{ textAlign:"right", color:"var(--green)", fontWeight:600 }}>{$(p.totalRevenue)}</td>
+                    <td data-label="Costo" style={{ textAlign:"right", color:"var(--red)", fontWeight:600 }}>{$(p.totalCost)}</td>
+                    <td data-label="Ganancia" style={{ textAlign:"right", fontWeight:700, fontSize:".95em", color:p.totalProfit>=0?"var(--green)":"var(--red)" }}>
                       {p.totalProfit<0?"-":""}{$(Math.abs(p.totalProfit))}
                     </td>
-                    <td><MarginBar pct={p.margin}/></td>
+                    <td data-label="Margen"><MarginBar pct={p.margin}/></td>
                   </tr>
                 ))}
               </tbody>
@@ -652,13 +652,13 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
                 <tbody>
                   {trendPoints.map((p, i) => (
                     <tr key={i}>
-                      <td style={{ fontWeight:500, fontSize:".86em" }}>{p.label}</td>
-                      <td style={{ textAlign:"right", color:"var(--green)", fontWeight:600 }}>{$(p.sales)}</td>
-                      <td style={{ textAlign:"right", color:"var(--red)", fontWeight:600 }}>{$(p.expenses)}</td>
-                      <td style={{ textAlign:"right", fontWeight:700, color:p.net>=0?"var(--green)":"var(--red)" }}>
+                      <td data-label="Período" style={{ fontWeight:500, fontSize:".86em" }}>{p.label}</td>
+                      <td data-label="Ventas" style={{ textAlign:"right", color:"var(--green)", fontWeight:600 }}>{$(p.sales)}</td>
+                      <td data-label="Gastos" style={{ textAlign:"right", color:"var(--red)", fontWeight:600 }}>{$(p.expenses)}</td>
+                      <td data-label="Ganancia" style={{ textAlign:"right", fontWeight:700, color:p.net>=0?"var(--green)":"var(--red)" }}>
                         {p.net<0?"-":""}{$(Math.abs(p.net))}
                       </td>
-                      <td>
+                      <td data-label="Balance">
                         <span className={`badge ${p.net>=0?"badge-green":"badge-red"}`}>
                           {p.net>=0?"Superávit":"Déficit"}
                         </span>
