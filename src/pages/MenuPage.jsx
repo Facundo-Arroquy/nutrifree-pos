@@ -108,6 +108,28 @@ export default function MenuPage({ onGoToLogin }) {
           </nav>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span className="badge-singluten">Sin Gluten</span>
+            <a
+              href="/menu-mayorista"
+              style={{
+                background: "rgba(255,255,255,0.12)",
+                border: "1.5px solid rgba(255,255,255,0.3)",
+                color: "rgba(255,255,255,0.85)",
+                fontFamily: "Arial, sans-serif",
+                fontSize: 12,
+                fontWeight: "bold",
+                letterSpacing: 1,
+                textTransform: "uppercase",
+                padding: "6px 14px",
+                borderRadius: 20,
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+                transition: "background 0.2s, color 0.2s",
+              }}
+              onMouseOver={e => { e.target.style.background = "rgba(255,255,255,0.22)"; e.target.style.color = "white"; }}
+              onMouseOut={e => { e.target.style.background = "rgba(255,255,255,0.12)"; e.target.style.color = "rgba(255,255,255,0.85)"; }}
+            >
+              🏢 Mayoristas
+            </a>
             <span
               onClick={onGoToLogin}
               title=""

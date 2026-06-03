@@ -55,6 +55,7 @@ import HoursBankPage from "./pages/HoursBankPage.jsx";
 import OrdersKanbanPage from "./pages/OrdersKanbanPage.jsx";
 import ChatWidget from "./components/ChatWidget.jsx";
 import MenuPage from "./pages/MenuPage.jsx";
+import WholesaleMenuPage from "./pages/WholesaleMenuPage.jsx";
 import { auditIsDue, runAudit, sendAuditEmail } from "./utils/auditCheck.js";
 
 // ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
@@ -533,8 +534,13 @@ export default function App() {
     }).length;
   }, [products, recipes]);
 
-  // Menú público en /
+  // Menú mayorista en /menu-mayorista (público con código)
   const currentPath = window.location.pathname;
+  if (currentPath === "/menu-mayorista") {
+    return <WholesaleMenuPage />;
+  }
+
+  // Menú público en /
   if (currentPath === "/" && !user) {
     if (authLoading) return (
       <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#f3faf8", flexDirection:"column", gap:16 }}>
