@@ -21,3 +21,5 @@
 | `app_settings`         | Configuración de la app | Parámetros globales de la aplicación (nombre del negocio, moneda, etc.).                                   |
 | `audit_log`            | Registro de auditoría | Log de acciones importantes: ventas, producciones, eliminaciones y accesos, con usuario, acción y detalle.  |
 | `customer_inactive_dismissed` | Clientes inactivos contactados | Registro de clientes inactivos cuya alerta fue descartada: cliente, última venta al descartar, quién la descartó y cuándo. La alerta reaparece automáticamente si el cliente hace una nueva compra. |
+| `weekly_goals`         | Objetivos semanales  | Objetivos de producción por semana: producto vinculado, nombre denormalizado, cantidad objetivo, etiqueta de unidad (ej: "placa", "hornada"), orden y semana de inicio (lunes, YYYY-MM-DD). El "producido" se calcula en tiempo real desde `stock_movements` (type=production) de la semana en curso. |
+| `app_settings` (claves nuevas) | — | `weekly_goal_start` / `weekly_goal_end`: rango horario (HH:MM) en que se muestra el modal y banner de objetivo semanal. |

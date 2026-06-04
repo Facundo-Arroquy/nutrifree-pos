@@ -54,6 +54,7 @@ import ProductionLogPage from "./pages/ProductionLogPage.jsx";
 import HoursBankPage from "./pages/HoursBankPage.jsx";
 import OrdersKanbanPage from "./pages/OrdersKanbanPage.jsx";
 import ChatWidget from "./components/ChatWidget.jsx";
+import { WeeklyGoalModal, WeeklyGoalBanner } from "./components/WeeklyGoalModal.jsx";
 import MenuPage from "./pages/MenuPage.jsx";
 import WholesaleMenuPage from "./pages/WholesaleMenuPage.jsx";
 import { auditIsDue, runAudit, sendAuditEmail } from "./utils/auditCheck.js";
@@ -154,8 +155,14 @@ export default function App() {
   const [menuSearch, setMenuSearch] = useState({ lunch: "", dinner: "" });
   const [reminderStart, setReminderStart] = useState(() => localStorage.getItem("reminderStart") || "10:00");
   const [reminderEnd,   setReminderEnd]   = useState(() => localStorage.getItem("reminderEnd")   || "11:00");
+  const [weeklyGoals,      setWeeklyGoals]      = useState([]);
+  const [weeklyGoalStart,  setWeeklyGoalStart]  = useState("08:00");
+  const [weeklyGoalEnd,    setWeeklyGoalEnd]    = useState("20:00");
+  const [showWeeklyGoal,   setShowWeeklyGoal]   = useState(false);
+  const [weeklyGoalBannerOpen, setWeeklyGoalBannerOpen] = useState(false);
   const alertsChecked = useRef(false);
   const deliveryChecked = useRef(false);
+  const weeklyGoalChecked = useRef(false);
   const loadDataRef = useRef(null);
 
   // ─── Supabase Auth: restaurar sesión y escuchar cambios ───────────────────
@@ -191,7 +198,7 @@ export default function App() {
   useEffect(() => {
     if (!user || user.isDemo) return;
     const load = async () => {
-      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }, { data: faqs }, { data: faqsMissed }, { data: settings }, { data: inactiveDis }] = await Promise.all([
+      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }, { data: faqs }, { data: faqsMissed }, { data: settings }, { data: inactiveDis }, { data: wGoals }] = await Promise.all([
         supabase.from("categories").select("*"),
         supabase.from("expense_categories").select("*").order("name"),
         supabase.from("products").select("*"),
@@ -210,6 +217,7 @@ export default function App() {
         supabase.from("faq_missed").select("*").order("created_at", { ascending: false }),
         supabase.from("app_settings").select("*"),
         supabase.from("customer_inactive_dismissed").select("*"),
+        supabase.from("weekly_goals").select("*").order("sort_order"),
       ]);
       if (accPaysErr) console.error("[account_payments] Error al cargar:", accPaysErr);
       if (cats) setCategories(cats.map(c => c.name));
@@ -244,6 +252,17 @@ export default function App() {
         if (vat) setVatRate(Number(vat.value) || 21);
         const inactiveDays = settings.find(s => s.key === "inactive_days_threshold");
         if (inactiveDays) setInactiveDayThreshold(Number(inactiveDays.value) || 0);
+        const wgS = settings.find(s => s.key === "weekly_goal_start");
+        if (wgS) setWeeklyGoalStart(wgS.value);
+        const wgE = settings.find(s => s.key === "weekly_goal_end");
+        if (wgE) setWeeklyGoalEnd(wgE.value);
+      }
+      if (wGoals) {
+        setWeeklyGoals(wGoals.map(r => ({
+          id: r.id, weekStart: r.week_start, productId: r.product_id,
+          productName: r.product_name, targetQty: r.target_qty,
+          unitLabel: r.unit_label, sortOrder: r.sort_order,
+        })));
       }
       if (inactiveDis) setInactiveDismissed(inactiveDis.map(r => ({
         customerId: r.customer_id,
@@ -486,6 +505,22 @@ export default function App() {
     if (alerts.length > 0) setDeliveryAlerts(alerts);
   }, [user, sales]);
 
+  // ─── Objetivo semanal: mostrar modal una vez por día si hay objetivos ────────
+  useEffect(() => {
+    if (!user || user.isDemo || weeklyGoalChecked.current || weeklyGoals.length === 0) return;
+    weeklyGoalChecked.current = true;
+    const now = new Date();
+    const cur = now.getHours() * 60 + now.getMinutes();
+    const [sh, sm] = weeklyGoalStart.split(":").map(Number);
+    const [eh, em] = weeklyGoalEnd.split(":").map(Number);
+    if (cur < sh * 60 + sm || cur >= eh * 60 + em) return;
+    const today = todayStr();
+    if (localStorage.getItem("weeklyGoalDismissed") !== today) {
+      setShowWeeklyGoal(true);
+    }
+    setWeeklyGoalBannerOpen(true);
+  }, [user, weeklyGoals, weeklyGoalStart, weeklyGoalEnd]);
+
   const MENU_PRODUCT_NAME = "Almuerzo y Cena del día";
 
   const saveMenu = async () => {
@@ -679,7 +714,7 @@ export default function App() {
     document.addEventListener("mouseup", onUp);
   };
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, inactiveDismissed, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction, settingsSection, setSettingsSection };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, inactiveDismissed, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction, settingsSection, setSettingsSection, weeklyGoals, setWeeklyGoals, weeklyGoalStart, setWeeklyGoalStart, weeklyGoalEnd, setWeeklyGoalEnd };
 
   return (
     <>
@@ -798,6 +833,14 @@ export default function App() {
               }} title="Salir"><Ico n="logout" s={13}/></button>
             </div>
           </div>
+          {weeklyGoals.length > 0 && (
+            <WeeklyGoalBanner
+              goals={weeklyGoals}
+              stockMovements={stockMovements}
+              open={weeklyGoalBannerOpen}
+              onToggle={() => setWeeklyGoalBannerOpen(v => !v)}
+            />
+          )}
           <div style={{ flex:1, overflow:"hidden" }}>
             {page==="dashboard" && <DashboardPage {...props}/>}
             {page==="pos" && <POSPage {...props}/>}
@@ -920,6 +963,16 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+      {showWeeklyGoal && (
+        <WeeklyGoalModal
+          goals={weeklyGoals}
+          stockMovements={stockMovements}
+          onClose={() => {
+            setShowWeeklyGoal(false);
+            localStorage.setItem("weeklyGoalDismissed", todayStr());
+          }}
+        />
       )}
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)}/>}
       <ChatWidget faqEntries={faqEntries} setFaqMissed={setFaqMissed}/>
