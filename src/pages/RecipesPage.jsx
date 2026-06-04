@@ -181,13 +181,15 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
         await supabase.from("recipe_ingredients").delete().eq("recipe_id", recipeId);
       }
 
-      if (form.ingredients.length > 0) {
-        const rows = form.ingredients.map(i => recipeIngredientToDb({...i, id: crypto.randomUUID()}, recipeId));
+      // Asignar IDs antes de insertar para que coincidan con el estado local
+      const ingredientsWithIds = form.ingredients.map(i => ({...i, id: crypto.randomUUID()}));
+      if (ingredientsWithIds.length > 0) {
+        const rows = ingredientsWithIds.map(i => recipeIngredientToDb(i, recipeId));
         const { error: riErr } = await supabase.from("recipe_ingredients").insert(rows);
         if (riErr) { showToast("Error al guardar ingredientes: " + riErr.message, "error"); return; }
       }
 
-      const savedRecipe = {...recipeData, ingredients: form.ingredients};
+      const savedRecipe = {...recipeData, ingredients: ingredientsWithIds};
       if (modal === "new") {
         setRecipes(p => [...p, savedRecipe]);
       } else {

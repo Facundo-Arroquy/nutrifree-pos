@@ -67,7 +67,17 @@ function MarginBar({ pct }) {
   );
 }
 
-export default function ReportsPage({ sales, products, recipes, expenses, expenseCategories, accountPayments, customers, stockMovements, setPage, setHighlightRecipeId }) {
+const REPORT_SECTIONS = [
+  { id:"resumen",    label:"Resumen" },
+  { id:"ventas",     label:"Ventas" },
+  { id:"gastos",     label:"Gastos" },
+  { id:"produccion", label:"Producción" },
+  { id:"alertas",    label:"Alertas" },
+];
+
+export default function ReportsPage({ sales, products, recipes, expenses, expenseCategories, accountPayments, customers, stockMovements, weeklyGoals = [], setPage, setHighlightRecipeId }) {
+  const [reportSection, setReportSection] = useState("resumen");
+
   const presets = useMemo(() => {
     const now = new Date();
     const t = now.toISOString().slice(0,10);
@@ -388,6 +398,29 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
   });
   const maxExpCat = Math.max(...Object.values(expByCat), 1);
 
+  // ── Historial de objetivos semanales ─────────────────────────────────────────
+  const weekGoalHistory = useMemo(() => {
+    const weeks = [...new Set((weeklyGoals||[]).map(g => g.weekStart))].sort((a, b) => b.localeCompare(a));
+    return weeks.map(weekStart => {
+      const weekEnd = new Date(weekStart + "T00:00:00");
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      const weekEndStr = weekEnd.toISOString().split("T")[0];
+      const goals = (weeklyGoals||[]).filter(g => g.weekStart === weekStart);
+      const rows = goals.map(g => {
+        const produced = (stockMovements||[])
+          .filter(m => m.type === "production" && m.productId === g.productId
+            && m.createdAt?.slice(0,10) >= weekStart && m.createdAt?.slice(0,10) <= weekEndStr)
+          .reduce((sum, m) => sum + (m.qty || 0), 0);
+        const met = g.targetQty > 0 && produced >= g.targetQty;
+        const pct = g.targetQty > 0 ? Math.min(100, Math.round((produced / g.targetQty) * 100)) : 0;
+        return { ...g, produced, met, pct };
+      });
+      const allMet  = rows.length > 0 && rows.every(r => r.met);
+      const noneMet = rows.every(r => !r.met);
+      return { weekStart, weekEndStr, rows, allMet, noneMet };
+    });
+  }, [weeklyGoals, stockMovements]);
+
   return (
     <div className="page">
       <div className="page-header">
@@ -405,439 +438,523 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
         </div>
       </div>
 
+      {/* ── Navegación de secciones ──────────────────────────────────────── */}
+      <div style={{ display:"flex", gap:4, marginBottom:16, flexWrap:"wrap", borderBottom:"1px solid var(--border)", paddingBottom:10 }}>
+        {REPORT_SECTIONS.map(s => (
+          <button key={s.id}
+            className={`btn btn-sm ${reportSection === s.id ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setReportSection(s.id)}>
+            {s.label}
+          </button>
+        ))}
+      </div>
+
       <div className="stats-row">
         <div className="stat stat-green"><div className="stat-num">{$(totalIncome)}</div><div className="stat-label">Cobrado en período</div><div className="stat-icon">💰</div></div>
         <div className="stat stat-amber"><div className="stat-num">{$(outstandingDebt)}</div><div className="stat-label">Deuda en cuentas</div><div className="stat-icon">⏳</div></div>
         <div className="stat"><div className="stat-num">{pSales.length}</div><div className="stat-label">Ventas en período</div><div className="stat-icon">🧾</div></div>
         <div className="stat stat-blue"><div className="stat-num">{$(activeOrdersValue)}</div><div className="stat-label">Pedidos activos ({activeOrders.length})</div><div className="stat-icon">📋</div></div>
       </div>
-      {availableExpCats.length > 0 && (
-        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8, flexWrap:"wrap" }}>
-          <span style={{ fontSize:".78em", color:"var(--t3)", fontWeight:500 }}>Filtrar gastos:</span>
-          <button className={`btn btn-sm ${filterExpCat==="Todos"?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterExpCat("Todos")}>Todos</button>
-          {availableExpCats.map(cat=>(
-            <button key={cat} className={`btn btn-sm ${filterExpCat===cat?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterExpCat(cat)}>{cat}</button>
-          ))}
-        </div>
-      )}
-      <div className="stats-row" style={{ marginBottom:16 }}>
-        <div className="stat stat-red"><div className="stat-num">{$(totalExpenses)}</div><div className="stat-label">Gastos pagados{filterExpCat!=="Todos"?` · ${filterExpCat}`:""}</div><div className="stat-icon">💸</div></div>
-        <div className="stat stat-amber"><div className="stat-num">{$(pendingExpenses)}</div><div className="stat-label">Gastos pendientes{filterExpCat!=="Todos"?` · ${filterExpCat}`:""}</div><div className="stat-icon">📤</div></div>
-        <div className="stat"><div className="stat-num">{filteredPExpenses.length}</div><div className="stat-label">Gastos en período{filterExpCat!=="Todos"?` · ${filterExpCat}`:""}</div><div className="stat-icon">🧾</div></div>
-        <div className={`stat ${netResult>=0?"stat-green":"stat-red"}`}>
-          <div className="stat-num">{netResult<0?"-":""}{$(Math.abs(netResult))}</div>
-          <div className="stat-label">Resultado neto</div>
-          <div className="stat-icon">{netResult>=0?"📈":"📉"}</div>
-        </div>
-      </div>
-
-      {/* ── Resumen del período ─────────────────────────────────────────────── */}
-      <div className="card" style={{ marginBottom:16 }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-          <div className="section-title" style={{ margin:0 }}>📋 Resumen del período</div>
-          <button className="btn btn-secondary btn-sm" onClick={copySummary}>
-            {copied ? "✓ Copiado!" : "Copiar texto"}
-          </button>
+      {/* ── RESUMEN ──────────────────────────────────────────────────────────── */}
+      {reportSection === "resumen" && (<>
+        <div className="stats-row" style={{ marginBottom:16 }}>
+          <div className="stat stat-red"><div className="stat-num">{$(totalExpenses)}</div><div className="stat-label">Gastos pagados</div><div className="stat-icon">💸</div></div>
+          <div className="stat stat-amber"><div className="stat-num">{$(pendingExpenses)}</div><div className="stat-label">Gastos pendientes</div><div className="stat-icon">📤</div></div>
+          <div className="stat"><div className="stat-num">{filteredPExpenses.length}</div><div className="stat-label">Gastos en período</div><div className="stat-icon">🧾</div></div>
+          <div className={`stat ${netResult>=0?"stat-green":"stat-red"}`}>
+            <div className="stat-num">{netResult<0?"-":""}{$(Math.abs(netResult))}</div>
+            <div className="stat-label">Resultado neto</div>
+            <div className="stat-icon">{netResult>=0?"📈":"📉"}</div>
+          </div>
         </div>
 
-        <div className="resp-2col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-          {/* Ventas por categoría */}
-          <div>
-            <div style={{ fontSize:".78em", fontWeight:700, textTransform:"uppercase", letterSpacing:".6px", color:"var(--t3)", marginBottom:10 }}>Vendido</div>
-            {Object.entries(daySummary.catTotals).length === 0
-              ? <div style={{ color:"var(--t4)", fontSize:".85em" }}>Sin ventas en el período</div>
-              : Object.entries(daySummary.catTotals)
-                  .sort((a,b) => b[1] - a[1])
-                  .map(([cat, qty]) => (
+        <div className="card" style={{ marginBottom:16 }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+            <div className="section-title" style={{ margin:0 }}>📋 Resumen del período</div>
+            <button className="btn btn-secondary btn-sm" onClick={copySummary}>
+              {copied ? "✓ Copiado!" : "Copiar texto"}
+            </button>
+          </div>
+          <div className="resp-2col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+            <div>
+              <div style={{ fontSize:".78em", fontWeight:700, textTransform:"uppercase", letterSpacing:".6px", color:"var(--t3)", marginBottom:10 }}>Vendido</div>
+              {Object.entries(daySummary.catTotals).length === 0
+                ? <div style={{ color:"var(--t4)", fontSize:".85em" }}>Sin ventas en el período</div>
+                : Object.entries(daySummary.catTotals).sort((a,b)=>b[1]-a[1]).map(([cat,qty])=>(
                     <div key={cat} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderBottom:"1px solid var(--border)" }}>
                       <span style={{ fontSize:".88em", color:"var(--t2)" }}>{cat}</span>
                       <span style={{ fontWeight:700, color:"var(--green)", fontSize:".95em" }}>{Math.round(qty)} u.</span>
                     </div>
                   ))
-            }
-          </div>
-
-          {/* Producción */}
-          <div>
-            <div style={{ fontSize:".78em", fontWeight:700, textTransform:"uppercase", letterSpacing:".6px", color:"var(--t3)", marginBottom:10 }}>Elaborado</div>
-            {Object.entries(daySummary.prodTotals).length === 0
-              ? <div style={{ color:"var(--t4)", fontSize:".85em" }}>Sin producción registrada en el período</div>
-              : Object.entries(daySummary.prodTotals)
-                  .sort((a,b) => b[1] - a[1])
-                  .map(([name, qty]) => (
+              }
+            </div>
+            <div>
+              <div style={{ fontSize:".78em", fontWeight:700, textTransform:"uppercase", letterSpacing:".6px", color:"var(--t3)", marginBottom:10 }}>Elaborado</div>
+              {Object.entries(daySummary.prodTotals).length === 0
+                ? <div style={{ color:"var(--t4)", fontSize:".85em" }}>Sin producción registrada en el período</div>
+                : Object.entries(daySummary.prodTotals).sort((a,b)=>b[1]-a[1]).map(([name,qty])=>(
                     <div key={name} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderBottom:"1px solid var(--border)" }}>
                       <span style={{ fontSize:".88em", color:"var(--t2)" }}>{name}</span>
                       <span style={{ fontWeight:700, color:"var(--blue)", fontSize:".95em" }}>{Math.round(qty)} u.</span>
                     </div>
                   ))
+              }
+            </div>
+          </div>
+          <div style={{ marginTop:14, background:"var(--s2)", borderRadius:8, padding:"10px 14px", fontSize:".84em", color:"var(--t3)", fontStyle:"italic", whiteSpace:"pre-line" }}>
+            {buildSummaryText()}
+          </div>
+        </div>
+
+        <div className="resp-2col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
+          <div className="card">
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+              <div className="section-title" style={{ marginBottom:0 }}>Productos más vendidos</div>
+              {allProductsSold.length>0 && <button className="btn btn-secondary btn-sm" onClick={exportProductsExcel}>↓ Excel</button>}
+            </div>
+            {topProducts.length===0 ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin datos</div> :
+              topProducts.map(([name,qty])=>(
+                <div key={name} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+                  <div style={{ fontSize:".82em", color:"var(--t2)", width:140, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{name}</div>
+                  <div style={{ flex:1, height:7, background:"var(--s2)", borderRadius:4, overflow:"hidden" }}>
+                    <div style={{ width:`${(qty/maxQty)*100}%`, height:"100%", background:"var(--green)", borderRadius:4 }}/>
+                  </div>
+                  <div style={{ fontSize:".82em", fontWeight:700, width:28, textAlign:"right" }}>{qty}</div>
+                </div>
+              ))
+            }
+          </div>
+          <div className="card">
+            <div className="section-title">Pedidos activos</div>
+            {activeOrders.length===0 ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin pedidos activos</div> :
+              activeOrders.slice(0,8).map(s=>(
+                <div key={s.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderBottom:"1px solid var(--border)" }}>
+                  <div>
+                    <div style={{ fontSize:".86em", fontWeight:600 }}>{s.customerName}</div>
+                    <div style={{ fontSize:".74em", color:"var(--t3)" }}>{fmtDate(s.createdAt)}</div>
+                  </div>
+                  <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                    <span className={`badge ${STATUS_COLORS[s.status]}`}>{STATUS_LABELS[s.status]}</span>
+                    <span style={{ fontWeight:700, color:"var(--green)" }}>{$(s.total)}</span>
+                  </div>
+                </div>
+              ))
             }
           </div>
         </div>
 
-        {/* Preview del texto */}
-        <div style={{ marginTop:14, background:"var(--s2)", borderRadius:8, padding:"10px 14px", fontSize:".84em", color:"var(--t3)", fontStyle:"italic", whiteSpace:"pre-line" }}>
-          {buildSummaryText()}
-        </div>
-      </div>
-
-      <div className="resp-2col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
-        <div className="card">
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
-            <div className="section-title" style={{ marginBottom:0 }}>Productos más vendidos</div>
-            {allProductsSold.length>0 && <button className="btn btn-secondary btn-sm" onClick={exportProductsExcel}>↓ Excel</button>}
-          </div>
-          {topProducts.length===0 ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin datos</div> :
-            topProducts.map(([name,qty])=>(
-              <div key={name} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-                <div style={{ fontSize:".82em", color:"var(--t2)", width:140, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{name}</div>
-                <div style={{ flex:1, height:7, background:"var(--s2)", borderRadius:4, overflow:"hidden" }}>
-                  <div style={{ width:`${(qty/maxQty)*100}%`, height:"100%", background:"var(--green)", borderRadius:4 }}/>
-                </div>
-                <div style={{ fontSize:".82em", fontWeight:700, width:28, textAlign:"right" }}>{qty}</div>
-              </div>
-            ))
-          }
-        </div>
-
-        <div className="card">
-          <div className="section-title">Pedidos activos</div>
-          {activeOrders.length===0 ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin pedidos activos</div> :
-            activeOrders.slice(0,8).map(s=>(
-              <div key={s.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderBottom:"1px solid var(--border)" }}>
-                <div>
-                  <div style={{ fontSize:".86em", fontWeight:600 }}>{s.customerName}</div>
-                  <div style={{ fontSize:".74em", color:"var(--t3)" }}>{fmtDate(s.createdAt)}</div>
-                </div>
-                <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                  <span className={`badge ${STATUS_COLORS[s.status]}`}>{STATUS_LABELS[s.status]}</span>
-                  <span style={{ fontWeight:700, color:"var(--green)" }}>{$(s.total)}</span>
-                </div>
-              </div>
-            ))
-          }
-        </div>
-      </div>
-
-      <div className="card" style={{ marginBottom:16 }}>
-        <div className="section-title">Ingresos por método de pago</div>
-        {totalIncome === 0 ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin cobros en el período</div> :
-          Object.entries(PAY_LABELS).filter(([k]) => (payMethodTotals[k]||0) > 0 || k !== "account").map(([k,v]) => {
-            const amt = payMethodTotals[k]||0;
-            const pct = totalIncome>0 ? Math.round(amt/totalIncome*100) : 0;
-            return (
-              <div key={k} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", borderBottom:"1px solid var(--border)" }}>
-                <span style={{ fontSize:".86em", color:"var(--t2)", width:130 }}>{v}</span>
-                <div style={{ flex:1, height:7, background:"var(--s2)", borderRadius:4, overflow:"hidden" }}>
-                  <div style={{ width:`${pct}%`, height:"100%", background:"var(--green)", borderRadius:4 }}/>
-                </div>
-                <span style={{ fontSize:".82em", color:"var(--t3)", width:32, textAlign:"right" }}>{pct}%</span>
-                <span style={{ fontWeight:700, color:amt>0?"var(--green)":"var(--t4)", width:80, textAlign:"right" }}>{$(amt)}</span>
-              </div>
-            );
-          })
-        }
-      </div>
-
-      <div className="resp-2col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
-        <div className="card">
-          <div className="section-title">Gastos por categoría</div>
-          {Object.keys(expByCat).length===0
-            ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin gastos pagados en el período</div>
-            : (expenseCategories||[]).filter(c => expByCat[c]).map(c => {
-                const amt = expByCat[c]||0;
-                const pct = Math.round(amt/maxExpCat*100);
-                return (
-                  <div key={c} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-                    <div style={{ fontSize:".82em", color:"var(--t2)", width:100, flexShrink:0 }}>{c}</div>
-                    <div style={{ flex:1, height:7, background:"var(--s2)", borderRadius:4, overflow:"hidden" }}>
-                      <div style={{ width:`${pct}%`, height:"100%", background:"var(--red)", borderRadius:4 }}/>
-                    </div>
-                    <div style={{ fontWeight:700, color:"var(--red)", width:72, textAlign:"right", fontSize:".82em" }}>{$(amt)}</div>
+        <div className="card" style={{ marginBottom:16 }}>
+          <div className="section-title">Ingresos por método de pago</div>
+          {totalIncome === 0 ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin cobros en el período</div> :
+            Object.entries(PAY_LABELS).filter(([k])=>(payMethodTotals[k]||0)>0||k!=="account").map(([k,v])=>{
+              const amt = payMethodTotals[k]||0;
+              const pct = totalIncome>0 ? Math.round(amt/totalIncome*100) : 0;
+              return (
+                <div key={k} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", borderBottom:"1px solid var(--border)" }}>
+                  <span style={{ fontSize:".86em", color:"var(--t2)", width:130 }}>{v}</span>
+                  <div style={{ flex:1, height:7, background:"var(--s2)", borderRadius:4, overflow:"hidden" }}>
+                    <div style={{ width:`${pct}%`, height:"100%", background:"var(--green)", borderRadius:4 }}/>
                   </div>
-                );
-              })
+                  <span style={{ fontSize:".82em", color:"var(--t3)", width:32, textAlign:"right" }}>{pct}%</span>
+                  <span style={{ fontWeight:700, color:amt>0?"var(--green)":"var(--t4)", width:80, textAlign:"right" }}>{$(amt)}</span>
+                </div>
+              );
+            })
           }
         </div>
 
-        <div className="card">
-          <div className="section-title">Balance del período</div>
-          <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
-              <span style={{ fontSize:".84em", color:"var(--t3)" }}>Ventas cobradas directamente</span>
-              <span style={{ fontWeight:600, color:"var(--green)" }}>{$(directIncome)}</span>
-            </div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
-              <span style={{ fontSize:".84em", color:"var(--t3)" }}>Cuentas corrientes cobradas</span>
-              <span style={{ fontWeight:600, color:"var(--green)" }}>{$(accountIncome)}</span>
-            </div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"2px solid var(--border)" }}>
-              <span style={{ fontSize:".86em", color:"var(--t2)", fontWeight:700 }}>Total cobrado</span>
-              <span style={{ fontWeight:800, color:"var(--green)" }}>{$(totalIncome)}</span>
-            </div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
-              <span style={{ fontSize:".84em", color:"var(--t3)" }}>Gastos pagados</span>
-              <span style={{ fontWeight:600, color:"var(--red)" }}>-{$(totalExpenses)}</span>
-            </div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
-              <span style={{ fontSize:".84em", color:"var(--t3)" }}>Gastos pendientes</span>
-              <span style={{ fontWeight:600, color:"var(--amber)" }}>-{$(pendingExpenses)}</span>
-            </div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
-              <span style={{ fontSize:".84em", color:"var(--t3)" }}>Deuda en cuentas corrientes</span>
-              <span style={{ fontWeight:600, color:outstandingDebt>0?"var(--amber)":"var(--t3)" }}>{$(outstandingDebt)}</span>
-            </div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 12px", marginTop:8, background:netResult>=0?"var(--greenl)":"var(--redl)", borderRadius:8, border:`1px solid ${netResult>=0?"var(--greenlb)":"var(--redlb)"}` }}>
-              <span style={{ fontWeight:700, fontSize:".9em" }}>Resultado neto</span>
-              <span style={{ fontWeight:800, fontSize:"1.1em", color:netResult>=0?"var(--green)":"var(--red)" }}>
-                {netResult<0?"-":""}{$(Math.abs(netResult))}
-              </span>
+        <div className="resp-2col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
+          <div className="card">
+            <div className="section-title">Gastos por categoría</div>
+            {Object.keys(expByCat).length===0
+              ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin gastos pagados en el período</div>
+              : (expenseCategories||[]).filter(c=>expByCat[c]).map(c=>{
+                  const amt = expByCat[c]||0;
+                  const pct = Math.round(amt/maxExpCat*100);
+                  return (
+                    <div key={c} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+                      <div style={{ fontSize:".82em", color:"var(--t2)", width:100, flexShrink:0 }}>{c}</div>
+                      <div style={{ flex:1, height:7, background:"var(--s2)", borderRadius:4, overflow:"hidden" }}>
+                        <div style={{ width:`${pct}%`, height:"100%", background:"var(--red)", borderRadius:4 }}/>
+                      </div>
+                      <div style={{ fontWeight:700, color:"var(--red)", width:72, textAlign:"right", fontSize:".82em" }}>{$(amt)}</div>
+                    </div>
+                  );
+                })
+            }
+          </div>
+          <div className="card">
+            <div className="section-title">Balance del período</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+              {[
+                ["Ventas cobradas directamente", directIncome, "var(--green)", false],
+                ["Cuentas corrientes cobradas",  accountIncome,"var(--green)", false],
+              ].map(([label, val, color]) => (
+                <div key={label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
+                  <span style={{ fontSize:".84em", color:"var(--t3)" }}>{label}</span>
+                  <span style={{ fontWeight:600, color }}>{$(val)}</span>
+                </div>
+              ))}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"2px solid var(--border)" }}>
+                <span style={{ fontSize:".86em", color:"var(--t2)", fontWeight:700 }}>Total cobrado</span>
+                <span style={{ fontWeight:800, color:"var(--green)" }}>{$(totalIncome)}</span>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
+                <span style={{ fontSize:".84em", color:"var(--t3)" }}>Gastos pagados</span>
+                <span style={{ fontWeight:600, color:"var(--red)" }}>-{$(totalExpenses)}</span>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
+                <span style={{ fontSize:".84em", color:"var(--t3)" }}>Gastos pendientes</span>
+                <span style={{ fontWeight:600, color:"var(--amber)" }}>-{$(pendingExpenses)}</span>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
+                <span style={{ fontSize:".84em", color:"var(--t3)" }}>Deuda en cuentas corrientes</span>
+                <span style={{ fontWeight:600, color:outstandingDebt>0?"var(--amber)":"var(--t3)" }}>{$(outstandingDebt)}</span>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 12px", marginTop:8, background:netResult>=0?"var(--greenl)":"var(--redl)", borderRadius:8, border:`1px solid ${netResult>=0?"var(--greenlb)":"var(--redlb)"}` }}>
+                <span style={{ fontWeight:700, fontSize:".9em" }}>Resultado neto</span>
+                <span style={{ fontWeight:800, fontSize:"1.1em", color:netResult>=0?"var(--green)":"var(--red)" }}>
+                  {netResult<0?"-":""}{$(Math.abs(netResult))}
+                </span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </>)}
 
-      {/* ── DETALLE DE GASTOS ──────────────────────────────────────────────── */}
-      <div className="card" style={{ marginBottom:16 }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-          <div>
-            <div className="section-title" style={{ marginBottom:2 }}>Detalle de gastos</div>
-            <div style={{ fontSize:".75em", color:"var(--t4)" }}>
-              {filterExpCat !== "Todos" ? `Categoría: ${filterExpCat} · ` : ""}
-              {filteredPExpenses.length} registro{filteredPExpenses.length !== 1 ? "s" : ""}
+      {/* ── VENTAS ───────────────────────────────────────────────────────────── */}
+      {reportSection === "ventas" && (<>
+        <div className="card" style={{ marginBottom:16 }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+            <div>
+              <div className="section-title" style={{ marginBottom:2 }}>Top 5 — Productos más rentables</div>
+              <div style={{ fontSize:".75em", color:"var(--t4)" }}>Rentabilidad = precio de venta − costo de receta · período seleccionado</div>
             </div>
           </div>
-          {filteredPExpenses.length > 0 && (
-            <button className="btn btn-secondary btn-sm" onClick={exportExpensesExcel}>↓ Excel</button>
+          {top5Profitable.length === 0 ? (
+            <div style={{ color:"var(--t3)", fontSize:".84em", padding:"12px 0" }}>
+              Sin datos — asegurate de que los productos tengan recetas con ingredientes y hayan sido vendidos en el período.
+            </div>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <SortableTh col="name" sortBy={profitSortBy} sortDir={profitSortDir} toggleSort={profitToggleSort}>Producto</SortableTh>
+                    <SortableTh col="unitsSold" sortBy={profitSortBy} sortDir={profitSortDir} toggleSort={profitToggleSort} align="right">Uds. vendidas</SortableTh>
+                    <SortableTh col="totalRevenue" sortBy={profitSortBy} sortDir={profitSortDir} toggleSort={profitToggleSort} align="right">Ingresos</SortableTh>
+                    <SortableTh col="totalCost" sortBy={profitSortBy} sortDir={profitSortDir} toggleSort={profitToggleSort} align="right">Costo total</SortableTh>
+                    <SortableTh col="totalProfit" sortBy={profitSortBy} sortDir={profitSortDir} toggleSort={profitToggleSort} align="right">Ganancia</SortableTh>
+                    <SortableTh col="margin" sortBy={profitSortBy} sortDir={profitSortDir} toggleSort={profitToggleSort} style={{ minWidth:140 }}>Margen</SortableTh>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...top5Profitable].sort((a, b) => {
+                    const av = a[profitSortBy] ?? (typeof a[profitSortBy] === "string" ? "" : 0);
+                    const bv = b[profitSortBy] ?? (typeof b[profitSortBy] === "string" ? "" : 0);
+                    let v = typeof av === "string" ? av.localeCompare(bv, undefined, { sensitivity:"base" }) : (av - bv);
+                    return profitSortDir === "asc" ? v : -v;
+                  }).map((p, i) => (
+                    <tr key={p.id}>
+                      <td data-label="#">
+                        <div style={{ width:22, height:22, borderRadius:6, background:i===0?"var(--green)":i===1?"var(--amber)":i===2?"var(--blue)":"var(--s2)", color:i<3?"white":"var(--t3)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:".75em" }}>
+                          {i+1}
+                        </div>
+                      </td>
+                      <td data-label="Producto">
+                        <div style={{ fontWeight:600, fontSize:".88em" }}>{p.name}</div>
+                        <div style={{ fontSize:".74em", color:"var(--t4)" }}>{p.category}</div>
+                      </td>
+                      <td data-label="Uds." style={{ textAlign:"right", fontWeight:600 }}>{p.unitsSold}</td>
+                      <td data-label="Ingresos" style={{ textAlign:"right", color:"var(--green)", fontWeight:600 }}>{$(p.totalRevenue)}</td>
+                      <td data-label="Costo" style={{ textAlign:"right", color:"var(--red)", fontWeight:600 }}>{$(p.totalCost)}</td>
+                      <td data-label="Ganancia" style={{ textAlign:"right", fontWeight:700, fontSize:".95em", color:p.totalProfit>=0?"var(--green)":"var(--red)" }}>
+                        {p.totalProfit<0?"-":""}{$(Math.abs(p.totalProfit))}
+                      </td>
+                      <td data-label="Margen"><MarginBar pct={p.margin}/></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
-        {filteredPExpenses.length === 0
-          ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin gastos en el período{filterExpCat !== "Todos" ? ` para "${filterExpCat}"` : ""}</div>
-          : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <SortableTh col="date" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Fecha</SortableTh>
-                    <SortableTh col="concept" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Concepto</SortableTh>
-                    <SortableTh col="supplier" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Proveedor</SortableTh>
-                    <SortableTh col="category" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Categoría</SortableTh>
-                    <SortableTh col="paymentMethod" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Método</SortableTh>
-                    <SortableTh col="paymentStatus" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Estado</SortableTh>
-                    <SortableTh col="total" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort} align="right">Total</SortableTh>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedExpenses.map(e => (
-                    <tr key={e.id}>
-                      <td style={{ fontSize:".84em", whiteSpace:"nowrap" }}>{fmtDate(e.date)}</td>
-                      <td style={{ fontSize:".86em", fontWeight:500 }}>{e.concept || "—"}</td>
-                      <td style={{ fontSize:".84em", color:"var(--t3)" }}>{e.supplier || "—"}</td>
-                      <td><span className="badge badge-blue" style={{ fontSize:".74em" }}>{e.category || "Otros"}</span></td>
-                      <td style={{ fontSize:".82em", color:"var(--t3)" }}>{PAY_LABELS[e.paymentMethod] || "—"}</td>
-                      <td>
-                        <span className={`badge ${e.paymentStatus === "paid" ? "badge-green" : "badge-amber"}`} style={{ fontSize:".74em" }}>
-                          {e.paymentStatus === "paid" ? "Pagado" : "Pendiente"}
-                        </span>
-                      </td>
-                      <td style={{ textAlign:"right", fontWeight:700, color:e.paymentStatus==="paid"?"var(--red)":"var(--amber)" }}>
-                        {$(e.total)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr style={{ borderTop:"2px solid var(--border)" }}>
-                    <td colSpan={6} style={{ fontWeight:700, fontSize:".86em", paddingTop:10 }}>Totales</td>
-                    <td style={{ textAlign:"right", paddingTop:10 }}>
-                      <div style={{ fontWeight:800, color:"var(--red)" }}>{$(totalExpenses)}</div>
-                      {pendingExpenses > 0 && <div style={{ fontWeight:600, color:"var(--amber)", fontSize:".8em" }}>+{$(pendingExpenses)} pend.</div>}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
+
+        <div className="card" style={{ marginBottom:16 }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:10 }}>
+            <div>
+              <div className="section-title" style={{ marginBottom:2 }}>Tendencia de rendimiento</div>
+              <div style={{ fontSize:".75em", color:"var(--t4)" }}>Ventas <span style={{ color:"var(--green)", fontWeight:700 }}>■</span> vs Gastos <span style={{ color:"var(--red)", fontWeight:700 }}>■</span> · comparativa primera/segunda mitad del período</div>
             </div>
-          )
-        }
-      </div>
-
-      {/* ── TOP 5 RENTABILIDAD ─────────────────────────────────────────────── */}
-      <div className="card" style={{ marginBottom:16 }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-          <div>
-            <div className="section-title" style={{ marginBottom:2 }}>Top 5 — Productos más rentables</div>
-            <div style={{ fontSize:".75em", color:"var(--t4)" }}>Rentabilidad = precio de venta − costo de receta · período seleccionado</div>
+            <div style={{ display:"flex", gap:6 }}>
+              {[["daily","Diario"],["weekly","Semanal"],["monthly","Mensual"]].map(([k,l]) => (
+                <button key={k} className={`btn btn-sm ${trendMode===k?"btn-primary":"btn-secondary"}`} onClick={()=>setTrendMode(k)}>{l}</button>
+              ))}
+            </div>
           </div>
+          {trendIndicator && (
+            <div style={{ display:"flex", gap:16, marginBottom:14, padding:"10px 14px", background:"var(--s2)", borderRadius:10 }}>
+              <div style={{ fontSize:".74em", color:"var(--t4)", alignSelf:"center" }}>Variación 1ª→2ª mitad:</div>
+              <TrendBadge pct={trendIndicator.salesChg} label="Ventas"/>
+              <TrendBadge pct={trendIndicator.expChg ? -trendIndicator.expChg : null} label="Gastos"/>
+              <TrendBadge pct={trendIndicator.netChg} label="Ganancia neta"/>
+              <div style={{ marginLeft:"auto", display:"flex", gap:16, alignItems:"center" }}>
+                {trendPoints.length > 0 && (() => {
+                  const totS = trendPoints.reduce((s,p)=>s+p.sales,0);
+                  const totE = trendPoints.reduce((s,p)=>s+p.expenses,0);
+                  const totN = totS - totE;
+                  return (
+                    <>
+                      <div style={{ textAlign:"center" }}><div style={{ fontSize:".7em", color:"var(--t4)" }}>Total ventas</div><div style={{ fontWeight:700, color:"var(--green)", fontSize:".9em" }}>{$(totS)}</div></div>
+                      <div style={{ textAlign:"center" }}><div style={{ fontSize:".7em", color:"var(--t4)" }}>Total gastos</div><div style={{ fontWeight:700, color:"var(--red)", fontSize:".9em" }}>{$(totE)}</div></div>
+                      <div style={{ textAlign:"center" }}><div style={{ fontSize:".7em", color:"var(--t4)" }}>Ganancia neta</div><div style={{ fontWeight:700, color:totN>=0?"var(--green)":"var(--red)", fontSize:".9em" }}>{totN<0?"-":""}{$(Math.abs(totN))}</div></div>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+          <TrendChart points={trendPoints}/>
+          {trendPoints.length > 0 && (
+            <div style={{ marginTop:14 }}>
+              <div className="section-title" style={{ marginBottom:8 }}>Desglose por período</div>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Período</th>
+                      <th style={{ textAlign:"right" }}>Ventas</th>
+                      <th style={{ textAlign:"right" }}>Gastos</th>
+                      <th style={{ textAlign:"right" }}>Ganancia neta</th>
+                      <th style={{ minWidth:100 }}>Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trendPoints.map((p, i) => (
+                      <tr key={i}>
+                        <td data-label="Período" style={{ fontWeight:500, fontSize:".86em" }}>{p.label}</td>
+                        <td data-label="Ventas" style={{ textAlign:"right", color:"var(--green)", fontWeight:600 }}>{$(p.sales)}</td>
+                        <td data-label="Gastos" style={{ textAlign:"right", color:"var(--red)", fontWeight:600 }}>{$(p.expenses)}</td>
+                        <td data-label="Ganancia" style={{ textAlign:"right", fontWeight:700, color:p.net>=0?"var(--green)":"var(--red)" }}>
+                          {p.net<0?"-":""}{$(Math.abs(p.net))}
+                        </td>
+                        <td data-label="Balance">
+                          <span className={`badge ${p.net>=0?"badge-green":"badge-red"}`}>
+                            {p.net>=0?"Superávit":"Déficit"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
-        {top5Profitable.length === 0 ? (
-          <div style={{ color:"var(--t3)", fontSize:".84em", padding:"12px 0" }}>
-            Sin datos — asegurate de que los productos tengan recetas con ingredientes y hayan sido vendidos en el período.
-          </div>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <SortableTh col="name" sortBy={profitSortBy} sortDir={profitSortDir} toggleSort={profitToggleSort}>Producto</SortableTh>
-                  <SortableTh col="unitsSold" sortBy={profitSortBy} sortDir={profitSortDir} toggleSort={profitToggleSort} align="right">Uds. vendidas</SortableTh>
-                  <SortableTh col="totalRevenue" sortBy={profitSortBy} sortDir={profitSortDir} toggleSort={profitToggleSort} align="right">Ingresos</SortableTh>
-                  <SortableTh col="totalCost" sortBy={profitSortBy} sortDir={profitSortDir} toggleSort={profitToggleSort} align="right">Costo total</SortableTh>
-                  <SortableTh col="totalProfit" sortBy={profitSortBy} sortDir={profitSortDir} toggleSort={profitToggleSort} align="right">Ganancia</SortableTh>
-                  <SortableTh col="margin" sortBy={profitSortBy} sortDir={profitSortDir} toggleSort={profitToggleSort} style={{ minWidth:140 }}>Margen</SortableTh>
-                </tr>
-              </thead>
-              <tbody>
-                {[...top5Profitable].sort((a, b) => {
-                  const av = a[profitSortBy] ?? (typeof a[profitSortBy] === "string" ? "" : 0);
-                  const bv = b[profitSortBy] ?? (typeof b[profitSortBy] === "string" ? "" : 0);
-                  let v = typeof av === "string" ? av.localeCompare(bv, undefined, { sensitivity:"base" }) : (av - bv);
-                  return profitSortDir === "asc" ? v : -v;
-                }).map((p, i) => (
-                  <tr key={p.id}>
-                    <td data-label="#">
-                      <div style={{ width:22, height:22, borderRadius:6, background:i===0?"var(--green)":i===1?"var(--amber)":i===2?"var(--blue)":"var(--s2)", color:i<3?"white":"var(--t3)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:".75em" }}>
-                        {i+1}
-                      </div>
-                    </td>
-                    <td data-label="Producto">
-                      <div style={{ fontWeight:600, fontSize:".88em" }}>{p.name}</div>
-                      <div style={{ fontSize:".74em", color:"var(--t4)" }}>{p.category}</div>
-                    </td>
-                    <td data-label="Uds." style={{ textAlign:"right", fontWeight:600 }}>{p.unitsSold}</td>
-                    <td data-label="Ingresos" style={{ textAlign:"right", color:"var(--green)", fontWeight:600 }}>{$(p.totalRevenue)}</td>
-                    <td data-label="Costo" style={{ textAlign:"right", color:"var(--red)", fontWeight:600 }}>{$(p.totalCost)}</td>
-                    <td data-label="Ganancia" style={{ textAlign:"right", fontWeight:700, fontSize:".95em", color:p.totalProfit>=0?"var(--green)":"var(--red)" }}>
-                      {p.totalProfit<0?"-":""}{$(Math.abs(p.totalProfit))}
-                    </td>
-                    <td data-label="Margen"><MarginBar pct={p.margin}/></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      </>)}
 
-      {/* ── TENDENCIA DE RENDIMIENTO ───────────────────────────────────────── */}
-      <div className="card" style={{ marginBottom:16 }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:10 }}>
-          <div>
-            <div className="section-title" style={{ marginBottom:2 }}>Tendencia de rendimiento</div>
-            <div style={{ fontSize:".75em", color:"var(--t4)" }}>Ventas <span style={{ color:"var(--green)", fontWeight:700 }}>■</span> vs Gastos <span style={{ color:"var(--red)", fontWeight:700 }}>■</span> · comparativa primera/segunda mitad del período</div>
-          </div>
-          <div style={{ display:"flex", gap:6 }}>
-            {[["daily","Diario"],["weekly","Semanal"],["monthly","Mensual"]].map(([k,l]) => (
-              <button key={k} className={`btn btn-sm ${trendMode===k?"btn-primary":"btn-secondary"}`} onClick={()=>setTrendMode(k)}>{l}</button>
+      {/* ── GASTOS ───────────────────────────────────────────────────────────── */}
+      {reportSection === "gastos" && (<>
+        {availableExpCats.length > 0 && (
+          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8, flexWrap:"wrap" }}>
+            <span style={{ fontSize:".78em", color:"var(--t3)", fontWeight:500 }}>Filtrar:</span>
+            <button className={`btn btn-sm ${filterExpCat==="Todos"?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterExpCat("Todos")}>Todos</button>
+            {availableExpCats.map(cat=>(
+              <button key={cat} className={`btn btn-sm ${filterExpCat===cat?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterExpCat(cat)}>{cat}</button>
             ))}
           </div>
+        )}
+        <div className="stats-row" style={{ marginBottom:16 }}>
+          <div className="stat stat-red"><div className="stat-num">{$(totalExpenses)}</div><div className="stat-label">Gastos pagados{filterExpCat!=="Todos"?` · ${filterExpCat}`:""}</div><div className="stat-icon">💸</div></div>
+          <div className="stat stat-amber"><div className="stat-num">{$(pendingExpenses)}</div><div className="stat-label">Gastos pendientes{filterExpCat!=="Todos"?` · ${filterExpCat}`:""}</div><div className="stat-icon">📤</div></div>
+          <div className="stat"><div className="stat-num">{filteredPExpenses.length}</div><div className="stat-label">Gastos en período{filterExpCat!=="Todos"?` · ${filterExpCat}`:""}</div><div className="stat-icon">🧾</div></div>
+          <div className={`stat ${netResult>=0?"stat-green":"stat-red"}`}>
+            <div className="stat-num">{netResult<0?"-":""}{$(Math.abs(netResult))}</div>
+            <div className="stat-label">Resultado neto</div>
+            <div className="stat-icon">{netResult>=0?"📈":"📉"}</div>
+          </div>
         </div>
 
-        {trendIndicator && (
-          <div style={{ display:"flex", gap:16, marginBottom:14, padding:"10px 14px", background:"var(--s2)", borderRadius:10 }}>
-            <div style={{ fontSize:".74em", color:"var(--t4)", alignSelf:"center" }}>Variación 1ª→2ª mitad:</div>
-            <TrendBadge pct={trendIndicator.salesChg} label="Ventas"/>
-            <TrendBadge pct={trendIndicator.expChg ? -trendIndicator.expChg : null} label="Gastos"/>
-            <TrendBadge pct={trendIndicator.netChg} label="Ganancia neta"/>
-            <div style={{ marginLeft:"auto", display:"flex", gap:16, alignItems:"center" }}>
-              {trendPoints.length > 0 && (() => {
-                const totS = trendPoints.reduce((s,p)=>s+p.sales,0);
-                const totE = trendPoints.reduce((s,p)=>s+p.expenses,0);
-                const totN = totS - totE;
-                return (
-                  <>
-                    <div style={{ textAlign:"center" }}><div style={{ fontSize:".7em", color:"var(--t4)" }}>Total ventas</div><div style={{ fontWeight:700, color:"var(--green)", fontSize:".9em" }}>{$(totS)}</div></div>
-                    <div style={{ textAlign:"center" }}><div style={{ fontSize:".7em", color:"var(--t4)" }}>Total gastos</div><div style={{ fontWeight:700, color:"var(--red)", fontSize:".9em" }}>{$(totE)}</div></div>
-                    <div style={{ textAlign:"center" }}><div style={{ fontSize:".7em", color:"var(--t4)" }}>Ganancia neta</div><div style={{ fontWeight:700, color:totN>=0?"var(--green)":"var(--red)", fontSize:".9em" }}>{totN<0?"-":""}{$(Math.abs(totN))}</div></div>
-                  </>
-                );
-              })()}
+        <div className="card" style={{ marginBottom:16 }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+            <div>
+              <div className="section-title" style={{ marginBottom:2 }}>Detalle de gastos</div>
+              <div style={{ fontSize:".75em", color:"var(--t4)" }}>
+                {filterExpCat !== "Todos" ? `Categoría: ${filterExpCat} · ` : ""}
+                {filteredPExpenses.length} registro{filteredPExpenses.length !== 1 ? "s" : ""}
+              </div>
             </div>
+            {filteredPExpenses.length > 0 && (
+              <button className="btn btn-secondary btn-sm" onClick={exportExpensesExcel}>↓ Excel</button>
+            )}
           </div>
-        )}
-
-        <TrendChart points={trendPoints}/>
-
-        {trendPoints.length > 0 && (
-          <div style={{ marginTop:14 }}>
-            <div className="section-title" style={{ marginBottom:8 }}>Desglose por período</div>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Período</th>
-                    <th style={{ textAlign:"right" }}>Ventas</th>
-                    <th style={{ textAlign:"right" }}>Gastos</th>
-                    <th style={{ textAlign:"right" }}>Ganancia neta</th>
-                    <th style={{ minWidth:100 }}>Balance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {trendPoints.map((p, i) => (
-                    <tr key={i}>
-                      <td data-label="Período" style={{ fontWeight:500, fontSize:".86em" }}>{p.label}</td>
-                      <td data-label="Ventas" style={{ textAlign:"right", color:"var(--green)", fontWeight:600 }}>{$(p.sales)}</td>
-                      <td data-label="Gastos" style={{ textAlign:"right", color:"var(--red)", fontWeight:600 }}>{$(p.expenses)}</td>
-                      <td data-label="Ganancia" style={{ textAlign:"right", fontWeight:700, color:p.net>=0?"var(--green)":"var(--red)" }}>
-                        {p.net<0?"-":""}{$(Math.abs(p.net))}
-                      </td>
-                      <td data-label="Balance">
-                        <span className={`badge ${p.net>=0?"badge-green":"badge-red"}`}>
-                          {p.net>=0?"Superávit":"Déficit"}
-                        </span>
+          {filteredPExpenses.length === 0
+            ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>Sin gastos en el período{filterExpCat !== "Todos" ? ` para "${filterExpCat}"` : ""}</div>
+            : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <SortableTh col="date" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Fecha</SortableTh>
+                      <SortableTh col="concept" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Concepto</SortableTh>
+                      <SortableTh col="supplier" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Proveedor</SortableTh>
+                      <SortableTh col="category" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Categoría</SortableTh>
+                      <SortableTh col="paymentMethod" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Método</SortableTh>
+                      <SortableTh col="paymentStatus" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Estado</SortableTh>
+                      <SortableTh col="total" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort} align="right">Total</SortableTh>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedExpenses.map(e => (
+                      <tr key={e.id}>
+                        <td style={{ fontSize:".84em", whiteSpace:"nowrap" }}>{fmtDate(e.date)}</td>
+                        <td style={{ fontSize:".86em", fontWeight:500 }}>{e.concept || "—"}</td>
+                        <td style={{ fontSize:".84em", color:"var(--t3)" }}>{e.supplier || "—"}</td>
+                        <td><span className="badge badge-blue" style={{ fontSize:".74em" }}>{e.category || "Otros"}</span></td>
+                        <td style={{ fontSize:".82em", color:"var(--t3)" }}>{PAY_LABELS[e.paymentMethod] || "—"}</td>
+                        <td>
+                          <span className={`badge ${e.paymentStatus === "paid" ? "badge-green" : "badge-amber"}`} style={{ fontSize:".74em" }}>
+                            {e.paymentStatus === "paid" ? "Pagado" : "Pendiente"}
+                          </span>
+                        </td>
+                        <td style={{ textAlign:"right", fontWeight:700, color:e.paymentStatus==="paid"?"var(--red)":"var(--amber)" }}>
+                          {$(e.total)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop:"2px solid var(--border)" }}>
+                      <td colSpan={6} style={{ fontWeight:700, fontSize:".86em", paddingTop:10 }}>Totales</td>
+                      <td style={{ textAlign:"right", paddingTop:10 }}>
+                        <div style={{ fontWeight:800, color:"var(--red)" }}>{$(totalExpenses)}</div>
+                        {pendingExpenses > 0 && <div style={{ fontWeight:600, color:"var(--amber)", fontSize:".8em" }}>+{$(pendingExpenses)} pend.</div>}
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </tfoot>
+                </table>
+              </div>
+            )
+          }
+        </div>
+      </>)}
+
+      {/* ── PRODUCCIÓN ───────────────────────────────────────────────────────── */}
+      {reportSection === "produccion" && (<>
+        {weekGoalHistory.length === 0 ? (
+          <div className="card">
+            <div style={{ color:"var(--t3)", fontSize:".88em", padding:"12px 0" }}>
+              No hay objetivos semanales registrados. Configurá los objetivos en Configuración → Sistema.
             </div>
           </div>
-        )}
-      </div>
-
-      <div className="card">
-        <div className="section-title">⚠️ Stock bajo (≤ 5 unidades)</div>
-        {stockAlert.length===0 ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>✅ Todo el stock está bien</div> :
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:10 }}>
-            {stockAlert.map(p=>(
-              <div key={p.id} style={{ background:p.stock===0?"var(--redl)":"var(--amberl)", border:`1px solid ${p.stock===0?"var(--redlb)":"var(--amberlb)"}`, borderRadius:8, padding:"10px 12px" }}>
-                <div style={{ fontWeight:600, fontSize:".88em" }}>{p.name}</div>
-                <div style={{ fontSize:".8em", color:p.stock===0?"var(--red)":"var(--amber)", fontWeight:700, marginTop:4 }}>
-                  {p.stock===0?"SIN STOCK":`${p.stock} unidades`}
+        ) : weekGoalHistory.map(week => (
+          <div key={week.weekStart} className="card" style={{ marginBottom:16 }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+              <div>
+                <div style={{ fontWeight:700, fontSize:".95em" }}>
+                  Semana del {week.weekStart} al {week.weekEndStr}
+                </div>
+                <div style={{ fontSize:".75em", color:"var(--t4)", marginTop:2 }}>
+                  {week.rows.length} producto{week.rows.length !== 1 ? "s" : ""}
                 </div>
               </div>
-            ))}
-          </div>
-        }
-      </div>
-
-      <div className="card">
-        <div className="section-title">📉 Margen bajo (por receta)</div>
-        {marginAlert.length===0
-          ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>✅ Todos los productos superan su margen mínimo configurado</div>
-          : <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:10 }}>
-              {marginAlert.map(p => {
-                const recipe = recipes.find(r => r.productId === p.id);
-                const canNav = !!(recipe && setPage && setHighlightRecipeId);
-                return (
-                  <div key={p.id}
-                    onClick={canNav ? () => { setHighlightRecipeId(recipe.id); setPage("recipes"); } : undefined}
-                    style={{ background:"var(--redl)", border:"1px solid var(--redlb)", borderRadius:8, padding:"10px 12px", cursor: canNav ? "pointer" : "default" }}>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:6 }}>
-                      <div style={{ fontWeight:600, fontSize:".88em" }}>{p.name}</div>
-                      {canNav && <span style={{ fontSize:".72em", color:"var(--t3)" }}>Ver receta →</span>}
-                    </div>
-                    <div style={{ fontSize:".8em", color:"var(--red)", fontWeight:700, marginTop:4 }}>
-                      Margen: {p.margin.toFixed(1)}% <span style={{ fontWeight:400, color:"var(--t3)" }}>(mín. {p.minMargin}%)</span>
-                    </div>
-                    <div style={{ fontSize:".76em", color:"var(--t3)", marginTop:2 }}>
-                      Costo/u: {$(p.costPerUnit)} · Precio: {$(p.price)}
-                    </div>
-                  </div>
-                );
-              })}
+              <span className={`badge ${week.allMet ? "badge-green" : week.noneMet ? "badge-red" : "badge-amber"}`}>
+                {week.allMet ? "✓ Cumplido" : week.noneMet ? "✗ Sin cumplir" : "Parcial"}
+              </span>
             </div>
-        }
-      </div>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Producto</th>
+                    <th style={{ textAlign:"right" }}>Objetivo</th>
+                    <th style={{ textAlign:"right" }}>Producido</th>
+                    <th style={{ minWidth:120 }}>Progreso</th>
+                    <th style={{ textAlign:"center" }}>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {week.rows.map(r => (
+                    <tr key={r.id}>
+                      <td style={{ fontWeight:500, fontSize:".88em" }}>{r.productName}</td>
+                      <td style={{ textAlign:"right", color:"var(--t3)", fontSize:".86em" }}>
+                        {r.targetQty} {r.unitLabel || "u."}
+                      </td>
+                      <td style={{ textAlign:"right", fontWeight:700, color:r.met?"var(--green)":"var(--t2)", fontSize:".88em" }}>
+                        {r.produced} {r.unitLabel || "u."}
+                      </td>
+                      <td>
+                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                          <div style={{ flex:1, height:6, background:"var(--s2)", borderRadius:3, overflow:"hidden" }}>
+                            <div style={{ width:`${r.pct}%`, height:"100%", background:r.met?"var(--green)":r.pct>=50?"var(--amber)":"var(--red)", borderRadius:3 }}/>
+                          </div>
+                          <span style={{ fontSize:".74em", fontWeight:700, minWidth:32, textAlign:"right", color:r.met?"var(--green)":r.pct>=50?"var(--amber)":"var(--red)" }}>
+                            {r.pct}%
+                          </span>
+                        </div>
+                      </td>
+                      <td style={{ textAlign:"center" }}>
+                        <span className={`badge ${r.met ? "badge-green" : r.pct >= 50 ? "badge-amber" : "badge-red"}`} style={{ fontSize:".74em" }}>
+                          {r.met ? "Cumplido" : r.pct >= 50 ? "Parcial" : "Pendiente"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+      </>)}
+
+      {/* ── ALERTAS ──────────────────────────────────────────────────────────── */}
+      {reportSection === "alertas" && (<>
+        <div className="card" style={{ marginBottom:16 }}>
+          <div className="section-title">⚠️ Stock bajo (≤ 5 unidades)</div>
+          {stockAlert.length===0 ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>✅ Todo el stock está bien</div> :
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:10 }}>
+              {stockAlert.map(p=>(
+                <div key={p.id} style={{ background:p.stock===0?"var(--redl)":"var(--amberl)", border:`1px solid ${p.stock===0?"var(--redlb)":"var(--amberlb)"}`, borderRadius:8, padding:"10px 12px" }}>
+                  <div style={{ fontWeight:600, fontSize:".88em" }}>{p.name}</div>
+                  <div style={{ fontSize:".8em", color:p.stock===0?"var(--red)":"var(--amber)", fontWeight:700, marginTop:4 }}>
+                    {p.stock===0?"SIN STOCK":`${p.stock} unidades`}
+                  </div>
+                </div>
+              ))}
+            </div>
+          }
+        </div>
+
+        <div className="card">
+          <div className="section-title">📉 Margen bajo (por receta)</div>
+          {marginAlert.length===0
+            ? <div style={{ color:"var(--t3)", fontSize:".84em" }}>✅ Todos los productos superan su margen mínimo configurado</div>
+            : <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:10 }}>
+                {marginAlert.map(p => {
+                  const recipe = recipes.find(r => r.productId === p.id);
+                  const canNav = !!(recipe && setPage && setHighlightRecipeId);
+                  return (
+                    <div key={p.id}
+                      onClick={canNav ? () => { setHighlightRecipeId(recipe.id); setPage("recipes"); } : undefined}
+                      style={{ background:"var(--redl)", border:"1px solid var(--redlb)", borderRadius:8, padding:"10px 12px", cursor: canNav ? "pointer" : "default" }}>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:6 }}>
+                        <div style={{ fontWeight:600, fontSize:".88em" }}>{p.name}</div>
+                        {canNav && <span style={{ fontSize:".72em", color:"var(--t3)" }}>Ver receta →</span>}
+                      </div>
+                      <div style={{ fontSize:".8em", color:"var(--red)", fontWeight:700, marginTop:4 }}>
+                        Margen: {p.margin.toFixed(1)}% <span style={{ fontWeight:400, color:"var(--t3)" }}>(mín. {p.minMargin}%)</span>
+                      </div>
+                      <div style={{ fontSize:".76em", color:"var(--t3)", marginTop:2 }}>
+                        Costo/u: {$(p.costPerUnit)} · Precio: {$(p.price)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+          }
+        </div>
+      </>)}
     </div>
   );
 }

@@ -3,17 +3,17 @@
  *
  * Subsecciones:
  *  - general   → Categorías de productos y gastos
- *  - sistema   → Recordatorios, alertas, valores comerciales
+ *  - sistema   → Recordatorios, alertas, valores comerciales, objetivo semanal
  *  - empleados → Gestión de empleados (admin only)
  *  - notas     → Notas / Fichas internas (admin only)
  *  - cuenta    → Cambiar contraseña
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Ico } from "../shared.jsx";
 import { supabase } from "../supabase.js";
 import { getLastAuditResult, auditIsDue, runAudit, sendAuditEmail } from "../utils/auditCheck.js";
 
-export default function SettingsPage({ user, products, categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, settingsSection = "general", setPage }) {
+export default function SettingsPage({ user, products, categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, settingsSection = "general", setPage, weeklyGoals = [], setWeeklyGoals, weeklyGoalStart, setWeeklyGoalStart, weeklyGoalEnd, setWeeklyGoalEnd }) {
   const [newCat, setNewCat] = useState("");
   const [newExpCat, setNewExpCat] = useState("");
   const [newPass, setNewPass] = useState("");
@@ -26,6 +26,76 @@ export default function SettingsPage({ user, products, categories, setCategories
   const [inactiveDaysInput, setInactiveDaysInput] = useState(String(inactiveDayThreshold ?? 0));
   const [frozenInput, setFrozenInput] = useState(String(frozenDiscount));
   const [vatInput, setVatInput] = useState(String(vatRate));
+
+  // ─── Objetivo semanal ─────────────────────────────────────────────────────
+  const [wgStart, setWgStart] = useState(weeklyGoalStart || "08:00");
+  const [wgEnd,   setWgEnd]   = useState(weeklyGoalEnd   || "20:00");
+  const [wgProduct, setWgProduct]   = useState("");
+  const [wgProductId, setWgProductId] = useState("");
+  const [wgTargetQty, setWgTargetQty] = useState("");
+  const [wgUnitLabel, setWgUnitLabel] = useState("");
+  const [wgSearch, setWgSearch] = useState("");
+  const [wgSaving, setWgSaving] = useState(false);
+
+  const getWeekStart = () => {
+    const now = new Date();
+    const day = now.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diff);
+    return monday.toISOString().split("T")[0]; // YYYY-MM-DD
+  };
+  const weekStartStr = useMemo(getWeekStart, []);
+
+  const currentGoals = weeklyGoals.filter(g => g.weekStart === weekStartStr);
+
+  const saveWgSchedule = async () => {
+    if (!wgStart || !wgEnd || wgStart >= wgEnd) {
+      showToast("El horario de inicio debe ser anterior al de fin", "error");
+      return;
+    }
+    const rows = [
+      { key: "weekly_goal_start", value: wgStart },
+      { key: "weekly_goal_end",   value: wgEnd   },
+    ];
+    const { error } = await supabase.from("app_settings").upsert(rows, { onConflict: "key" });
+    if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
+    setWeeklyGoalStart?.(wgStart);
+    setWeeklyGoalEnd?.(wgEnd);
+    showToast("Horario de objetivo semanal guardado ✓");
+  };
+
+  const addGoal = async () => {
+    if (!wgProductId) { showToast("Seleccioná un producto", "error"); return; }
+    if (!wgTargetQty || Number(wgTargetQty) <= 0) { showToast("Ingresá una cantidad válida", "error"); return; }
+    setWgSaving(true);
+    const row = {
+      week_start:   weekStartStr,
+      product_id:   wgProductId,
+      product_name: wgProduct,
+      target_qty:   Number(wgTargetQty),
+      unit_label:   wgUnitLabel.trim(),
+      sort_order:   currentGoals.length,
+    };
+    const { data, error } = await supabase.from("weekly_goals").insert(row).select().single();
+    setWgSaving(false);
+    if (error) { showToast("Error al agregar: " + error.message, "error"); return; }
+    setWeeklyGoals?.(prev => [...prev, {
+      id: data.id, weekStart: data.week_start, productId: data.product_id,
+      productName: data.product_name, targetQty: data.target_qty,
+      unitLabel: data.unit_label, sortOrder: data.sort_order,
+    }]);
+    setWgProduct(""); setWgProductId(""); setWgTargetQty(""); setWgUnitLabel(""); setWgSearch("");
+    showToast("Objetivo agregado ✓");
+  };
+
+  const deleteGoal = async (id) => {
+    if (!confirm("¿Eliminar este objetivo?")) return;
+    const { error } = await supabase.from("weekly_goals").delete().eq("id", id);
+    if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
+    setWeeklyGoals?.(prev => prev.filter(g => g.id !== id));
+    showToast("Objetivo eliminado");
+  };
 
   // ─── Empleados ────────────────────────────────────────────────────────────
   const [employees, setEmployees] = useState([]);
@@ -231,7 +301,8 @@ export default function SettingsPage({ user, products, categories, setCategories
       {/* ── SISTEMA ─────────────────────────────────────────────────── */}
       {settingsSection === "sistema" && (
         <>
-          <div className="card" style={{ maxWidth:420, marginBottom:16 }}>
+          <div style={{ display:"flex", gap:16, flexWrap:"wrap", marginBottom:16, alignItems:"flex-start" }}>
+          <div className="card" style={{ flex:"1 1 340px", marginBottom:0 }}>
             <div className="section-title">Recordatorios</div>
             <div style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
               Horario en que aparecen los recordatorios al iniciar sesión: entregas pendientes del día y menú del día.
@@ -264,6 +335,133 @@ export default function SettingsPage({ user, products, categories, setCategories
               </button>
             </div>
           </div>
+
+          {/* Objetivo semanal — al lado de Recordatorios */}
+          {user?.role === "admin" && (
+            <div className="card" style={{ flex:"1 1 340px", marginBottom:0, overflow:"visible" }}>
+              <div className="section-title">Objetivo semanal de producción</div>
+              <div style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
+                Rango horario en que se muestra el objetivo al iniciar sesión.
+              </div>
+
+              {/* Horario */}
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16, flexWrap:"wrap" }}>
+                <div className="form-group" style={{ flex:1, minWidth:120, marginBottom:0 }}>
+                  <label className="lbl">Desde</label>
+                  <input type="time" value={wgStart} onChange={e => setWgStart(e.target.value)}/>
+                </div>
+                <div className="form-group" style={{ flex:1, minWidth:120, marginBottom:0 }}>
+                  <label className="lbl">Hasta</label>
+                  <input type="time" value={wgEnd} onChange={e => setWgEnd(e.target.value)}/>
+                </div>
+                <button className="btn btn-primary btn-sm" style={{ alignSelf:"flex-end", marginBottom:1 }} onClick={saveWgSchedule}>
+                  <Ico n="check" s={13}/> Guardar
+                </button>
+              </div>
+
+              <div style={{ borderTop:"1px solid var(--border)", marginTop:4, paddingTop:16 }}>
+                <div style={{ fontWeight:600, fontSize:".84em", color:"var(--t2)", marginBottom:12 }}>
+                  Semana actual ({weekStartStr}) — {currentGoals.length} productos
+                </div>
+
+                {currentGoals.length > 0 && (
+                  <div className="table-wrap" style={{ marginBottom:16 }}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Producto</th>
+                          <th style={{ textAlign:"center" }}>Objetivo</th>
+                          <th style={{ textAlign:"center" }}>Unidad</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {currentGoals.map(g => (
+                          <tr key={g.id}>
+                            <td style={{ fontWeight:500 }}>{g.productName}</td>
+                            <td style={{ textAlign:"center" }}>{g.targetQty}</td>
+                            <td style={{ textAlign:"center", color:"var(--t3)" }}>{g.unitLabel || "–"}</td>
+                            <td style={{ textAlign:"center" }}>
+                              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => deleteGoal(g.id)} title="Eliminar">
+                                <Ico n="x" s={13} c="var(--red)"/>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Formulario para agregar */}
+                <div style={{ display:"flex", flexWrap:"wrap", gap:8, alignItems:"flex-end" }}>
+                  <div className="form-group" style={{ flex:"1 1 160px", marginBottom:0, position:"relative" }}>
+                    <label className="lbl">Producto</label>
+                    {wgProductId
+                      ? (
+                        <div style={{ display:"flex", alignItems:"center", gap:6, background:"var(--greenl)", border:"1px solid var(--greenlb)", borderRadius:7, padding:"6px 10px" }}>
+                          <span style={{ flex:1, fontSize:".88em", fontWeight:600 }}>{wgProduct}</span>
+                          <button className="btn btn-ghost btn-icon btn-sm" onClick={() => { setWgProductId(""); setWgProduct(""); setWgSearch(""); }}>
+                            <Ico n="x" s={12} c="var(--red)"/>
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <input
+                            value={wgSearch}
+                            onChange={e => setWgSearch(e.target.value)}
+                            placeholder="Buscar producto..."
+                          />
+                          {wgSearch && (
+                            <div style={{ position:"absolute", top:"100%", left:0, right:0, background:"var(--bg1)", border:"1px solid var(--border)", borderRadius:7, boxShadow:"0 4px 16px rgba(0,0,0,.12)", zIndex:100, maxHeight:220, overflowY:"auto" }}>
+                              {(products || [])
+                                .filter(p => p.active && p.name.toLowerCase().includes(wgSearch.toLowerCase()))
+                                .map(p => (
+                                  <div key={p.id}
+                                    style={{ padding:"8px 12px", cursor:"pointer", fontSize:".84em", borderBottom:"1px solid var(--border)" }}
+                                    onMouseDown={() => { setWgProductId(p.id); setWgProduct(p.name); setWgSearch(""); }}
+                                  >
+                                    {p.name}
+                                  </div>
+                                ))
+                              }
+                            </div>
+                          )}
+                        </>
+                      )
+                    }
+                  </div>
+                  <div className="form-group" style={{ flex:"0 0 80px", marginBottom:0 }}>
+                    <label className="lbl">Cantidad</label>
+                    <input
+                      type="text" inputMode="numeric"
+                      value={wgTargetQty}
+                      onChange={e => setWgTargetQty(e.target.value.replace(/[^0-9.]/g, ""))}
+                      placeholder="Ej: 3"
+                    />
+                  </div>
+                  <div className="form-group" style={{ flex:"1 1 120px", marginBottom:0 }}>
+                    <label className="lbl">Unidad</label>
+                    <input
+                      type="text"
+                      value={wgUnitLabel}
+                      onChange={e => setWgUnitLabel(e.target.value)}
+                      placeholder="Ej: placa, hornada..."
+                    />
+                  </div>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ alignSelf:"flex-end", marginBottom:1 }}
+                    onClick={addGoal}
+                    disabled={wgSaving}
+                  >
+                    {wgSaving ? "..." : <><Ico n="plus" s={13}/> Agregar</>}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          </div>{/* cierre flex wrapper */}
 
           <div className="card" style={{ maxWidth:420, marginBottom:16 }}>
             <div className="section-title">Alerta de cuenta corriente</div>
