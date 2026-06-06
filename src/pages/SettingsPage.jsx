@@ -165,9 +165,9 @@ export default function SettingsPage({ user, products, categories, setCategories
     const isWholesale = type === "wholesale";
     const activeProducts = (products || []).filter(p => {
       if (p.active === false) return false;
+      if (isWholesale) return p.priceWholesale > 0;
       if (/vianda/i.test(p.category || "")) return false;
       if (/combo/i.test(p.category || "") || /combo/i.test(p.name || "")) return false;
-      if (isWholesale && !(p.priceWholesale > 0)) return false;
       return true;
     });
     const byCategory = {};
