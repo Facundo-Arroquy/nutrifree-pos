@@ -160,9 +160,82 @@ export default function SettingsPage({ user, products, categories, setCategories
     showToast("Nota guardada ✓");
   };
 
+  // ─── Lista de precios PDF ─────────────────────────────────────────────────
+  const printPriceList = (type) => {
+    const isWholesale = type === "wholesale";
+    const activeProducts = (products || []).filter(p => {
+      if (p.active === false) return false;
+      if (/vianda/i.test(p.category || "")) return false;
+      if (/combo/i.test(p.category || "") || /combo/i.test(p.name || "")) return false;
+      if (isWholesale && !(p.priceWholesale > 0)) return false;
+      return true;
+    });
+    const byCategory = {};
+    activeProducts.forEach(p => {
+      const cat = p.category || "Sin categoría";
+      if (!byCategory[cat]) byCategory[cat] = [];
+      byCategory[cat].push(p);
+    });
+
+    const fmt = (n) => n != null ? `$${Number(n).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
+    const title = isWholesale ? "Lista de Precios Mayoristas" : "Lista de Precios Minoristas";
+    const date = new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires", day: "2-digit", month: "2-digit", year: "numeric" });
+
+    const rows = Object.entries(byCategory).map(([cat, prods]) => {
+      const header = `<tr class="cat-row"><td colspan="3">${cat}</td></tr>`;
+      const items = prods.map(p => {
+        const price = isWholesale ? p.priceWholesale : p.priceRetail;
+        return `<tr><td>${p.name}</td><td class="unit">${p.unit || ""}</td><td class="price">${fmt(price)}</td></tr>`;
+      }).join("");
+      return header + items;
+    }).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <title>${title}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',Arial,sans-serif;color:#111;padding:32px;font-size:13px}
+    .header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;border-bottom:2px solid #111;padding-bottom:12px}
+    .header h1{font-size:20px;font-weight:700}
+    .header .meta{font-size:11px;color:#555;text-align:right}
+    table{width:100%;border-collapse:collapse}
+    th{background:#111;color:#fff;padding:7px 10px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+    td{padding:6px 10px;border-bottom:1px solid #e5e5e5}
+    tr:hover td{background:#fafafa}
+    tr.cat-row td{background:#f0f0f0;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#444;padding:8px 10px;border-bottom:1px solid #ccc}
+    td.price{text-align:right;font-weight:600;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+    td.unit{color:#777;font-size:11px;white-space:nowrap}
+    .badge{display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;margin-left:10px;vertical-align:middle;${isWholesale?"background:#1a3a5c;color:#60a5fa":"background:#14532d;color:#4ade80"}}
+    @media print{body{padding:16px}button{display:none}}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>NutriFree<span class="badge">${isWholesale ? "MAYORISTA" : "MINORISTA"}</span></h1>
+      <div style="font-size:12px;color:#555;margin-top:4px">${title}</div>
+    </div>
+    <div class="meta">Fecha: ${date}<br/>${activeProducts.length} productos</div>
+  </div>
+  <table>
+    <thead><tr><th>Producto</th><th>Unidad</th><th style="text-align:right">Precio</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <script>window.onload=()=>window.print()<\/script>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank");
+    if (win) { win.document.write(html); win.document.close(); }
+  };
+
   const SECTION_TITLES = {
     general:   "General",
     sistema:   "Sistema",
+    precios:   "Listas de precios",
     empleados: "Empleados",
     notas:     "Notas internas",
     cuenta:    "Mi cuenta",
@@ -385,6 +458,39 @@ export default function SettingsPage({ user, products, categories, setCategories
             </div>
           )}
         </>
+      )}
+
+      {/* ── LISTAS DE PRECIOS ────────────────────────────────────────── */}
+      {settingsSection === "precios" && (
+        <div className="card" style={{ maxWidth: 480 }}>
+          <div className="section-title">Listas de precios en PDF</div>
+          <p style={{ fontSize: ".84em", color: "var(--t3)", marginBottom: 20 }}>
+            Generá una lista de precios lista para imprimir o guardar como PDF desde el navegador.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--s1)" }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: ".9em", marginBottom: 2 }}>Precios Minoristas</div>
+                <div style={{ fontSize: ".78em", color: "var(--t3)" }}>Lista con precio_retail por producto, agrupada por categoría</div>
+              </div>
+              <button className="btn btn-primary btn-sm" onClick={() => printPriceList("retail")} style={{ whiteSpace: "nowrap" }}>
+                <Ico n="download" s={13}/> Imprimir PDF
+              </button>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--s1)" }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: ".9em", marginBottom: 2 }}>Precios Mayoristas</div>
+                <div style={{ fontSize: ".78em", color: "var(--t3)" }}>Lista con precio_wholesale por producto, agrupada por categoría</div>
+              </div>
+              <button className="btn btn-secondary btn-sm" onClick={() => printPriceList("wholesale")} style={{ whiteSpace: "nowrap" }}>
+                <Ico n="download" s={13}/> Imprimir PDF
+              </button>
+            </div>
+          </div>
+          <p style={{ fontSize: ".74em", color: "var(--t4)", marginTop: 14 }}>
+            Solo se incluyen productos activos. Usá Ctrl+P o el diálogo de impresión del navegador para guardar como PDF.
+          </p>
+        </div>
       )}
 
       {/* ── EMPLEADOS ───────────────────────────────────────────────── */}
