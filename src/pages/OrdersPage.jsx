@@ -74,10 +74,8 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
     if (!sale.paymentMethod) { showToast("Seleccioná un método de pago", "error"); return; }
     setSubmitting(true);
     try {
-      const { error: saleErr } = await supabase.from("sales").update({ status: "closed" }).eq("id", sale.id);
-      if (saleErr) { showToast("Error al cerrar: " + saleErr.message, "error"); return; }
-      setSales(prev => prev.map(s => s.id===sale.id ? {...s, status:"closed"} : s));
-      setSelected(prev => prev ? {...prev, status:"closed"} : prev);
+      // Registrar movimientos de cuenta corriente ANTES de cerrar la venta.
+      // Así, si los pagos fallan, la venta queda abierta y se puede reintentar sin inconsistencias.
       if (sale.paymentMethod === "account" && sale.customerId) {
         const newPayments = [];
 
@@ -113,6 +111,12 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
           return [...prev, ...newPayments.filter(p => !ids.has(p.id))];
         });
       }
+
+      // Cerrar la venta después de registrar los pagos
+      const { error: saleErr } = await supabase.from("sales").update({ status: "closed" }).eq("id", sale.id);
+      if (saleErr) { showToast("Error al cerrar: " + saleErr.message, "error"); return; }
+      setSales(prev => prev.map(s => s.id===sale.id ? {...s, status:"closed"} : s));
+      setSelected(prev => prev ? {...prev, status:"closed"} : prev);
       showToast("Pedido cerrado");
     } finally {
       setSubmitting(false);

@@ -185,6 +185,9 @@ function WholesaleMenu() {
       setCategories(cats?.map(c => c.name) ?? []);
       setProducts(mapped);
       setLoading(false);
+    }).catch(err => {
+      console.error("[WholesaleMenuPage] Error al cargar datos:", err);
+      setLoading(false);
     });
   }, []);
 

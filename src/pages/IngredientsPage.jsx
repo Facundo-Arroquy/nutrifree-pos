@@ -117,9 +117,10 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
             for (const ri of recipe.ingredients.filter(ri => ri.ingredientId === modal.id)) {
               const newQty = conversion ? +(ri.qty * conversion.factor).toFixed(6) : ri.qty;
               const newCost = newQty * data.unitCost;
-              await supabase.from("recipe_ingredients")
+              const { error: riErr } = await supabase.from("recipe_ingredients")
                 .update({ unit: data.unit, qty: newQty, cost: newCost })
                 .eq("id", ri.id);
+              if (riErr) { showToast("Error al actualizar ingrediente de receta: " + riErr.message, "error"); return; }
             }
             // Solo marcar para revisión si la conversión es entre tipos distintos o imposible
             const needsReview = !conversion || conversion.crossType;
@@ -127,9 +128,10 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
               const reason = conversion
                 ? `Unidad de "${data.name}" cambió de ${oldIngr.unit} → ${data.unit} (conversión aproximada, verificar cantidades)`
                 : `Unidad de "${data.name}" cambió de ${oldIngr.unit} → ${data.unit} (conversión no automática, revisar cantidades)`;
-              await supabase.from("recipes")
+              const { error: recErr } = await supabase.from("recipes")
                 .update({ needs_review: true, review_reason: reason })
                 .eq("id", recipe.id);
+              if (recErr) { showToast("Error al marcar receta para revisión: " + recErr.message, "error"); return; }
             }
           }
           if (affectedRecipes.length > 0) {

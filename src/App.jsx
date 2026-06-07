@@ -310,7 +310,7 @@ export default function App() {
             dismissedAt: r.dismissed_at,
             dismissedBy: r.dismissed_by,
           })));
-        });
+        }).catch(err => console.error("[rt_customer_inactive_dismissed]", err));
       })
       .subscribe();
 
@@ -349,13 +349,15 @@ export default function App() {
     // Categorías de productos (re-fetch en cualquier cambio)
     const catsChannel = supabase.channel("rt_categories")
       .on("postgres_changes", { event: "*", schema: "public", table: "categories" }, () => {
-        supabase.from("categories").select("*").then(({ data }) => { if (data) setCategories(data.map(c => c.name)); });
+        supabase.from("categories").select("*").then(({ data }) => { if (data) setCategories(data.map(c => c.name)); })
+          .catch(err => console.error("[rt_categories]", err));
       }).subscribe();
 
     // Categorías de gastos (re-fetch en cualquier cambio)
     const expCatsChannel = supabase.channel("rt_expense_categories")
       .on("postgres_changes", { event: "*", schema: "public", table: "expense_categories" }, () => {
-        supabase.from("expense_categories").select("*").order("name").then(({ data }) => { if (data) setExpenseCategories(data.map(c => c.name)); });
+        supabase.from("expense_categories").select("*").order("name").then(({ data }) => { if (data) setExpenseCategories(data.map(c => c.name)); })
+          .catch(err => console.error("[rt_expense_categories]", err));
       }).subscribe();
 
     // Configuración global (IVA, umbrales, descuentos) — re-fetch en cualquier cambio
@@ -367,7 +369,7 @@ export default function App() {
           const frozen = s.find(x => x.key === "frozen_discount");       if (frozen) setFrozenDiscount(Number(frozen.value) || 15);
           const vat = s.find(x => x.key === "vat_rate");                 if (vat) setVatRate(Number(vat.value) || 21);
           const inact = s.find(x => x.key === "inactive_days_threshold"); if (inact) setInactiveDayThreshold(Number(inact.value) || 0);
-        });
+        }).catch(err => console.error("[rt_app_settings]", err));
       }).subscribe();
 
     // FAQ
@@ -493,6 +495,7 @@ export default function App() {
     const kitItems = [{ productId: menuLunchId, qty: 1 }, { productId: menuDinnerId, qty: 1 }];
     const lunchProd  = products.find(p => p.id === menuLunchId);
     const dinnerProd = products.find(p => p.id === menuDinnerId);
+    if (!lunchProd || !dinnerProd) { showToast("Productos no encontrados", "error"); return; }
     const description = `Almuerzo: ${lunchProd.name} | Cena: ${dinnerProd.name}`;
     const existing = products.find(p => p.name === MENU_PRODUCT_NAME);
 

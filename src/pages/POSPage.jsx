@@ -190,11 +190,15 @@ export default function POSPage({ products, setProducts, customers, setCustomers
         else stockDeltas.push({ id: comp.productId, delta: comp.qty * ci.qty });
       }
     }
-    const { data: stockResults, error: stockErr } = await supabase.rpc("complete_sale_stocks", { p_stock_deltas: stockDeltas });
-    if (stockErr) { showToast("Error al descontar stock: " + stockErr.message, "error"); setSubmitting(false); return; }
+    // Insertar la venta primero: si falla el stock, el pedido queda registrado y se puede corregir manualmente.
+    // El orden inverso (stock antes que venta) era peor: dejaba el stock reducido sin venta registrada.
     const { error: saleErr } = await supabase.from("sales").insert(saleToDb(sale));
     if (saleErr) { showToast("Error al guardar venta: " + saleErr.message, "error"); setSubmitting(false); return; }
-    // Actualizar UI de stock solo después de confirmar que la venta se guardó correctamente
+    const { data: stockResults, error: stockErr } = await supabase.rpc("complete_sale_stocks", { p_stock_deltas: stockDeltas });
+    if (stockErr) {
+      console.error("[POSPage] Stock no se pudo descontar para la venta", sale.id, stockErr);
+      showToast("Venta guardada pero el stock no se descontó: " + stockErr.message, "error");
+    }
     setProducts(prev => prev.map(p => {
       const upd = (stockResults || []).find(r => r.id === p.id);
       return upd ? { ...p, stock: upd.stock } : p;

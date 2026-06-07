@@ -49,6 +49,9 @@ export default function MenuPage({ onGoToLogin }) {
       setCategories(cats?.map(c => c.name) ?? []);
       setProducts(prods?.map(dbToProduct) ?? []);
       setLoading(false);
+    }).catch(err => {
+      console.error("[MenuPage] Error al cargar datos:", err);
+      setLoading(false);
     });
   }, []);
 

@@ -129,6 +129,7 @@ ${r.steps.length>0?`<h2>Pasos</h2>${r.steps.map((s,i)=>`<div class="step"><div c
 ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
 </body></html>`;
     const win = window.open("","_blank");
+    if (!win) { alert("El navegador bloqueó la ventana emergente. Permitila para imprimir la receta."); return; }
     win.document.write(html);
     win.document.close();
     win.onload = () => win.print();

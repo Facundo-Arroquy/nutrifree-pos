@@ -44,14 +44,12 @@ export function getLastAuditResult() {
  */
 export async function runAudit() {
   // Q1 — Créditos sin cargo de consumo
-  const { data: q1 } = await supabase.rpc
-    ? await supabase
-        .from("account_payments")
-        .select("customer_id, sale_id, amount, date")
-        .eq("type", "payment")
-        .eq("payment_method", "balance")
-        .not("sale_id", "is", null)
-    : { data: [] };
+  const { data: q1 } = await supabase
+    .from("account_payments")
+    .select("customer_id, sale_id, amount, date")
+    .eq("type", "payment")
+    .eq("payment_method", "balance")
+    .not("sale_id", "is", null);
 
   // Filtrar los que NO tienen consumo correspondiente (client-side join)
   const { data: allCharges } = await supabase
