@@ -17,7 +17,12 @@
 
 ## Roles de usuario
 - `admin`: emails que empiezan con "admin@..."
+- `cocina`: emails que empiezan con "cocina@..." — rol limitado para uso en tablet
+  (acceso solo a: banner almuerzo/cena, calendario de pedidos, producción,
+  registrar producción, recetas, FAQ/ayuda — en progreso, ver kanban "Nutrifree Pos")
 - `vendor`: cualquier otro email
+- El rol se asigna automáticamente en el primer login (`sessionToUser` en App.jsx)
+  y luego se puede cambiar manualmente desde Configuración > Empleados
 - El objeto `user` se pasa como prop (no hay Context API)
 
 ## Cuentas Corrientes — lógica
