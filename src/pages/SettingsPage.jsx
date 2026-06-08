@@ -544,6 +544,7 @@ export default function SettingsPage({ user, products, categories, setCategories
                               style={{ fontSize:".82em", padding:"2px 6px", borderRadius:4 }}
                             >
                               <option value="vendor">vendor</option>
+                              <option value="cocina">cocina</option>
                               <option value="admin">admin</option>
                             </select>
                           )}

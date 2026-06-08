@@ -61,7 +61,10 @@ import { auditIsDue, runAudit, sendAuditEmail } from "./utils/auditCheck.js";
 // ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
 const sessionToUser = (session) => {
   const email = session.user.email || "";
-  const role = email.toLowerCase().startsWith("admin") ? "admin" : "vendor";
+  const lower = email.toLowerCase();
+  const role = lower.startsWith("admin") ? "admin"
+    : lower.startsWith("cocina") ? "cocina"
+    : "vendor";
   const name = session.user.user_metadata?.name || email.split("@")[0] || "Usuario";
   return { name, role, email, isDemo: false };
 };
