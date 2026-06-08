@@ -751,7 +751,7 @@ export default function App() {
                       );
                     }
                     return (
-                      <button key={n.id} className={`ni${page===n.id?" active":""}`} onClick={() => {
+                      <button key={n.id} className={`ni${page===n.id?" active":""}${user.role==="cocina"?" ni-tablet":""}`} onClick={() => {
                         if (n.id === "reports") logAction("view", "reports", "Acceso a reportes");
                         if (n.id === "menu-banner") {
                           const today = todayStr();
@@ -765,7 +765,7 @@ export default function App() {
                         setPage(n.id);
                         setSidebarOpen(false);
                       }}>
-                        <Ico n={n.icon} s={15}/>{n.label}
+                        <Ico n={n.icon} s={user.role==="cocina" ? 20 : 15}/>{n.label}
                         {n.id === "reports" && marginAlertCount > 0 && (
                           <span style={{ position:"absolute", right:10, background:"var(--red)", color:"white", borderRadius:99, minWidth:17, height:17, fontSize:".6em", fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px", flexShrink:0 }}>
                             {marginAlertCount}

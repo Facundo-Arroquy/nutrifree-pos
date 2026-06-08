@@ -135,6 +135,10 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ff);font-size:15px;m
 .ni.active{background:var(--greenl);color:var(--green);font-weight:600}
 .ni svg{flex-shrink:0;opacity:.65}
 .ni:hover svg,.ni.active svg{opacity:1}
+
+/* Modo tablet — navegación grande y simple (rol cocina) */
+.ni-tablet{padding:16px 18px;font-size:1.08em;font-weight:600;gap:14px;border-radius:12px;margin-bottom:6px}
+.ni-tablet svg{width:22px;height:22px}
 .sb-footer{padding:8px 8px 14px;border-top:1px solid var(--border)}
 .user-chip{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--s2);border-radius:10px}
 .user-av{width:26px;height:26px;border-radius:50%;background:var(--green);color:white;display:flex;align-items:center;justify-content:center;font-size:.69em;font-weight:700;flex-shrink:0}
