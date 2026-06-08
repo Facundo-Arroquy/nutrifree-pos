@@ -166,6 +166,21 @@ export default function OrdersKanbanPage({
     showToast("Estado actualizado");
   };
 
+  // ── Marcar / desmarcar pedido para facturar ────────────────────────────────
+  const toggleBilling = async (sale) => {
+    const mark = !sale.needsBilling;
+    const patch = mark
+      ? { needsBilling: true, billingStatus: "pending" }
+      : { needsBilling: false, billingStatus: null };
+    const { error } = await supabase.from("sales")
+      .update({ needs_billing: patch.needsBilling, billing_status: patch.billingStatus })
+      .eq("id", sale.id);
+    if (error) { showToast("Error: " + error.message, "error"); return; }
+    setSales(prev => prev.map(s => s.id === sale.id ? { ...s, ...patch } : s));
+    if (detail?.id === sale.id) setDetail(prev => ({ ...prev, ...patch }));
+    showToast(mark ? "Pedido marcado para facturar" : "Pedido sacado de facturación");
+  };
+
   // ── Cobrar pedido ──────────────────────────────────────────────────────────
   const closeOrder = async () => {
     if (!detail || submitting) return;
@@ -553,6 +568,15 @@ export default function OrdersKanbanPage({
               {nextLabel && (
                 <button className="btn btn-blue" onClick={() => advanceStatus(detail)}>
                   {nextLabel}
+                </button>
+              )}
+              {detail.needsBilling ? (
+                <button className="btn btn-secondary" onClick={() => toggleBilling(detail)}>
+                  <Ico n="check" s={13} c="var(--green)"/> Marcado para facturar — sacar
+                </button>
+              ) : (
+                <button className="btn btn-secondary" onClick={() => toggleBilling(detail)}>
+                  <Ico n="billing" s={13}/> Marcar para facturar
                 </button>
               )}
               <button
