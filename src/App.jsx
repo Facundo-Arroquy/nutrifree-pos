@@ -191,6 +191,12 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // El rol "cocina" tiene navegación limitada: si por defecto (o al restaurar
+  // sesión) cae en una página fuera de su alcance, lo mandamos al calendario.
+  useEffect(() => {
+    if (user?.role === "cocina" && page === "dashboard") setPage("orders-kanban");
+  }, [user, page]);
+
   useEffect(() => {
     if (!user || user.isDemo) return;
     const load = async () => {
@@ -451,7 +457,14 @@ export default function App() {
   }, [user]);
 
   // ─── Route guards ──────────────────────────────────────────────────────────
-  const PAGE_ROLES = { reports: ["admin"], import: ["admin"], "help-admin": ["admin"], "hours-bank": ["admin"] };
+  const PAGE_ROLES = {
+    reports: ["admin"], import: ["admin"], "hours-bank": ["admin"],
+    "help-admin":     ["admin", "cocina"],
+    "orders-kanban":  ["admin", "vendor", "cocina"],
+    recipes:          ["admin", "vendor", "cocina"],
+    production:       ["admin", "vendor", "cocina"],
+    "production-log": ["admin", "vendor", "cocina"],
+  };
   const canAccess = (pageId) => {
     if (user?.isDemo) return true;
     const allowed = PAGE_ROLES[pageId] || ["admin", "vendor"];
@@ -623,7 +636,7 @@ export default function App() {
           }
         }
         setUser(u);
-        setPage("dashboard");
+        setPage(u?.role === "cocina" ? "orders-kanban" : "dashboard");
       }} />
     </>
   );
@@ -631,21 +644,22 @@ export default function App() {
   const nav = [
     { id:"dashboard",   label:"Dashboard",      icon:"dashboard",   roles:["admin","vendor"], section:"top" },
     { id:"pos",         label:"Ventas en Mostrador", icon:"pos",      roles:["admin","vendor"], section:"ventas" },
-    { id:"orders-kanban", label:"Calendario de Pedidos", icon:"orders", roles:["admin","vendor"], section:"ventas" },
+    { id:"menu-banner", label:"Menú del Día",    icon:"dashboard",   roles:["admin","vendor","cocina"], section:"ventas" },
+    { id:"orders-kanban", label:"Calendario de Pedidos", icon:"orders", roles:["admin","vendor","cocina"], section:"ventas" },
   { id:"orders",      label:"Pedidos",         icon:"orders",      roles:["admin","vendor"], section:"ventas" },
     { id:"billing",     label:"Facturación",     icon:"billing",     roles:["admin","vendor"], section:"ventas" },
     { id:"customers",   label:"Clientes",        icon:"customers",   roles:["admin","vendor"], section:"ventas" },
     { id:"products",    label:"Productos",       icon:"products",    roles:["admin","vendor"], section:"productos" },
-    { id:"recipes",     label:"Recetas",         icon:"recipes",     roles:["admin","vendor"], section:"productos" },
+    { id:"recipes",     label:"Recetas",         icon:"recipes",     roles:["admin","vendor","cocina"], section:"productos" },
     { id:"ingredients", label:"Ingredientes",    icon:"ingredients", roles:["admin","vendor"], section:"productos" },
-    { id:"production",      label:"Producción",        icon:"production",  roles:["admin","vendor"], section:"productos" },
-    { id:"production-log",  label:"Reg. Producción",   icon:"production",  roles:["admin","vendor"], section:"productos" },
+    { id:"production",      label:"Producción",        icon:"production",  roles:["admin","vendor","cocina"], section:"productos" },
+    { id:"production-log",  label:"Reg. Producción",   icon:"production",  roles:["admin","vendor","cocina"], section:"productos" },
     { id:"cash",        label:"Cierre de Caja",  icon:"cash",        roles:["admin","vendor"], section:"finanzas" },
     { id:"expenses",    label:"Gastos",          icon:"expenses",    roles:["admin","vendor"], section:"finanzas" },
     { id:"suppliers",   label:"Proveedores",     icon:"suppliers",   roles:["admin","vendor"], section:"finanzas" },
     { id:"import",      label:"Importar datos",  icon:"upload",      roles:["admin"],          section:"bottom" },
     { id:"reports",     label:"Reportes",        icon:"reports",     roles:["admin"],          section:"bottom" },
-    { id:"help-admin",  label:"FAQ / Ayuda",     icon:"settings",    roles:["admin"],          section:"bottom" },
+    { id:"help-admin",  label:"FAQ / Ayuda",     icon:"settings",    roles:["admin","cocina"], section:"bottom" },
     { id:"settings",    label:"Configuración",   icon:"settings",    roles:["admin","vendor"], section:"bottom" },
   ].filter(n => user.isDemo || n.roles.includes(user.role));
   const SETTINGS_SECTIONS = [
@@ -739,6 +753,15 @@ export default function App() {
                     return (
                       <button key={n.id} className={`ni${page===n.id?" active":""}`} onClick={() => {
                         if (n.id === "reports") logAction("view", "reports", "Acceso a reportes");
+                        if (n.id === "menu-banner") {
+                          const today = todayStr();
+                          setMenuLunchId(localStorage.getItem("menuLunchId_" + today) || "");
+                          setMenuDinnerId(localStorage.getItem("menuDinnerId_" + today) || "");
+                          setMenuSearch({ lunch: "", dinner: "" });
+                          setShowMenuReminder(true);
+                          setSidebarOpen(false);
+                          return;
+                        }
                         setPage(n.id);
                         setSidebarOpen(false);
                       }}>
