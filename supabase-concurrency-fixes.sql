@@ -160,6 +160,27 @@ $$;
 
 
 -- ───────────────────────────────────────────────────────────────────────────
+-- 5b. PRODUCTO: ajuste relativo de stock (registro manual de producción, etc).
+-- ───────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION adjust_product_stock(
+  p_id    text,
+  p_delta numeric
+)
+RETURNS numeric   -- nuevo stock
+LANGUAGE plpgsql
+AS $$
+DECLARE v_stock numeric;
+BEGIN
+  UPDATE products
+  SET stock = stock + p_delta
+  WHERE id = p_id
+  RETURNING stock INTO v_stock;
+  RETURN v_stock;
+END;
+$$;
+
+
+-- ───────────────────────────────────────────────────────────────────────────
 -- 5. CLIENTE: ajuste relativo de balance (cuenta corriente).
 -- ───────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION adjust_customer_balance(p_id text, p_delta numeric)
@@ -184,4 +205,5 @@ GRANT EXECUTE ON FUNCTION apply_production         TO authenticated;
 GRANT EXECUTE ON FUNCTION complete_sale_stocks     TO authenticated;
 GRANT EXECUTE ON FUNCTION cancel_order_stocks      TO authenticated;
 GRANT EXECUTE ON FUNCTION adjust_ingredient_stock  TO authenticated;
+GRANT EXECUTE ON FUNCTION adjust_product_stock     TO authenticated;
 GRANT EXECUTE ON FUNCTION adjust_customer_balance  TO authenticated;

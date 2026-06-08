@@ -153,16 +153,11 @@ export default function ProductionLogPage({ user, recipes, products, setProducts
       const rpcErr = results.find(r => r.error)?.error;
       if (rpcErr) throw rpcErr;
 
-      // 4. Actualizar stock del producto (fetch fresco para evitar estado desactualizado)
+      // 4. Actualizar stock del producto — ajuste atómico y relativo en el servidor
+      //    (evita race conditions: dos producciones/ventas simultáneas no se pisan)
       if (product) {
-        const { data: freshProd, error: fetchErr } = await supabase
-          .from("products").select("stock").eq("id", product.id).single();
-        if (fetchErr) throw fetchErr;
-        const newStock = (freshProd.stock || 0) + totalUnits;
-        const { error: stockErr } = await supabase
-          .from("products")
-          .update({ stock: newStock })
-          .eq("id", product.id);
+        const { data: newStock, error: stockErr } = await supabase
+          .rpc("adjust_product_stock", { p_id: product.id, p_delta: totalUnits });
         if (stockErr) throw stockErr;
         setProducts(prev => prev.map(p => p.id === product.id ? { ...p, stock: newStock } : p));
 
