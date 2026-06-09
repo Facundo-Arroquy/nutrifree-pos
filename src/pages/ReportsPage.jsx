@@ -109,6 +109,10 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
   // Total income = cash received directly + account debt collected
   const totalIncome = directIncome + accountIncome;
 
+  // Total billed: all closed/delivered sales (including those on account)
+  const totalSalesValue = closedSales.reduce((a, b) => a + b.total, 0);
+  const accountSalesValue = closedSales.filter(s => s.paymentMethod === "account").reduce((a, b) => a + b.total, 0);
+
   // Outstanding account debt (all time) — same logic as CustomersPage (includes customer.balance)
   const outstandingDebt = (customers || []).reduce((sum, c) => {
     const charges  = (accountPayments || []).filter(p => p.customerId === c.id && p.type === "charge").reduce((a, b) => a + b.amount, 0);
@@ -406,7 +410,40 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
       </div>
 
       <div className="stats-row">
-        <div className="stat stat-green"><div className="stat-num">{$(totalIncome)}</div><div className="stat-label">Cobrado en período</div><div className="stat-icon">💰</div></div>
+        <div className="stat stat-blue">
+          <div className="stat-num">{$(totalSalesValue)}</div>
+          <div className="stat-label">Ingresos</div>
+          <div className="stat-icon">🧾</div>
+          {totalSalesValue > 0 && (
+            <div style={{ marginTop:6, display:"flex", flexDirection:"column", gap:2 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:".72em", color:"var(--t3)" }}>
+                <span>Cobrado directo</span>
+                <span style={{ fontWeight:600 }}>{$(directIncome)}</span>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:".72em", color:"var(--t3)" }}>
+                <span>Vendido en cuenta</span>
+                <span style={{ fontWeight:600 }}>{$(accountSalesValue)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="stat stat-green">
+          <div className="stat-num">{$(totalIncome)}</div>
+          <div className="stat-label">Ingresos reales</div>
+          <div className="stat-icon">💰</div>
+          {(directIncome > 0 || accountIncome > 0) && (
+            <div style={{ marginTop:6, display:"flex", flexDirection:"column", gap:2 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:".72em", color:"var(--t3)" }}>
+                <span>Cobro directo</span>
+                <span style={{ fontWeight:600 }}>{$(directIncome)}</span>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:".72em", color:"var(--t3)" }}>
+                <span>Cuentas cobradas</span>
+                <span style={{ fontWeight:600 }}>{$(accountIncome)}</span>
+              </div>
+            </div>
+          )}
+        </div>
         <div className="stat stat-amber"><div className="stat-num">{$(outstandingDebt)}</div><div className="stat-label">Deuda en cuentas</div><div className="stat-icon">⏳</div></div>
         <div className="stat"><div className="stat-num">{pSales.length}</div><div className="stat-label">Ventas en período</div><div className="stat-icon">🧾</div></div>
         <div className="stat stat-blue"><div className="stat-num">{$(activeOrdersValue)}</div><div className="stat-label">Pedidos activos ({activeOrders.length})</div><div className="stat-icon">📋</div></div>
@@ -562,17 +599,31 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
         <div className="card">
           <div className="section-title">Balance del período</div>
           <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+            {/* Ingresos */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
-              <span style={{ fontSize:".84em", color:"var(--t3)" }}>Ventas cobradas directamente</span>
-              <span style={{ fontWeight:600, color:"var(--green)" }}>{$(directIncome)}</span>
+              <span style={{ fontSize:".86em", color:"var(--t2)", fontWeight:700 }}>Ingresos</span>
+              <span style={{ fontWeight:800, color:"var(--blue)" }}>{$(totalSalesValue)}</span>
             </div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
-              <span style={{ fontSize:".84em", color:"var(--t3)" }}>Cuentas corrientes cobradas</span>
-              <span style={{ fontWeight:600, color:"var(--green)" }}>{$(accountIncome)}</span>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0 5px 12px", borderBottom:"1px solid var(--border)" }}>
+              <span style={{ fontSize:".82em", color:"var(--t3)" }}>↳ Cobrado directo</span>
+              <span style={{ fontWeight:600, color:"var(--t2)", fontSize:".88em" }}>{$(directIncome)}</span>
             </div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"2px solid var(--border)" }}>
-              <span style={{ fontSize:".86em", color:"var(--t2)", fontWeight:700 }}>Total cobrado</span>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0 5px 12px", borderBottom:"1px solid var(--border)" }}>
+              <span style={{ fontSize:".82em", color:"var(--t3)" }}>↳ Vendido en cuenta</span>
+              <span style={{ fontWeight:600, color:"var(--t2)", fontSize:".88em" }}>{$(accountSalesValue)}</span>
+            </div>
+            {/* Ingresos reales */}
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)", marginTop:4 }}>
+              <span style={{ fontSize:".86em", color:"var(--t2)", fontWeight:700 }}>Ingresos reales</span>
               <span style={{ fontWeight:800, color:"var(--green)" }}>{$(totalIncome)}</span>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0 5px 12px", borderBottom:"1px solid var(--border)" }}>
+              <span style={{ fontSize:".82em", color:"var(--t3)" }}>↳ Ventas cobradas directamente</span>
+              <span style={{ fontWeight:600, color:"var(--t2)", fontSize:".88em" }}>{$(directIncome)}</span>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0 5px 12px", borderBottom:"2px solid var(--border)" }}>
+              <span style={{ fontSize:".82em", color:"var(--t3)" }}>↳ Cuentas corrientes cobradas</span>
+              <span style={{ fontWeight:600, color:"var(--t2)", fontSize:".88em" }}>{$(accountIncome)}</span>
             </div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
               <span style={{ fontSize:".84em", color:"var(--t3)" }}>Gastos pagados</span>
