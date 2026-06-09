@@ -52,6 +52,30 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
   const recipesForIngredient = (ingredientId) =>
     (recipes || []).filter(r => r.ingredients?.some(ri => ri.ingredientId === ingredientId));
 
+  // Actualiza recipe_ingredients.cost para todas las recetas que usan este ingrediente
+  const updateRecipeCostsForIngredient = async (ingredientId, newUnitCost) => {
+    const affected = (recipes || []).filter(r =>
+      r.ingredients?.some(ri => ri.ingredientId === ingredientId)
+    );
+    for (const recipe of affected) {
+      for (const ri of recipe.ingredients.filter(ri => ri.ingredientId === ingredientId)) {
+        const newCost = ri.qty * newUnitCost;
+        const { error } = await supabase.from("recipe_ingredients")
+          .update({ cost: newCost })
+          .eq("id", ri.id);
+        if (error) showToast("Error al actualizar costo en receta: " + error.message, "error");
+      }
+    }
+    if (affected.length > 0 && setRecipes) {
+      setRecipes(prev => prev.map(r => ({
+        ...r,
+        ingredients: r.ingredients.map(ri =>
+          ri.ingredientId === ingredientId ? { ...ri, cost: ri.qty * newUnitCost } : ri
+        ),
+      })));
+    }
+  };
+
   const goToRecipe = (recipeId) => {
     setOpenRecipeId(recipeId);
     setPage("recipes");
@@ -106,6 +130,11 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
         const { error } = await supabase.from("ingredients").update(ingredientToDb(data)).eq("id", modal.id);
         if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
         setIngredients(p=>p.map(i=>i.id===modal.id?{...i,...data}:i));
+
+        // Si cambió el precio, actualizar costos en recipe_ingredients
+        if (oldIngr && oldIngr.unitCost !== data.unitCost) {
+          await updateRecipeCostsForIngredient(modal.id, data.unitCost);
+        }
 
         // Si cambió la unidad, convertir cantidades en recetas y actualizar recipe_ingredients
         if (unitChanged && recipes?.length) {
@@ -206,6 +235,7 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
     const { error } = await supabase.from("ingredients").update({ unit_cost: val }).eq("id", id);
     if (error) { showToast("Error al actualizar precio: " + error.message, "error"); return; }
     setIngredients(p=>p.map(i=>i.id===id?{...i,unitCost:val}:i));
+    await updateRecipeCostsForIngredient(id, val);
     setPriceEdit(p=>({...p,[id]:undefined}));
     showToast("Precio actualizado");
   };
