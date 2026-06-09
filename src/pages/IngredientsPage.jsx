@@ -244,8 +244,8 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
     const qty = Number(stockEdit[id]);
     if (!qty) return;
     const ingr = ingredients.find(i=>i.id===id);
-    const newStock = (ingr?.stock||0) + qty;
-    const { error } = await supabase.from("ingredients").update({ stock: newStock }).eq("id", id);
+    // Ajuste atómico y relativo en el servidor (evita race conditions entre usuarios)
+    const { data: newStock, error } = await supabase.rpc("adjust_ingredient_stock", { p_id: id, p_delta: qty });
     if (error) { showToast("Error al actualizar stock: " + error.message, "error"); return; }
     setIngredients(p=>p.map(i=>i.id===id?{...i,stock:newStock}:i));
     setStockEdit(p=>({...p,[id]:""}));

@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS business_users (
   email      TEXT        UNIQUE NOT NULL,
   name       TEXT        NOT NULL DEFAULT '',
   domain     TEXT        NOT NULL,
-  role       TEXT        NOT NULL DEFAULT 'vendor' CHECK (role IN ('admin', 'vendor')),
+  role       TEXT        NOT NULL DEFAULT 'vendor' CHECK (role IN ('admin', 'vendor', 'cocina')),
   active     BOOLEAN     NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -80,3 +80,9 @@ SELECT
   CASE WHEN email ILIKE 'admin%' THEN 'admin' ELSE 'vendor' END     AS role
 FROM auth.users
 ON CONFLICT (email) DO NOTHING;
+
+-- ─── Migración: agregar rol "cocina" al check constraint existente ─────
+-- (ejecutar si la tabla ya existía con el constraint viejo admin/vendor)
+ALTER TABLE business_users DROP CONSTRAINT IF EXISTS business_users_role_check;
+ALTER TABLE business_users ADD CONSTRAINT business_users_role_check
+  CHECK (role IN ('admin', 'vendor', 'cocina'));
