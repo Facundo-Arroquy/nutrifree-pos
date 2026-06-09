@@ -3,3 +3,5 @@ dist
 .env
 .vercel
 NOTAS_SESION.md
+PASARELA_PAGO.md
+.env.local

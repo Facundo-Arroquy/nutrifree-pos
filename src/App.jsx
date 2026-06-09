@@ -56,6 +56,7 @@ import OrdersKanbanPage from "./pages/OrdersKanbanPage.jsx";
 import ChatWidget from "./components/ChatWidget.jsx";
 import MenuPage from "./pages/MenuPage.jsx";
 import WholesaleMenuPage from "./pages/WholesaleMenuPage.jsx";
+import PagoResultadoPage from "./pages/PagoResultadoPage.jsx";
 import { auditIsDue, runAudit, sendAuditEmail } from "./utils/auditCheck.js";
 
 // ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
@@ -541,6 +542,11 @@ export default function App() {
   const currentPath = window.location.pathname;
   if (currentPath === "/menu-mayorista") {
     return <WholesaleMenuPage />;
+  }
+
+  // Páginas de resultado de pago MP (públicas)
+  if (["/pago-exitoso", "/pago-fallido", "/pago-pendiente"].includes(currentPath)) {
+    return <PagoResultadoPage />;
   }
 
   // Menú público en /
