@@ -183,17 +183,12 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
       }
 
       if (form.ingredients.length > 0) {
-        const rows = form.ingredients.map(i => recipeIngredientToDb({...i, id: crypto.randomUUID()}, recipeId));
+        const rows = form.ingredients.map(i => recipeIngredientToDb({...i, id: i.id || crypto.randomUUID()}, recipeId));
         const { error: riErr } = await supabase.from("recipe_ingredients").insert(rows);
         if (riErr) { showToast("Error al guardar ingredientes: " + riErr.message, "error"); return; }
       }
 
-      const savedRecipe = {...recipeData, ingredients: form.ingredients};
-      if (modal === "new") {
-        setRecipes(p => [...p, savedRecipe]);
-      } else {
-        setRecipes(p => p.map(r => r.id === recipeId ? savedRecipe : r));
-      }
+      // No actualizamos el estado local — Realtime lo maneja para evitar duplicados
       setModal(null);
       showToast("Receta guardada");
     } finally {
