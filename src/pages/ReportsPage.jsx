@@ -458,8 +458,23 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
         </div>
       )}
       <div className="stats-row" style={{ marginBottom:16 }}>
-        <div className="stat stat-red"><div className="stat-num">{$(totalExpenses)}</div><div className="stat-label">Gastos pagados{filterExpCat!=="Todos"?` · ${filterExpCat}`:""}</div><div className="stat-icon">💸</div></div>
-        <div className="stat stat-amber"><div className="stat-num">{$(pendingExpenses)}</div><div className="stat-label">Gastos pendientes{filterExpCat!=="Todos"?` · ${filterExpCat}`:""}</div><div className="stat-icon">📤</div></div>
+        <div className="stat stat-red">
+          <div className="stat-num">{$(totalExpenses + pendingExpenses)}</div>
+          <div className="stat-label">Gastos{filterExpCat!=="Todos"?` · ${filterExpCat}`:""}</div>
+          <div className="stat-icon">💸</div>
+          {(totalExpenses > 0 || pendingExpenses > 0) && (
+            <div style={{ marginTop:6, display:"flex", flexDirection:"column", gap:2 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:".72em", color:"var(--t3)" }}>
+                <span>Pagados</span>
+                <span style={{ fontWeight:600 }}>{$(totalExpenses)}</span>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:".72em", color:"var(--t3)" }}>
+                <span>Pendientes</span>
+                <span style={{ fontWeight:600 }}>{$(pendingExpenses)}</span>
+              </div>
+            </div>
+          )}
+        </div>
         <div className="stat"><div className="stat-num">{filteredPExpenses.length}</div><div className="stat-label">Gastos en período{filterExpCat!=="Todos"?` · ${filterExpCat}`:""}</div><div className="stat-icon">🧾</div></div>
         <div className={`stat ${netResult>=0?"stat-green":"stat-red"}`}>
           <div className="stat-num">{netResult<0?"-":""}{$(Math.abs(netResult))}</div>
@@ -625,13 +640,17 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
               <span style={{ fontSize:".82em", color:"var(--t3)" }}>↳ Cuentas corrientes cobradas</span>
               <span style={{ fontWeight:600, color:"var(--t2)", fontSize:".88em" }}>{$(accountIncome)}</span>
             </div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
-              <span style={{ fontSize:".84em", color:"var(--t3)" }}>Gastos pagados</span>
-              <span style={{ fontWeight:600, color:"var(--red)" }}>-{$(totalExpenses)}</span>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)", marginTop:4 }}>
+              <span style={{ fontSize:".86em", color:"var(--t2)", fontWeight:700 }}>Gastos</span>
+              <span style={{ fontWeight:800, color:"var(--red)" }}>-{$(totalExpenses + pendingExpenses)}</span>
             </div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
-              <span style={{ fontSize:".84em", color:"var(--t3)" }}>Gastos pendientes</span>
-              <span style={{ fontWeight:600, color:"var(--amber)" }}>-{$(pendingExpenses)}</span>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0 5px 12px", borderBottom:"1px solid var(--border)" }}>
+              <span style={{ fontSize:".82em", color:"var(--t3)" }}>↳ Pagados</span>
+              <span style={{ fontWeight:600, color:"var(--t2)", fontSize:".88em" }}>-{$(totalExpenses)}</span>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 0 5px 12px", borderBottom:"1px solid var(--border)" }}>
+              <span style={{ fontSize:".82em", color:"var(--t3)" }}>↳ Pendientes</span>
+              <span style={{ fontWeight:600, color:"var(--amber)", fontSize:".88em" }}>-{$(pendingExpenses)}</span>
             </div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
               <span style={{ fontSize:".84em", color:"var(--t3)" }}>Deuda en cuentas corrientes</span>
