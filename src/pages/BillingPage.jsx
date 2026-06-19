@@ -19,8 +19,14 @@ const MONTHS = [
 
 export default function BillingPage({ sales, setSales, customers, showToast }) {
   const now = new Date();
-  const [filterMonth, setFilterMonth] = useState(now.getMonth());
-  const [filterYear, setFilterYear]   = useState(now.getFullYear());
+  const [filterMonths, setFilterMonths] = useState(new Set([now.getMonth()]));
+  const [filterYear, setFilterYear]     = useState(now.getFullYear());
+
+  const toggleMonth = m => setFilterMonths(prev => {
+    const next = new Set(prev);
+    next.has(m) ? next.size > 1 && next.delete(m) : next.add(m);
+    return next;
+  });
   const [expandedId, setExpandedId]   = useState(null);
 
   // Panel envío de facturas
@@ -79,7 +85,7 @@ export default function BillingPage({ sales, setSales, customers, showToast }) {
 
   const filtered = allBillingSales.filter(s => {
     const d = new Date(s.createdAt);
-    return d.getMonth() === filterMonth && d.getFullYear() === filterYear;
+    return filterMonths.has(d.getMonth()) && d.getFullYear() === filterYear;
   });
 
   const pending   = filtered.filter(s => s.billingStatus === "pending");
@@ -145,23 +151,38 @@ export default function BillingPage({ sales, setSales, customers, showToast }) {
       </div>
 
       {/* Filtro de período */}
-      <div style={{ display:"flex", gap:10, marginBottom:20, flexWrap:"wrap", alignItems:"center" }}>
-        <span style={{ fontSize:".82em", color:"var(--t3)", fontWeight:600 }}>Período:</span>
-        <select
-          value={filterMonth}
-          onChange={e => setFilterMonth(Number(e.target.value))}
-          style={{ padding:"5px 10px", borderRadius:7, border:"1px solid var(--border)", background:"var(--s1)", fontSize:".84em" }}>
-          {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
-        </select>
-        <select
-          value={filterYear}
-          onChange={e => setFilterYear(Number(e.target.value))}
-          style={{ padding:"5px 10px", borderRadius:7, border:"1px solid var(--border)", background:"var(--s1)", fontSize:".84em" }}>
-          {years.map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
-        <span style={{ fontSize:".78em", color:"var(--t4)" }}>
-          {filtered.length} venta{filtered.length !== 1 ? "s" : ""} en el período
-        </span>
+      <div style={{ marginBottom:20 }}>
+        <div style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"center", marginBottom:8 }}>
+          <span style={{ fontSize:".82em", color:"var(--t3)", fontWeight:600 }}>Año:</span>
+          <select
+            value={filterYear}
+            onChange={e => setFilterYear(Number(e.target.value))}
+            style={{ padding:"5px 10px", borderRadius:7, border:"1px solid var(--border)", background:"var(--s1)", fontSize:".84em" }}>
+            {years.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <span style={{ fontSize:".78em", color:"var(--t4)" }}>
+            {filtered.length} venta{filtered.length !== 1 ? "s" : ""} · {filterMonths.size > 1 ? `${filterMonths.size} meses` : MONTHS[[...filterMonths][0]]}
+          </span>
+        </div>
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+          {MONTHS.map((m, i) => {
+            const active = filterMonths.has(i);
+            return (
+              <button
+                key={i}
+                onClick={() => toggleMonth(i)}
+                style={{
+                  padding:"4px 11px", borderRadius:20, fontSize:".78em", fontWeight:600, cursor:"pointer",
+                  border: `1.5px solid ${active ? "var(--green)" : "var(--border)"}`,
+                  background: active ? "var(--greenl)" : "var(--s1)",
+                  color: active ? "var(--green)" : "var(--t3)",
+                  transition:"all .12s",
+                }}>
+                {m.slice(0, 3)}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Tarjetas de resumen */}
