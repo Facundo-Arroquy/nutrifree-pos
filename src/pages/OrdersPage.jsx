@@ -54,6 +54,7 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
     });
 
   const changeStatus = async (id, status) => {
+    if (status === "closed") { console.error("[OrdersPage] Usar closeOrder() para cerrar ventas en cuenta, no changeStatus()"); return; }
     const { error } = await supabase.from("sales").update({ status }).eq("id", id);
     if (error) { showToast("Error al actualizar estado: " + error.message, "error"); return; }
     setSales(prev => prev.map(s => s.id===id ? {...s,status} : s));
