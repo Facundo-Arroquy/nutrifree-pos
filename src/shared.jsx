@@ -94,8 +94,8 @@ const clamp = (v,mn,mx) => Math.min(Math.max(v,mn),mx);
 const STATUS_LABELS = { open:"Pendiente", preparing:"En preparación", pending:"Pend. pago", ready:"Listo para Retirar", delivered:"Entregado", cancelled:"Cancelado", closed:"Cerrado" };
 const STATUS_COLORS = { open:"badge-amber", preparing:"badge-blue", pending:"badge-amber", ready:"badge-green", delivered:"badge-gray", cancelled:"badge-red", closed:"badge-gray" };
 // Etiquetas para métodos de pago (PAY_ORDER_LABELS excluye tarjeta, que no aplica en pedidos)
-const PAY_LABELS = { cash:"Efectivo", transfer:"Transferencia", card:"Tarjeta", account:"Cuenta corriente" };
-const PAY_ORDER_LABELS = { cash:"Efectivo", transfer:"Transferencia", account:"Cuenta corriente" };
+const PAY_LABELS = { cash:"Efectivo", transfer:"Transferencia", card:"Tarjeta", account:"Cuenta corriente", mercadopago:"MercadoPago" };
+const PAY_ORDER_LABELS = { cash:"Efectivo", transfer:"Transferencia", account:"Cuenta corriente", mercadopago:"MercadoPago" };
 
 // ─── STYLES ───────────────────────────────────────────────────────────────────
 const CSS = `

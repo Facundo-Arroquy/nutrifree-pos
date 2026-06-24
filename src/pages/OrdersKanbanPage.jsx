@@ -198,6 +198,9 @@ export default function OrdersKanbanPage({
       if (payMethod === "account" && detail.customerId) {
         const newPayments = [];
 
+        const alreadyCharged = accountPayments.some(p => p.saleId === detail.id && p.type === "charge");
+        if (alreadyCharged) { showToast("Este pedido ya tiene un cargo registrado", "error"); return; }
+
         const charge = {
           id: crypto.randomUUID(), customerId: detail.customerId, saleId: detail.id,
           amount: detail.total, type: "charge", paymentMethod: null, date: todayStr(), notes: "",

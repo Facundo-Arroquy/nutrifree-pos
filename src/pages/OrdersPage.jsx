@@ -54,6 +54,7 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
     });
 
   const changeStatus = async (id, status) => {
+    if (status === "closed") { console.error("[OrdersPage] Usar closeOrder() para cerrar ventas en cuenta, no changeStatus()"); return; }
     const { error } = await supabase.from("sales").update({ status }).eq("id", id);
     if (error) { showToast("Error al actualizar estado: " + error.message, "error"); return; }
     setSales(prev => prev.map(s => s.id===id ? {...s,status} : s));
@@ -78,6 +79,9 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
       // Así, si los pagos fallan, la venta queda abierta y se puede reintentar sin inconsistencias.
       if (sale.paymentMethod === "account" && sale.customerId) {
         const newPayments = [];
+
+        const alreadyCharged = accountPayments.some(p => p.saleId === sale.id && p.type === "charge");
+        if (alreadyCharged) { showToast("Este pedido ya tiene un cargo registrado", "error"); return; }
 
         const charge = { id: crypto.randomUUID(), customerId: sale.customerId, saleId: sale.id,
           amount: sale.total, type: "charge", paymentMethod: null, date: todayStr(), notes: "" };
