@@ -192,27 +192,45 @@ export default function App() {
   useEffect(() => {
     if (!user || user.isDemo) return;
     const load = async () => {
-      const [{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: accPays, error: accPaysErr }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }, { data: faqs }, { data: faqsMissed }, { data: settings }, { data: inactiveDis }] = await Promise.all([
-        supabase.from("categories").select("*"),
-        supabase.from("expense_categories").select("*").order("name"),
-        supabase.from("products").select("*"),
-        supabase.from("customers").select("*"),
-        supabase.from("sales").select("*").order("created_at", { ascending: false }),
-        supabase.from("recipes").select("*"),
-        supabase.from("expenses").select("*").order("created_at", { ascending: false }),
-        supabase.from("ingredients").select("*").order("name"),
-        supabase.from("account_payments").select("*").order("created_at", { ascending: false }),
-        supabase.from("stock_movements").select("*").order("created_at", { ascending: false }),
-        supabase.from("recipe_ingredients").select("*"),
-        supabase.from("suppliers").select("*").order("name"),
-        supabase.from("supplier_payments").select("*").order("created_at", { ascending: false }),
-        supabase.from("cash_shifts").select("*").order("created_at", { ascending: false }),
-        supabase.from("faq_entries").select("*").order("created_at", { ascending: false }),
-        supabase.from("faq_missed").select("*").order("created_at", { ascending: false }),
-        supabase.from("app_settings").select("*"),
-        supabase.from("customer_inactive_dismissed").select("*"),
+      // account_payments se pagina porque PostgREST limita a 1000 filas por respuesta
+      const fetchAllAccountPayments = async () => {
+        let all = [];
+        let from = 0;
+        while (true) {
+          const { data, error } = await supabase.from("account_payments")
+            .select("*").order("created_at", { ascending: false })
+            .range(from, from + 999);
+          if (error) { console.error("[account_payments] Error:", error); break; }
+          if (!data || data.length === 0) break;
+          all = [...all, ...data];
+          if (data.length < 1000) break;
+          from += 1000;
+        }
+        return all;
+      };
+
+      const [[{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }, { data: faqs }, { data: faqsMissed }, { data: settings }, { data: inactiveDis }], accPays] = await Promise.all([
+        Promise.all([
+          supabase.from("categories").select("*"),
+          supabase.from("expense_categories").select("*").order("name"),
+          supabase.from("products").select("*"),
+          supabase.from("customers").select("*"),
+          supabase.from("sales").select("*").order("created_at", { ascending: false }),
+          supabase.from("recipes").select("*"),
+          supabase.from("expenses").select("*").order("created_at", { ascending: false }),
+          supabase.from("ingredients").select("*").order("name"),
+          supabase.from("stock_movements").select("*").order("created_at", { ascending: false }),
+          supabase.from("recipe_ingredients").select("*"),
+          supabase.from("suppliers").select("*").order("name"),
+          supabase.from("supplier_payments").select("*").order("created_at", { ascending: false }),
+          supabase.from("cash_shifts").select("*").order("created_at", { ascending: false }),
+          supabase.from("faq_entries").select("*").order("created_at", { ascending: false }),
+          supabase.from("faq_missed").select("*").order("created_at", { ascending: false }),
+          supabase.from("app_settings").select("*"),
+          supabase.from("customer_inactive_dismissed").select("*"),
+        ]),
+        fetchAllAccountPayments(),
       ]);
-      if (accPaysErr) console.error("[account_payments] Error al cargar:", accPaysErr);
       if (cats) setCategories(cats.map(c => c.name));
       if (expCats && expCats.length > 0) setExpenseCategories(expCats.map(c => c.name));
       if (prods) setProducts(prods.map(dbToProduct));
@@ -229,7 +247,7 @@ export default function App() {
             .map(ri => dbToRecipeIngredient(ri, ingredientsCatalog)),
         })));
       }
-      if (accPays) setAccountPayments(accPays.map(dbToAccountPayment));
+      setAccountPayments(accPays.map(dbToAccountPayment));
       if (stockMovs) setStockMovements(stockMovs.map(dbToStockMovement));
       if (supps) setSuppliers(supps.map(dbToSupplier));
       if (suppPays) setSupplierPayments(suppPays.map(dbToSupplierPayment));

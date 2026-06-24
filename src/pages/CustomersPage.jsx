@@ -7,11 +7,29 @@
  *
  * Props: customers, setCustomers, sales, accountPayments, setAccountPayments, showToast, logAction
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Ico, Modal, $, fmtDate, uid, PAY_LABELS, STATUS_LABELS, STATUS_COLORS, todayStr, useSortable, SortableTh } from "../shared.jsx";
-import { supabase, customerToDb, accountPaymentToDb } from "../supabase.js";
+import { supabase, customerToDb, accountPaymentToDb, dbToAccountPayment } from "../supabase.js";
 
 export default function CustomersPage({ customers, setCustomers, sales, accountPayments, setAccountPayments, showToast, logAction }) {
+  // Sincronizar account_payments al abrir la página, para no depender sólo del realtime
+  useEffect(() => {
+    const fetchAll = async () => {
+      let all = [];
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase.from("account_payments")
+          .select("*").order("created_at", { ascending: false })
+          .range(from, from + 999);
+        if (error || !data || data.length === 0) break;
+        all = [...all, ...data];
+        if (data.length < 1000) break;
+        from += 1000;
+      }
+      if (all.length > 0) setAccountPayments(all.map(dbToAccountPayment));
+    };
+    fetchAll();
+  }, []);
   const custBal = (id) =>
     accountPayments.filter(p => p.customerId === id)
       .reduce((sum, p) => p.type === "payment" ? sum + p.amount : sum - p.amount, 0);
@@ -183,7 +201,8 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
     const creditForInitial = initialDebtAlloc?.creditApplied ?? 0;
     const totalCreditUsed = creditForOrders.reduce((sum, a) => sum + a.creditApplied, 0) + creditForInitial;
 
-    const cashAmount = Number(payForm.amount) || 0;
+    // Sanear formato argentino: "10.000,50" → 10000.50
+    const cashAmount = Number(String(payForm.amount).replace(/\./g, "").replace(",", ".")) || 0;
     const cashSelected = allocations.filter(a => a.remaining > 0 && cashSelectedIds.has(a.sale.id));
 
     if (totalCreditUsed === 0 && cashAmount === 0) {
@@ -353,12 +372,10 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
                   {isExpanded && (() => {
                     const custMovs = accountPayments
                       .filter(p => p.customerId === c.id)
-                      .sort((a,b) => new Date(b.createdAt||b.date) - new Date(a.createdAt||a.date))
-                      .slice(0, 5);
+                      .sort((a,b) => new Date(b.createdAt||b.date) - new Date(a.createdAt||a.date));
                     const custSales = sales
                       .filter(s => s.customerId === c.id)
-                      .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))
-                      .slice(0, 5);
+                      .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
                     const payStatus = (s) => {
                       if (s.status === "cancelled") return null;
                       if (s.status !== "closed") return { label:"Sin cobrar", cls:"badge-gray" };
@@ -400,21 +417,25 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {custMovs.map(p => (
-                                    <tr key={p.id} style={{ borderTop:"1px solid var(--border)" }}>
+                                  {custMovs.map(p => {
+                                    const isInternal = p.paymentMethod === "balance";
+                                    return (
+                                    <tr key={p.id} style={{ borderTop:"1px solid var(--border)", opacity: isInternal ? 0.55 : 1 }}>
                                       <td style={{ padding:"6px 8px", color:"var(--t3)", whiteSpace:"nowrap" }}>{fmtDate(p.date)}</td>
                                       <td style={{ padding:"6px 8px" }}>
-                                        <span className={`badge ${p.type==="charge"?"badge-red":"badge-green"}`}>
-                                          {p.type==="charge"?"Cargo":"Pago"}
-                                        </span>
+                                        {isInternal
+                                          ? <span className="badge badge-gray">Mov. crédito</span>
+                                          : <span className={`badge ${p.type==="charge"?"badge-red":"badge-green"}`}>{p.type==="charge"?"Cargo":"Pago"}</span>
+                                        }
                                       </td>
                                       <td style={{ padding:"6px 8px" }}>{PAY_LABELS[p.paymentMethod]||"—"}</td>
                                       <td style={{ padding:"6px 8px", color:"var(--t3)", fontSize:".82em" }}>{p.notes||"—"}</td>
-                                      <td style={{ padding:"6px 8px", fontWeight:700, textAlign:"right", color: p.type==="charge"?"var(--red)":"var(--green)" }}>
+                                      <td style={{ padding:"6px 8px", fontWeight:700, textAlign:"right", color: isInternal ? "var(--t4)" : p.type==="charge"?"var(--red)":"var(--green)" }}>
                                         {p.type==="charge"?"-":"+"}{$(p.amount)}
                                       </td>
                                     </tr>
-                                  ))}
+                                    );
+                                  })}
                                 </tbody>
                               </table>
                             )}
@@ -527,12 +548,13 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
                           <td style={{ color:"var(--t3)", fontSize:".88em", whiteSpace:"nowrap" }}>{fmtDate(p.date)}</td>
                           <td style={{ fontWeight:600 }}>{cust?.name || "—"}</td>
                           <td>
-                            <span className={`badge ${p.type==="charge"?"badge-red":"badge-green"}`}>
-                              {p.type==="charge"?"Cargo":"Pago"}
-                            </span>
+                            {p.paymentMethod === "balance"
+                              ? <span className="badge badge-gray">Mov. crédito</span>
+                              : <span className={`badge ${p.type==="charge"?"badge-red":"badge-green"}`}>{p.type==="charge"?"Cargo":"Pago"}</span>
+                            }
                           </td>
                           <td style={{ fontSize:".88em" }}>{PAY_LABELS[p.paymentMethod]||"—"}</td>
-                          <td style={{ fontWeight:700, textAlign:"right", color: p.type==="charge"?"var(--red)":"var(--green)" }}>
+                          <td style={{ fontWeight:700, textAlign:"right", color: p.paymentMethod==="balance" ? "var(--t4)" : p.type==="charge"?"var(--red)":"var(--green)" }}>
                             {p.type==="charge"?"-":"+"}{$(p.amount)}
                           </td>
                         </tr>
@@ -626,8 +648,13 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
                       {movements.map(p => (
                         <tr key={p.id}>
                           <td data-label="Fecha" style={{ fontSize:".82em", color:"var(--t3)" }}>{fmtDate(p.date)}</td>
-                          <td data-label="Tipo"><span className={`badge ${p.type==="charge"?"badge-red":"badge-green"}`}>{p.type==="charge"?"Cargo":"Pago"}</span></td>
-                          <td data-label="Monto" style={{ fontWeight:700, color: p.type==="charge"?"var(--red)":"var(--green)" }}>
+                          <td data-label="Tipo">
+                            {p.paymentMethod === "balance"
+                              ? <span className="badge badge-gray">Mov. crédito</span>
+                              : <span className={`badge ${p.type==="charge"?"badge-red":"badge-green"}`}>{p.type==="charge"?"Cargo":"Pago"}</span>
+                            }
+                          </td>
+                          <td data-label="Monto" style={{ fontWeight:700, color: p.paymentMethod==="balance" ? "var(--t4)" : p.type==="charge"?"var(--red)":"var(--green)" }}>
                             {p.type==="charge"?"-":"+"}{$(p.amount)}
                           </td>
                           <td data-label="Método" style={{ fontSize:".84em" }}>{PAY_LABELS[p.paymentMethod]||"—"}</td>

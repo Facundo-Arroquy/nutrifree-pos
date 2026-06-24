@@ -80,6 +80,9 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
       if (sale.paymentMethod === "account" && sale.customerId) {
         const newPayments = [];
 
+        const alreadyCharged = accountPayments.some(p => p.saleId === sale.id && p.type === "charge");
+        if (alreadyCharged) { showToast("Este pedido ya tiene un cargo registrado", "error"); return; }
+
         const charge = { id: crypto.randomUUID(), customerId: sale.customerId, saleId: sale.id,
           amount: sale.total, type: "charge", paymentMethod: null, date: todayStr(), notes: "" };
         const { error: payErr } = await supabase.from("account_payments").insert(accountPaymentToDb(charge));

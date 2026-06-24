@@ -75,7 +75,7 @@ export const customerToDb = c => ({
 
 export const dbToSale = r => ({
   id: r.id, customerId: r.customer_id, customerName: r.customer_name,
-  items: r.items, total: r.total, priceList: r.price_list,
+  items: r.items, total: Number(r.total) || 0, priceList: r.price_list,
   paymentMethod: r.payment_method, status: r.status, notes: r.notes,
   createdAt: r.created_at,
   paidAt: r.paid_at || null,
@@ -199,7 +199,7 @@ export const ingredientToDb = i => ({
 
 export const dbToAccountPayment = r => ({
   id: r.id, customerId: r.customer_id, saleId: r.sale_id,
-  amount: r.amount, type: r.type, paymentMethod: r.payment_method,
+  amount: Number(r.amount) || 0, type: r.type, paymentMethod: r.payment_method,
   date: r.date, notes: r.notes, createdAt: r.created_at,
 });
 
