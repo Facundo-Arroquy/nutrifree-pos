@@ -44,7 +44,8 @@ export default function OrdersKanbanPage({
   // ── Touch drag (tablets) ───────────────────────────────────────────────────
   // Usamos refs para evitar closures stale en los listeners de documento
   const touchRef  = useRef({ saleId: null, active: false, startX: 0, startY: 0, overCol: null });
-  const salesRef  = useRef(sales);
+  const salesRef        = useRef(sales);
+  const discountStockRef = useRef(null);
   useEffect(() => { salesRef.current = sales; });
 
   const handleTouchStart = (e, sale) => {
@@ -78,9 +79,14 @@ export default function OrdersKanbanPage({
       if (!active || !saleId || !overCol) return;
       const sale = salesRef.current.find(s => s.id === saleId);
       if (!sale || sale.status === overCol) return;
-      const { error } = await supabase.from("sales").update({ status: overCol }).eq("id", saleId);
-      if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
-      setSales(prev => prev.map(s => s.id === saleId ? { ...s, status: overCol } : s));
+      try {
+        if (overCol === "ready") await discountStockRef.current(sale);
+        const { error } = await supabase.from("sales").update({ status: overCol }).eq("id", saleId);
+        if (error) throw error;
+        setSales(prev => prev.map(s => s.id === saleId ? { ...s, status: overCol } : s));
+      } catch (err) {
+        showToast("Error al actualizar: " + err.message, "error");
+      }
     };
 
     document.addEventListener("touchmove", onMove, { passive: false });
@@ -125,6 +131,39 @@ export default function OrdersKanbanPage({
 
   const colOrders = (colId) => kanbanOrders.filter(s => s.status === colId);
 
+  // ── Helpers de stock ───────────────────────────────────────────────────────
+  const buildStockDeltas = (items) => {
+    const deltas = [];
+    for (const ci of items.filter(c => !c.isKit)) {
+      const ex = deltas.find(d => d.id === ci.productId);
+      if (ex) ex.delta += ci.qty;
+      else deltas.push({ id: ci.productId, delta: ci.qty, name: ci.name || "" });
+    }
+    for (const ci of items.filter(c => c.isKit)) {
+      for (const comp of (ci.kitItems || [])) {
+        const ex = deltas.find(d => d.id === comp.productId);
+        if (ex) ex.delta += comp.qty * ci.qty;
+        else deltas.push({ id: comp.productId, delta: comp.qty * ci.qty, name: comp.name || "" });
+      }
+    }
+    return deltas;
+  };
+
+  const discountStockForSale = async (sale) => {
+    const deltas = buildStockDeltas(sale.items);
+    if (deltas.length === 0) return;
+    const { data: stockResults, error: stockErr } = await supabase.rpc(
+      "complete_sale_stocks", { p_stock_deltas: deltas }
+    );
+    if (stockErr) throw stockErr;
+    setProducts(prev => prev.map(p => {
+      const upd = (stockResults || []).find(r => r.id === p.id);
+      return upd ? { ...p, stock: upd.stock } : p;
+    }));
+  };
+  // Actualizar ref en cada render para que onEnd (closure estática) use la versión fresca
+  discountStockRef.current = discountStockForSale;
+
   // ── Drag & drop handlers ───────────────────────────────────────────────────
   const handleDragStart = (e, sale) => {
     setDraggingId(sale.id);
@@ -144,11 +183,14 @@ export default function OrdersKanbanPage({
     const saleId = e.dataTransfer.getData("saleId");
     const sale = sales.find(s => s.id === saleId);
     if (!sale || sale.status === newStatus) { setDraggingId(null); return; }
-    const { error } = await supabase.from("sales").update({ status: newStatus }).eq("id", saleId);
-    if (error) { showToast("Error al actualizar: " + error.message, "error"); }
-    else {
+    try {
+      if (newStatus === "ready") await discountStockForSale(sale);
+      const { error } = await supabase.from("sales").update({ status: newStatus }).eq("id", saleId);
+      if (error) throw error;
       setSales(prev => prev.map(s => s.id === saleId ? { ...s, status: newStatus } : s));
       if (detail?.id === saleId) setDetail(prev => ({ ...prev, status: newStatus }));
+    } catch (err) {
+      showToast("Error al actualizar: " + err.message, "error");
     }
     setDraggingId(null);
   };
@@ -159,11 +201,16 @@ export default function OrdersKanbanPage({
   const advanceStatus = async (sale) => {
     const next = { open: "preparing", preparing: "ready" }[sale.status];
     if (!next) return;
-    const { error } = await supabase.from("sales").update({ status: next }).eq("id", sale.id);
-    if (error) { showToast("Error: " + error.message, "error"); return; }
-    setSales(prev => prev.map(s => s.id === sale.id ? { ...s, status: next } : s));
-    if (detail?.id === sale.id) setDetail(prev => ({ ...prev, status: next }));
-    showToast("Estado actualizado");
+    try {
+      if (next === "ready") await discountStockForSale(sale);
+      const { error } = await supabase.from("sales").update({ status: next }).eq("id", sale.id);
+      if (error) throw error;
+      setSales(prev => prev.map(s => s.id === sale.id ? { ...s, status: next } : s));
+      if (detail?.id === sale.id) setDetail(prev => ({ ...prev, status: next }));
+      showToast("Estado actualizado");
+    } catch (err) {
+      showToast("Error: " + err.message, "error");
+    }
   };
 
   // ── Marcar / desmarcar pedido para facturar ────────────────────────────────
@@ -251,11 +298,29 @@ export default function OrdersKanbanPage({
   // ── Cancelar pedido ────────────────────────────────────────────────────────
   const cancelOrder = async (sale) => {
     if (!confirm("¿Cancelar este pedido?")) return;
-    const { error } = await supabase.from("sales").update({ status: "cancelled" }).eq("id", sale.id);
-    if (error) { showToast("Error: " + error.message, "error"); return; }
-    setSales(prev => prev.map(s => s.id === sale.id ? { ...s, status: "cancelled" } : s));
-    if (detail?.id === sale.id) setDetail(null);
-    showToast("Pedido cancelado");
+    try {
+      // Solo restaurar stock si ya llegó a "Listo para Retirar" (único momento donde se descuenta)
+      if (sale.status === "ready") {
+        const restoreDeltas = buildStockDeltas(sale.items);
+        if (restoreDeltas.length > 0) {
+          const { data: stockResults, error: stockErr } = await supabase.rpc(
+            "cancel_order_stocks", { p_restore_deltas: restoreDeltas, p_sale_id: sale.id }
+          );
+          if (stockErr) throw stockErr;
+          setProducts(prev => prev.map(p => {
+            const upd = (stockResults || []).find(r => r.id === p.id);
+            return upd ? { ...p, stock: upd.stock } : p;
+          }));
+        }
+      }
+      const { error } = await supabase.from("sales").update({ status: "cancelled" }).eq("id", sale.id);
+      if (error) throw error;
+      setSales(prev => prev.map(s => s.id === sale.id ? { ...s, status: "cancelled" } : s));
+      if (detail?.id === sale.id) setDetail(null);
+      showToast("Pedido cancelado");
+    } catch (err) {
+      showToast("Error: " + err.message, "error");
+    }
   };
 
   // ── Nuevo pedido — helpers ─────────────────────────────────────────────────
@@ -325,31 +390,7 @@ export default function OrdersKanbanPage({
     if (!newDeliveryDate) { showToast("Seleccioná una fecha de entrega", "error"); return; }
     setSaving(true);
     try {
-      // Descontar stock (igual que POSPage)
-      const stockDeltas = [];
-      for (const ci of newCart.filter(c => !c.isKit)) {
-        const ex = stockDeltas.find(d => d.id === ci.productId);
-        if (ex) ex.delta += ci.qty;
-        else stockDeltas.push({ id: ci.productId, delta: ci.qty });
-      }
-      for (const ci of newCart.filter(c => c.isKit)) {
-        for (const comp of (ci.kitItems || [])) {
-          const ex = stockDeltas.find(d => d.id === comp.productId);
-          if (ex) ex.delta += comp.qty * ci.qty;
-          else stockDeltas.push({ id: comp.productId, delta: comp.qty * ci.qty });
-        }
-      }
-      if (stockDeltas.length > 0) {
-        const { data: stockResults, error: stockErr } = await supabase.rpc(
-          "complete_sale_stocks", { p_stock_deltas: stockDeltas }
-        );
-        if (stockErr) throw stockErr;
-        setProducts(prev => prev.map(p => {
-          const upd = (stockResults || []).find(r => r.id === p.id);
-          return upd ? { ...p, stock: upd.stock } : p;
-        }));
-      }
-
+      // El stock se descuenta cuando el pedido llega a "Listo para Retirar", no al crearlo.
       const sale = {
         id: uid(),
         customerId: newCustomer?.id || null,
