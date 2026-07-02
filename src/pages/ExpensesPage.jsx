@@ -18,6 +18,55 @@ import { supabase, expenseToDb, supplierPaymentToDb } from "../supabase.js";
 
 const EXPENSE_UNITS = ["unidades", "kg", "g", "litros", "porciones"];
 
+function IngredientLinesTable({ lines, ingredients, withVat, vatRate, lineSubcats, updateLine, removeLine, $ }) {
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Total pagado</th>
+            <th>Subtotal{withVat ? ` (+${vatRate}% IVA)` : ""}</th>
+            {lineSubcats.length > 0 && <th>Subcategoría</th>}
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((line, idx) => {
+            const effTotal = withVat ? (Number(line.totalPaid)||0) * (1 + vatRate / 100) : (Number(line.totalPaid)||0);
+            return (
+              <tr key={idx}>
+                <td>
+                  <select value={line.ingredientId} onChange={e=>updateLine(idx,"ingredientId",e.target.value)} style={{ minWidth:150 }}>
+                    <option value="">— Elegir —</option>
+                    {[...ingredients].sort((a,b)=>a.name.localeCompare(b.name)).map(i=><option key={i.id} value={i.id}>{i.name}</option>)}
+                  </select>
+                </td>
+                <td><input type="number" min="0" step="0.01" value={line.qty} onChange={e=>updateLine(idx,"qty",e.target.value)} style={{ width:75 }}/></td>
+                <td><input type="text" value={line.unit||""} onChange={e=>updateLine(idx,"unit",e.target.value)} style={{ width:80 }} placeholder="kg"/></td>
+                <td><input type="number" min="0" step="0.01" value={line.totalPaid ?? ""} onChange={e=>updateLine(idx,"totalPaid",e.target.value)} style={{ width:100 }}/></td>
+                <td style={{ fontWeight:700, color:"var(--red)" }}>{$(effTotal)}</td>
+                {lineSubcats.length > 0 && (
+                  <td>
+                    <select value={line.subcategory||""} onChange={e=>updateLine(idx,"subcategory",e.target.value)} style={{ minWidth:120 }}>
+                      <option value="">— Sin subcat. —</option>
+                      {lineSubcats.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
+                    </select>
+                  </td>
+                )}
+                <td>
+                  {lines.length > 1 && (
+                    <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>removeLine(idx)}><Ico n="trash" s={13} c="var(--red)"/></button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function CloseExpenseModal({ expense, onClose, onConfirm }) {
   const [payMethod, setPayMethod] = useState(expense.paymentMethod||"cash");
   const [submitting, setSubmitting] = useState(false);
@@ -51,15 +100,16 @@ function CloseExpenseModal({ expense, onClose, onConfirm }) {
   );
 }
 
-export default function ExpensesPage({ expenses, setExpenses, expenseCategories, ingredients, setIngredients, recipes, setRecipes, suppliers, supplierPayments, setSupplierPayments, showToast, logAction, vatRate = 21 }) {
-  const emptyLine = () => ({ ingredientId: "", qty: 1, unit: "", totalPaid: "" });
-  const emptyForm = { date:todayStr(), supplier:"", supplierId:null, concept:"", quantity:1, unit:"unidades", unitPrice:0, total:0, paymentMethod:"", paymentStatus:"pending", category:"Ingredientes", notes:"", ingredientLines:[emptyLine()], withVat:false };
+export default function ExpensesPage({ expenses, setExpenses, expenseCategories, expenseSubcategories = [], ingredients, setIngredients, recipes, setRecipes, suppliers, supplierPayments, setSupplierPayments, showToast, logAction, vatRate = 21 }) {
+  const emptyLine = (subcategory = "") => ({ ingredientId: "", qty: 1, unit: "", totalPaid: "", subcategory });
+  const emptyForm = { date:todayStr(), supplier:"", supplierId:null, concept:"", quantity:1, unit:"unidades", unitPrice:0, total:0, paymentMethod:"", paymentStatus:"pending", category:"Ingredientes", subcategory:"", notes:"", ingredientLines:[emptyLine()], withVat:false };
   const [modal, setModal] = useState(null);
   const [payModal, setPayModal] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCat, setFilterCat] = useState("Todos");
+  const [filterSubcat, setFilterSubcat] = useState("Todos");
   const [filterSupplier, setFilterSupplier] = useState("Todos");
   const today = todayStr();
   const [dateFrom, setDateFrom] = useState(today.slice(0,7) + "-01");
@@ -69,12 +119,18 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
     const np = {...p, [k]:v};
     if (k==="quantity" || k==="unitPrice") np.total = Number(np.quantity||0) * Number(np.unitPrice||0);
     if (k==="category" && v==="Ingredientes" && (!np.ingredientLines || np.ingredientLines.length===0)) {
-      np.ingredientLines = [emptyLine()];
+      np.ingredientLines = [emptyLine(np.subcategory||"")];
+    }
+    // Al cambiar categoría, resetear subcategoría
+    if (k==="category") np.subcategory = "";
+    // Al cambiar subcategoría global en Ingredientes, propagar a todas las líneas que no tienen una propia diferente
+    if (k==="subcategory" && np.category==="Ingredientes") {
+      np.ingredientLines = (np.ingredientLines||[]).map(l => ({ ...l, subcategory: v }));
     }
     return np;
   });
 
-  const addLine = () => setForm(p => ({ ...p, ingredientLines: [...(p.ingredientLines||[]), emptyLine()] }));
+  const addLine = () => setForm(p => ({ ...p, ingredientLines: [...(p.ingredientLines||[]), emptyLine(p.subcategory||"")] }));
   const removeLine = idx => setForm(p => ({
     ...p,
     ingredientLines: (p.ingredientLines||[]).filter((_,i) => i!==idx),
@@ -101,9 +157,22 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
 
   const dateFiltered = expenses.filter(inRange);
   const cats = ["Todos", ...expenseCategories];
+
+  // Subcategorías visibles según la categoría seleccionada en el filtro
+  const subcatsForFilter = filterCat === "Todos"
+    ? expenseSubcategories
+    : expenseSubcategories.filter(s => s.categoryName === filterCat);
+
   const filtered = dateFiltered
     .filter(e => filterStatus==="all" || e.paymentStatus===filterStatus)
     .filter(e => filterCat==="Todos" || e.category===filterCat)
+    .filter(e => {
+      if (filterSubcat === "Todos") return true;
+      if (e.category === "Ingredientes") {
+        return (e.ingredientLines||[]).some(l => l.subcategory === filterSubcat);
+      }
+      return e.subcategory === filterSubcat;
+    })
     .filter(e => filterSupplier==="Todos" || (filterSupplier==="_none" ? !e.supplierId : e.supplierId===filterSupplier))
     .sort((a, b) => {
       let av, bv;
@@ -125,9 +194,9 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
   const openNew  = () => { setForm(emptyForm); setModal("new"); };
   const openEdit = e  => {
     const lines = e.ingredientLines?.length
-      ? e.ingredientLines.map(l => ({ ...l, totalPaid: l.totalPaid ?? (Number(l.unitPrice||0) * Number(l.qty||0)) }))
-      : [emptyLine()];
-    setForm({...e, ingredientLines: lines, withVat: e.withVat || false});
+      ? e.ingredientLines.map(l => ({ ...l, totalPaid: l.totalPaid ?? (Number(l.unitPrice||0) * Number(l.qty||0)), subcategory: l.subcategory || "" }))
+      : [emptyLine(e.subcategory || "")];
+    setForm({...e, ingredientLines: lines, withVat: e.withVat || false, subcategory: e.subcategory || ""});
     setModal(e);
   };
 
@@ -380,9 +449,18 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8, alignItems:"center" }}>
         <span style={{ fontSize:".74em", fontWeight:700, color:"var(--t4)", textTransform:"uppercase", letterSpacing:".5px" }}>Cat.:</span>
         {cats.map(c => (
-          <button key={c} className={`btn btn-sm ${filterCat===c?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterCat(c)}>{c}</button>
+          <button key={c} className={`btn btn-sm ${filterCat===c?"btn-primary":"btn-secondary"}`} onClick={()=>{ setFilterCat(c); setFilterSubcat("Todos"); }}>{c}</button>
         ))}
       </div>
+      {subcatsForFilter.length > 0 && (
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8, alignItems:"center" }}>
+          <span style={{ fontSize:".74em", fontWeight:700, color:"var(--t4)", textTransform:"uppercase", letterSpacing:".5px" }}>Subcat.:</span>
+          <button className={`btn btn-sm ${filterSubcat==="Todos"?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterSubcat("Todos")}>Todas</button>
+          {subcatsForFilter.map(s => (
+            <button key={s.id} className={`btn btn-sm ${filterSubcat===s.name?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterSubcat(s.name)}>{s.name}</button>
+          ))}
+        </div>
+      )}
       <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:16, alignItems:"center" }}>
         <span style={{ fontSize:".74em", fontWeight:700, color:"var(--t4)", textTransform:"uppercase", letterSpacing:".5px" }}>Proveedor:</span>
         <select value={filterSupplier} onChange={e=>setFilterSupplier(e.target.value)} style={{ minWidth:180 }}>
@@ -403,6 +481,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
             <th>Cant.</th><th>P. Unit.</th>
             <SortableTh col="total" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Total</SortableTh>
             <SortableTh col="category" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Categoría</SortableTh>
+            <th>Subcategoría</th>
             <SortableTh col="paymentMethod" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Método pago</SortableTh>
             <SortableTh col="paymentStatus" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Estado</SortableTh>
             <th></th>
@@ -417,6 +496,15 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
                 <td data-label="P. Unit." style={{ color:"var(--t2)" }}>{$(e.unitPrice)}</td>
                 <td data-label="Total" style={{ fontWeight:700, color:"var(--red)" }}>{$(e.total)}</td>
                 <td data-label="Categoría"><span className="tag">{e.category}</span></td>
+                <td data-label="Subcategoría" style={{ fontSize:".82em", color:"var(--t3)" }}>
+                  {e.category === "Ingredientes"
+                    ? (() => {
+                        const subcats = [...new Set((e.ingredientLines||[]).map(l=>l.subcategory).filter(Boolean))];
+                        return subcats.length > 0 ? subcats.map(s=><span key={s} className="tag" style={{ marginRight:3, fontSize:".78em" }}>{s}</span>) : <span style={{color:"var(--t4)"}}>—</span>;
+                      })()
+                    : e.subcategory ? <span className="tag" style={{ fontSize:".78em" }}>{e.subcategory}</span> : <span style={{color:"var(--t4)"}}>—</span>
+                  }
+                </td>
                 <td data-label="Método" style={{ fontSize:".82em", color:"var(--t3)" }}>{e.paymentMethod ? PAY_LABELS[e.paymentMethod]||e.paymentMethod : <span style={{color:"var(--t4)"}}>—</span>}</td>
                 <td data-label="Estado">
                   {e.paymentStatus==="paid"
@@ -435,7 +523,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
                 </td>
               </tr>
             ))}
-            {filtered.length===0 && <tr><td colSpan={10}><div className="empty"><div className="empty-icon">💸</div><h3>Sin gastos</h3></div></td></tr>}
+            {filtered.length===0 && <tr><td colSpan={11}><div className="empty"><div className="empty-icon">💸</div><h3>Sin gastos</h3></div></td></tr>}
           </tbody>
         </table>
       </div>
@@ -472,6 +560,19 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
                 {expenseCategories.map(c=><option key={c} value={c}>{c}</option>)}
               </select>
             </div>
+            {(() => {
+              const subcats = expenseSubcategories.filter(s => s.categoryName === form.category);
+              if (subcats.length === 0) return null;
+              const label = form.category === "Ingredientes" ? "Subcategoría (por defecto para todas las líneas)" : "Subcategoría";
+              return (
+                <div className="form-group"><label className="lbl">{label}</label>
+                  <select value={form.subcategory||""} onChange={e=>set("subcategory", e.target.value)}>
+                    <option value="">— Sin subcategoría —</option>
+                    {subcats.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
+                  </select>
+                </div>
+              );
+            })()}
             <div className="form-group"><label className="lbl">Método de pago</label>
               <select value={form.paymentMethod||""} onChange={e=>set("paymentMethod",e.target.value||null)}>
                 <option value="">Pendiente</option>
@@ -497,35 +598,16 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
                   <button className="btn btn-sm btn-secondary" onClick={addLine}><Ico n="plus" s={13}/>Agregar ingrediente</button>
                 </div>
               </div>
-              <div className="table-wrap">
-                <table>
-                  <thead><tr><th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Total pagado</th><th>Subtotal{form.withVat?` (+${vatRate}% IVA)`:""}</th><th></th></tr></thead>
-                  <tbody>
-                    {(form.ingredientLines||[]).map((line, idx) => {
-                      const effTotal = form.withVat ? (Number(line.totalPaid)||0) * (1 + vatRate / 100) : (Number(line.totalPaid)||0);
-                      return (
-                        <tr key={idx}>
-                          <td>
-                            <select value={line.ingredientId} onChange={e=>updateLine(idx,"ingredientId",e.target.value)} style={{ minWidth:150 }}>
-                              <option value="">— Elegir —</option>
-                              {[...ingredients].sort((a,b)=>a.name.localeCompare(b.name)).map(i=><option key={i.id} value={i.id}>{i.name}</option>)}
-                            </select>
-                          </td>
-                          <td><input type="number" min="0" step="0.01" value={line.qty} onChange={e=>updateLine(idx,"qty",e.target.value)} style={{ width:75 }}/></td>
-                          <td><input type="text" value={line.unit||""} onChange={e=>updateLine(idx,"unit",e.target.value)} style={{ width:80 }} placeholder="kg"/></td>
-                          <td><input type="number" min="0" step="0.01" value={line.totalPaid ?? ""} onChange={e=>updateLine(idx,"totalPaid",e.target.value)} style={{ width:100 }}/></td>
-                          <td style={{ fontWeight:700, color:"var(--red)" }}>{$(effTotal)}</td>
-                          <td>
-                            {(form.ingredientLines||[]).length>1 && (
-                              <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>removeLine(idx)}><Ico n="trash" s={13} c="var(--red)"/></button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <IngredientLinesTable
+                lines={form.ingredientLines||[]}
+                ingredients={ingredients}
+                withVat={form.withVat}
+                vatRate={vatRate}
+                lineSubcats={expenseSubcategories.filter(s => s.categoryName === "Ingredientes")}
+                updateLine={updateLine}
+                removeLine={removeLine}
+                $={$}
+              />
               <div style={{ textAlign:"right", fontWeight:800, fontSize:"1.1em", color:"var(--red)", marginTop:8 }}>
                 Total{form.withVat?" (con IVA)":""}: {$((form.ingredientLines||[]).reduce((a,l) => a + (form.withVat ? (Number(l.totalPaid)||0)*(1 + vatRate/100) : (Number(l.totalPaid)||0)), 0))}
               </div>

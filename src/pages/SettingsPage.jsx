@@ -10,12 +10,14 @@
  */
 import { useState, useEffect } from "react";
 import { Ico } from "../shared.jsx";
-import { supabase } from "../supabase.js";
+import { supabase, dbToExpenseSubcategory } from "../supabase.js";
 import { getLastAuditResult, auditIsDue, runAudit, sendAuditEmail } from "../utils/auditCheck.js";
 
-export default function SettingsPage({ user, products, categories, setCategories, expenseCategories, setExpenseCategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, settingsSection = "general", setPage }) {
+export default function SettingsPage({ user, products, categories, setCategories, expenseCategories, setExpenseCategories, expenseSubcategories, setExpenseSubcategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, settingsSection = "general", setPage }) {
   const [newCat, setNewCat] = useState("");
   const [newExpCat, setNewExpCat] = useState("");
+  const [newSubcatName, setNewSubcatName] = useState("");
+  const [newSubcatCategory, setNewSubcatCategory] = useState("");
   const [newPass, setNewPass] = useState("");
   const [newPassConfirm, setNewPassConfirm] = useState("");
   const [showNewPass, setShowNewPass] = useState(false);
@@ -118,6 +120,26 @@ export default function SettingsPage({ user, products, categories, setCategories
     if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
     setExpenseCategories(p => p.filter(x => x !== c));
     showToast("Categoría eliminada");
+  };
+
+  const addExpSubcat = async () => {
+    if (!newSubcatName.trim() || !newSubcatCategory) return;
+    const name = newSubcatName.trim();
+    const already = expenseSubcategories.some(s => s.name === name && s.categoryName === newSubcatCategory);
+    if (already) { showToast("Ya existe esa subcategoría para esta categoría", "error"); return; }
+    const row = { name, category_name: newSubcatCategory };
+    const { data, error } = await supabase.from("expense_subcategories").insert(row).select().single();
+    if (error) { showToast("Error al agregar: " + error.message, "error"); return; }
+    setExpenseSubcategories(p => [...p, dbToExpenseSubcategory(data)]);
+    setNewSubcatName("");
+    showToast("Subcategoría agregada");
+  };
+
+  const delExpSubcat = async (id) => {
+    const { error } = await supabase.from("expense_subcategories").delete().eq("id", id);
+    if (error) { showToast("Error al eliminar: " + error.message, "error"); return; }
+    setExpenseSubcategories(p => p.filter(s => s.id !== id));
+    showToast("Subcategoría eliminada");
   };
 
   // ─── Notas internas ───────────────────────────────────────────────────────
@@ -256,6 +278,7 @@ export default function SettingsPage({ user, products, categories, setCategories
 
       {/* ── GENERAL ─────────────────────────────────────────────────── */}
       {settingsSection === "general" && (
+        <>
         <div className="resp-2col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
           <div className="card">
             <div className="section-title">Categorías de productos</div>
@@ -299,6 +322,64 @@ export default function SettingsPage({ user, products, categories, setCategories
             </div>
           </div>
         </div>
+
+        {/* Subcategorías de gastos — ancho completo */}
+        <div className="card" style={{ marginTop:16 }}>
+          <div className="section-title">Subcategorías de gastos</div>
+          <p style={{ fontSize:".82em", color:"var(--t3)", marginBottom:12 }}>
+            Cada categoría puede tener sus propias subcategorías para un registro más detallado.
+          </p>
+
+          {/* Agrupar por categoría */}
+          {expenseCategories.map(cat => {
+            const subcats = expenseSubcategories.filter(s => s.categoryName === cat);
+            return (
+              <div key={cat} style={{ marginBottom:16 }}>
+                <div style={{ fontSize:".78em", fontWeight:700, color:"var(--t4)", textTransform:"uppercase", letterSpacing:".5px", marginBottom:6 }}>
+                  {cat}
+                </div>
+                {subcats.length === 0
+                  ? <p style={{ fontSize:".82em", color:"var(--t4)", marginBottom:4 }}>Sin subcategorías</p>
+                  : subcats.map(s => (
+                    <div key={s.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"6px 0", borderBottom:"1px solid var(--border)" }}>
+                      <span style={{ fontSize:".88em" }}>{s.name}</span>
+                      <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>delExpSubcat(s.id)}>
+                        <Ico n="x" s={12} c="var(--red)"/>
+                      </button>
+                    </div>
+                  ))
+                }
+              </div>
+            );
+          })}
+
+          {/* Formulario para agregar */}
+          <div style={{ display:"flex", gap:8, marginTop:8, flexWrap:"wrap" }}>
+            <select
+              value={newSubcatCategory}
+              onChange={e=>setNewSubcatCategory(e.target.value)}
+              style={{ minWidth:160 }}
+            >
+              <option value="">— Categoría —</option>
+              {expenseCategories.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+            <input
+              value={newSubcatName}
+              onChange={e=>setNewSubcatName(e.target.value)}
+              placeholder="Nueva subcategoría..."
+              style={{ flex:1, minWidth:160 }}
+              onKeyDown={e=>{ if(e.key==="Enter") addExpSubcat(); }}
+            />
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={!newSubcatName.trim() || !newSubcatCategory}
+              onClick={addExpSubcat}
+            >
+              <Ico n="plus" s={13}/>Agregar
+            </button>
+          </div>
+        </div>
+        </>
       )}
 
       {/* ── SISTEMA ─────────────────────────────────────────────────── */}

@@ -32,6 +32,7 @@ import {
   dbToCashShift,
   dbToFaqEntry,
   dbToFaqMissed,
+  dbToExpenseSubcategory,
 } from "./supabase.js";
 
 import DashboardPage from "./pages/DashboardPage.jsx";
@@ -134,6 +135,7 @@ export default function App() {
   const [recipes, setRecipes] = useState([]);
   const [categories, setCategories] = useState([]);
   const [expenseCategories, setExpenseCategories] = useState(["Ingredientes","Servicios","Envases","Limpieza","Otros"]);
+  const [expenseSubcategories, setExpenseSubcategories] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [ingredients, setIngredients] = useState([]);
   const [accountPayments, setAccountPayments] = useState([]);
@@ -218,7 +220,7 @@ export default function App() {
         return all;
       };
 
-      const [[{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }, { data: faqs }, { data: faqsMissed }, { data: settings }, { data: inactiveDis }], accPays] = await Promise.all([
+      const [[{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: exps }, { data: ingrs }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: suppPays }, { data: shifts }, { data: faqs }, { data: faqsMissed }, { data: settings }, { data: inactiveDis }, { data: expSubcats }], accPays] = await Promise.all([
         Promise.all([
           supabase.from("categories").select("*"),
           supabase.from("expense_categories").select("*").order("name"),
@@ -237,11 +239,13 @@ export default function App() {
           supabase.from("faq_missed").select("*").order("created_at", { ascending: false }),
           supabase.from("app_settings").select("*"),
           supabase.from("customer_inactive_dismissed").select("*"),
+          supabase.from("expense_subcategories").select("*").order("name"),
         ]),
         fetchAllAccountPayments(),
       ]);
       if (cats) setCategories(cats.map(c => c.name));
       if (expCats && expCats.length > 0) setExpenseCategories(expCats.map(c => c.name));
+      if (expSubcats) setExpenseSubcategories(expSubcats.map(dbToExpenseSubcategory));
       if (prods) setProducts(prods.map(dbToProduct));
       if (custs) setCustomers(custs.map(dbToCustomer));
       if (sls) setSales(sls.map(dbToSale));
@@ -388,6 +392,14 @@ export default function App() {
           .catch(err => console.error("[rt_expense_categories]", err));
       }).subscribe();
 
+    // Subcategorías de gastos (re-fetch en cualquier cambio)
+    const expSubcatsChannel = supabase.channel("rt_expense_subcategories")
+      .on("postgres_changes", { event: "*", schema: "public", table: "expense_subcategories" }, () => {
+        supabase.from("expense_subcategories").select("*").order("name").then(({ data }) => {
+          if (data) setExpenseSubcategories(data.map(dbToExpenseSubcategory));
+        }).catch(err => console.error("[rt_expense_subcategories]", err));
+      }).subscribe();
+
     // Configuración global (IVA, umbrales, descuentos) — re-fetch en cualquier cambio
     const settingsChannel = supabase.channel("rt_app_settings")
       .on("postgres_changes", { event: "*", schema: "public", table: "app_settings" }, () => {
@@ -424,7 +436,7 @@ export default function App() {
       ).subscribe();
 
     return () => {
-      [...channels, recipesChannel, recIngChannel, dismissedChannel, catsChannel, expCatsChannel, settingsChannel, faqChannel, faqMissedChannel].forEach(ch => supabase.removeChannel(ch));
+      [...channels, recipesChannel, recIngChannel, dismissedChannel, catsChannel, expCatsChannel, expSubcatsChannel, settingsChannel, faqChannel, faqMissedChannel].forEach(ch => supabase.removeChannel(ch));
     };
   }, [user?.email]);
 
@@ -724,7 +736,7 @@ export default function App() {
     document.addEventListener("mouseup", onUp);
   };
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, inactiveDismissed, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction, settingsSection, setSettingsSection };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenseSubcategories, setExpenseSubcategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, inactiveDismissed, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction, settingsSection, setSettingsSection };
 
   return (
     <>

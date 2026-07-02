@@ -141,7 +141,9 @@ export const dbToExpense = r => ({
   id: r.id, date: r.date, supplier: r.supplier, concept: r.concept,
   quantity: r.quantity, unit: r.unit, unitPrice: r.unit_price,
   total: r.total, paymentMethod: r.payment_method,
-  paymentStatus: r.payment_status, category: r.category, notes: r.notes,
+  paymentStatus: r.payment_status, category: r.category,
+  subcategory: r.subcategory || null,
+  notes: r.notes,
   createdAt: r.created_at, supplierId: r.supplier_id || null,
   ingredientLines: r.ingredient_lines || null,
 });
@@ -150,9 +152,19 @@ export const expenseToDb = e => ({
   id: e.id, date: e.date, supplier: e.supplier, concept: e.concept,
   quantity: e.quantity, unit: e.unit, unit_price: e.unitPrice,
   total: e.total, payment_method: e.paymentMethod,
-  payment_status: e.paymentStatus, category: e.category, notes: e.notes,
+  payment_status: e.paymentStatus, category: e.category,
+  subcategory: e.subcategory || null,
+  notes: e.notes,
   supplier_id: e.supplierId || null,
   ingredient_lines: e.ingredientLines?.filter(l => l.ingredientId) || null,
+});
+
+export const dbToExpenseSubcategory = r => ({
+  id: r.id, name: r.name, categoryName: r.category_name,
+});
+
+export const expenseSubcategoryToDb = s => ({
+  id: s.id, name: s.name, category_name: s.categoryName,
 });
 
 export const dbToSupplier = r => ({

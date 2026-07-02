@@ -8,7 +8,7 @@
 | `recipes`              | Recetas              | Producto asociado, tiempos de preparación y cocción, rendimiento, pasos (JSONB), margen mínimo, notas, `is_favorite` (boolean — favorito global compartido entre todos los usuarios). |
 | `recipe_ingredients`   | Ingredientes de receta | Relación receta ↔ ingrediente con cantidad, unidad y costo unitario.                                        |
 | `ingredients`          | Ingredientes         | Nombre, categoría, unidad, stock actual, stock mínimo, costo unitario, proveedor, notas e información nutricional (calorías, proteínas, carbs, grasa, fibra, azúcar, sodio). |
-| `expenses`             | Gastos               | Fecha, proveedor, concepto, cantidad, unidad, precio unitario, total, método y estado de pago, categoría, notas, proveedor vinculado, líneas de ingredientes. |
+| `expenses`             | Gastos               | Fecha, proveedor, concepto, cantidad, unidad, precio unitario, total, método y estado de pago, categoría, subcategoría (texto libre para categorías no-ingredientes), notas, proveedor vinculado, líneas de ingredientes (cada línea puede tener su propia subcategoría). |
 | `suppliers`            | Proveedores          | Nombre, teléfono, email, dirección, notas.                                                                     |
 | `supplier_payments`    | Pagos a proveedores  | Movimientos de cuenta corriente del proveedor: cargos (gastos) y pagos realizados, con monto, método y fecha. |
 | `account_payments`     | Pagos en cuenta corriente | Movimientos de cuenta corriente de clientes: cargos (ventas en cuenta) y pagos recibidos.               |
@@ -16,6 +16,7 @@
 | `cash_shifts`          | Turnos de caja       | Apertura y cierre de caja: usuario, efectivo inicial, ventas por método de pago, gastos en efectivo, efectivo contado y diferencia. |
 | `categories`           | Categorías           | Lista de categorías de productos (solo nombre).                                                                |
 | `expense_categories`   | Categorías de gastos | Lista de categorías de gastos (solo nombre).                                                                   |
+| `expense_subcategories` | Subcategorías de gastos | Subcategorías vinculadas a una categoría de gasto (`name`, `category_name`). Creadas por admins. Se usan para clasificar gastos con mayor detalle. En gastos de Ingredientes, la subcategoría se asigna por línea (dentro de `ingredient_lines` JSONB). |
 | `faq_entries`          | Entradas de FAQ      | Preguntas y respuestas del asistente de ayuda interno.                                                         |
 | `faq_missed`           | Preguntas sin respuesta | Consultas que el asistente de ayuda no pudo responder, para revisión posterior.                             |
 | `app_settings`         | Configuración de la app | Parámetros globales de la aplicación (nombre del negocio, moneda, etc.).                                   |
