@@ -67,7 +67,7 @@ function MarginBar({ pct }) {
   );
 }
 
-export default function ReportsPage({ sales, products, recipes, expenses, expenseCategories, accountPayments, customers, stockMovements, setPage, setHighlightRecipeId }) {
+export default function ReportsPage({ sales, products, recipes, expenses, expenseCategories, expenseSubcategories = [], accountPayments, customers, stockMovements, setPage, setHighlightRecipeId }) {
   const presets = useMemo(() => {
     const now = new Date();
     const t = now.toISOString().slice(0,10);
@@ -370,12 +370,13 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
   });
 
   const exportExpensesExcel = () => {
-    const headers = ["Fecha","Concepto","Proveedor","Categoría","Método de pago","Estado","Total"];
+    const headers = ["Fecha","Concepto","Proveedor","Categoría","Subcategoría","Método de pago","Estado","Total"];
     const rows = sortedExpenses.map(e => [
       e.date,
       e.concept || "",
       e.supplier || "",
       e.category || "",
+      expSubcatLabel(e),
       PAY_LABELS[e.paymentMethod] || e.paymentMethod || "-",
       e.paymentStatus === "paid" ? "Pagado" : "Pendiente",
       e.total,
@@ -391,6 +392,30 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
     expByCat[e.category||"Otros"] = (expByCat[e.category||"Otros"]||0) + e.total;
   });
   const maxExpCat = Math.max(...Object.values(expByCat), 1);
+
+  // Subcategorías: mapa { categoryName: { subcatName: total } }
+  const expBySubcat = {};
+  pExpenses.filter(e=>e.paymentStatus==="paid").forEach(e => {
+    const cat = e.category || "Otros";
+    if (!expBySubcat[cat]) expBySubcat[cat] = {};
+    if (e.category === "Ingredientes" && Array.isArray(e.ingredientLines)) {
+      e.ingredientLines.forEach(l => {
+        if (!l.subcategory) return;
+        expBySubcat[cat][l.subcategory] = (expBySubcat[cat][l.subcategory]||0) + Number(l.totalPaid||0);
+      });
+    } else if (e.subcategory) {
+      expBySubcat[cat][e.subcategory] = (expBySubcat[cat][e.subcategory]||0) + e.total;
+    }
+  });
+
+  // Helper: texto de subcategoría para mostrar en tabla
+  const expSubcatLabel = (e) => {
+    if (e.category === "Ingredientes") {
+      const subcats = [...new Set((e.ingredientLines||[]).map(l=>l.subcategory).filter(Boolean))];
+      return subcats.join(", ") || "—";
+    }
+    return e.subcategory || "—";
+  };
 
   return (
     <div className="page">
@@ -598,13 +623,32 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
             : (expenseCategories||[]).filter(c => expByCat[c]).map(c => {
                 const amt = expByCat[c]||0;
                 const pct = Math.round(amt/maxExpCat*100);
+                const subcats = expBySubcat[c] ? Object.entries(expBySubcat[c]).sort((a,b)=>b[1]-a[1]) : [];
                 return (
-                  <div key={c} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-                    <div style={{ fontSize:".82em", color:"var(--t2)", width:100, flexShrink:0 }}>{c}</div>
-                    <div style={{ flex:1, height:7, background:"var(--s2)", borderRadius:4, overflow:"hidden" }}>
-                      <div style={{ width:`${pct}%`, height:"100%", background:"var(--red)", borderRadius:4 }}/>
+                  <div key={c} style={{ marginBottom:10 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                      <div style={{ fontSize:".82em", color:"var(--t2)", fontWeight:600, width:100, flexShrink:0 }}>{c}</div>
+                      <div style={{ flex:1, height:7, background:"var(--s2)", borderRadius:4, overflow:"hidden" }}>
+                        <div style={{ width:`${pct}%`, height:"100%", background:"var(--red)", borderRadius:4 }}/>
+                      </div>
+                      <div style={{ fontWeight:700, color:"var(--red)", width:72, textAlign:"right", fontSize:".82em" }}>{$(amt)}</div>
                     </div>
-                    <div style={{ fontWeight:700, color:"var(--red)", width:72, textAlign:"right", fontSize:".82em" }}>{$(amt)}</div>
+                    {subcats.length > 0 && (
+                      <div style={{ paddingLeft:110, marginTop:4 }}>
+                        {subcats.map(([name, subAmt]) => {
+                          const subPct = Math.round(subAmt/amt*100);
+                          return (
+                            <div key={name} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:3 }}>
+                              <div style={{ fontSize:".75em", color:"var(--t3)", width:90, flexShrink:0 }}>↳ {name}</div>
+                              <div style={{ flex:1, height:4, background:"var(--s2)", borderRadius:4, overflow:"hidden" }}>
+                                <div style={{ width:`${subPct}%`, height:"100%", background:"var(--red)", opacity:.5, borderRadius:4 }}/>
+                              </div>
+                              <div style={{ fontSize:".75em", color:"var(--t3)", width:72, textAlign:"right" }}>{$(subAmt)}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -691,6 +735,7 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
                     <SortableTh col="concept" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Concepto</SortableTh>
                     <SortableTh col="supplier" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Proveedor</SortableTh>
                     <SortableTh col="category" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Categoría</SortableTh>
+                    <th>Subcategoría</th>
                     <SortableTh col="paymentMethod" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Método</SortableTh>
                     <SortableTh col="paymentStatus" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort}>Estado</SortableTh>
                     <SortableTh col="total" sortBy={expSortBy} sortDir={expSortDir} toggleSort={expToggleSort} align="right">Total</SortableTh>
@@ -703,6 +748,7 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
                       <td style={{ fontSize:".86em", fontWeight:500 }}>{e.concept || "—"}</td>
                       <td style={{ fontSize:".84em", color:"var(--t3)" }}>{e.supplier || "—"}</td>
                       <td><span className="badge badge-blue" style={{ fontSize:".74em" }}>{e.category || "Otros"}</span></td>
+                      <td style={{ fontSize:".82em", color:"var(--t3)" }}>{expSubcatLabel(e)}</td>
                       <td style={{ fontSize:".82em", color:"var(--t3)" }}>{PAY_LABELS[e.paymentMethod] || "—"}</td>
                       <td>
                         <span className={`badge ${e.paymentStatus === "paid" ? "badge-green" : "badge-amber"}`} style={{ fontSize:".74em" }}>
@@ -717,7 +763,7 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
                 </tbody>
                 <tfoot>
                   <tr style={{ borderTop:"2px solid var(--border)" }}>
-                    <td colSpan={6} style={{ fontWeight:700, fontSize:".86em", paddingTop:10 }}>Totales</td>
+                    <td colSpan={7} style={{ fontWeight:700, fontSize:".86em", paddingTop:10 }}>Totales</td>
                     <td style={{ textAlign:"right", paddingTop:10 }}>
                       <div style={{ fontWeight:800, color:"var(--red)" }}>{$(totalExpenses)}</div>
                       {pendingExpenses > 0 && <div style={{ fontWeight:600, color:"var(--amber)", fontSize:".8em" }}>+{$(pendingExpenses)} pend.</div>}
