@@ -280,9 +280,12 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
         if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
         setExpenses(p => p.map(e => e.id===modal.id ? {...e,...data} : e));
         if (prevStatus === "pending" && data.paymentStatus === "paid" && data.supplierId) {
-          const payment = { id:crypto.randomUUID(), supplierId:data.supplierId, expenseId:modal.id, amount:data.total, type:"payment", paymentMethod:data.paymentMethod||"cash", date:todayStr(), notes:"Pago de gasto" };
-          await supabase.from("supplier_payments").insert(supplierPaymentToDb(payment));
-          setSupplierPayments(prev => [...prev, payment]);
+          const alreadyPaid = supplierPayments.some(p => p.expenseId === modal.id && p.type === "payment");
+          if (!alreadyPaid) {
+            const payment = { id:crypto.randomUUID(), supplierId:data.supplierId, expenseId:modal.id, amount:data.total, type:"payment", paymentMethod:data.paymentMethod||"cash", date:todayStr(), notes:"Pago de gasto" };
+            await supabase.from("supplier_payments").insert(supplierPaymentToDb(payment));
+            setSupplierPayments(prev => [...prev, payment]);
+          }
         } else if (data.paymentStatus === "pending") {
           await syncExpenseCharge(modal.id, data.supplierId, data.total, data.date, concept);
         }
@@ -373,9 +376,12 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
       setExpenses(p => p.map(e => e.id===modal.id ? {...e,...data} : e));
       if (prevStatus === "pending" && data.paymentStatus === "paid" && data.supplierId) {
-        const payment = { id:crypto.randomUUID(), supplierId:data.supplierId, expenseId:modal.id, amount:data.total, type:"payment", paymentMethod:data.paymentMethod||"cash", date:todayStr(), notes:"Pago de gasto" };
-        await supabase.from("supplier_payments").insert(supplierPaymentToDb(payment));
-        setSupplierPayments(prev => [...prev, payment]);
+        const alreadyPaid = supplierPayments.some(p => p.expenseId === modal.id && p.type === "payment");
+        if (!alreadyPaid) {
+          const payment = { id:crypto.randomUUID(), supplierId:data.supplierId, expenseId:modal.id, amount:data.total, type:"payment", paymentMethod:data.paymentMethod||"cash", date:todayStr(), notes:"Pago de gasto" };
+          await supabase.from("supplier_payments").insert(supplierPaymentToDb(payment));
+          setSupplierPayments(prev => [...prev, payment]);
+        }
       } else if (data.paymentStatus === "pending") {
         await syncExpenseCharge(modal.id, data.supplierId, data.total, data.date, data.concept);
       }
@@ -409,13 +415,17 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
   };
 
   const closeExpense = async (expense, paymentMethod) => {
+    if (expense.paymentStatus === "paid") { showToast("Este gasto ya fue pagado", "error"); setPayModal(null); return; }
     const { error } = await supabase.from("expenses").update({ payment_method: paymentMethod, payment_status:"paid" }).eq("id", expense.id);
     if (error) { showToast("Error al cerrar gasto: " + error.message, "error"); return; }
     setExpenses(p => p.map(e => e.id===expense.id ? {...e, paymentMethod, paymentStatus:"paid"} : e));
     if (expense.supplierId) {
-      const payment = { id:crypto.randomUUID(), supplierId:expense.supplierId, expenseId:expense.id, amount:expense.total, type:"payment", paymentMethod, date:todayStr(), notes:"Pago de gasto" };
-      await supabase.from("supplier_payments").insert(supplierPaymentToDb(payment));
-      setSupplierPayments(prev => [...prev, payment]);
+      const alreadyPaid = supplierPayments.some(p => p.expenseId === expense.id && p.type === "payment");
+      if (!alreadyPaid) {
+        const payment = { id:crypto.randomUUID(), supplierId:expense.supplierId, expenseId:expense.id, amount:expense.total, type:"payment", paymentMethod, date:todayStr(), notes:"Pago de gasto" };
+        await supabase.from("supplier_payments").insert(supplierPaymentToDb(payment));
+        setSupplierPayments(prev => [...prev, payment]);
+      }
     }
     logAction?.("pagar", "gasto", `"${expense.concept}" — $${expense.total} — ${PAY_LABELS[paymentMethod]||paymentMethod}`);
     setPayModal(null);
