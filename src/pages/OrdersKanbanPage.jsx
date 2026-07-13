@@ -544,15 +544,26 @@ export default function OrdersKanbanPage({
                     <div style={{ fontSize: ".77em", color: "var(--t3)", marginBottom: 8, lineHeight: 1.4 }}>
                       {sale.items.map(i => `${i.name} ×${i.qty}`).join(", ")}
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
                       <span style={{ fontWeight: 700, fontSize: ".87em", color: "var(--green)" }}>
                         {$(sale.total)}
                       </span>
-                      {db && (
-                        <span className={`badge ${db.cls}`} style={{ fontSize: ".7em" }}>
-                          📅 {db.label}
-                        </span>
-                      )}
+                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        {sale.needsBilling && (
+                          <span style={{
+                            background: "var(--amberl,#fffbe6)", color: "var(--amber,#d97706)",
+                            border: "1px solid #fde68a", borderRadius: 99,
+                            padding: "2px 7px", fontSize: ".68em", fontWeight: 700, whiteSpace: "nowrap",
+                          }}>
+                            🧾 Factura
+                          </span>
+                        )}
+                        {db && (
+                          <span className={`badge ${db.cls}`} style={{ fontSize: ".7em" }}>
+                            📅 {db.label}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -823,17 +834,21 @@ export default function OrdersKanbanPage({
                       style={{ marginTop: 4, minHeight: 60, width: "100%" }}/>
                   </div>
 
-                  <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8 }}>
-                    <input
-                      type="checkbox"
-                      id="newNeedsBilling"
-                      checked={newNeedsBilling}
-                      onChange={e => setNewNeedsBilling(e.target.checked)}
-                      style={{ width: 16, height: 16, cursor: "pointer" }}
-                    />
-                    <label htmlFor="newNeedsBilling" style={{ cursor: "pointer", fontSize: ".88em", color: "var(--t2)" }}>
-                      Necesita factura
-                    </label>
+                  <div style={{ marginTop: 14 }}>
+                    <button
+                      type="button"
+                      onClick={() => setNewNeedsBilling(v => !v)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8,
+                        padding: "8px 14px", borderRadius: 8, cursor: "pointer",
+                        border: `1.5px solid ${newNeedsBilling ? "var(--amber,#d97706)" : "var(--border)"}`,
+                        background: newNeedsBilling ? "var(--amberl,#fffbe6)" : "var(--s1)",
+                        color: newNeedsBilling ? "var(--amber,#d97706)" : "var(--t3)",
+                        fontWeight: 600, fontSize: ".85em", transition: "all .15s",
+                      }}>
+                      <span style={{ fontSize: "1.1em" }}>🧾</span>
+                      {newNeedsBilling ? "Necesita factura ✓" : "Necesita factura"}
+                    </button>
                   </div>
                 </div>
               </div>
