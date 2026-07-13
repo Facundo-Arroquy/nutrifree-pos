@@ -28,6 +28,8 @@ export default function BillingPage({ sales, setSales, customers, showToast }) {
     return next;
   });
   const [expandedId, setExpandedId]   = useState(null);
+  const [filterSearch, setFilterSearch] = useState("");
+  const [filterDate, setFilterDate]     = useState("");
 
   // Panel envío de facturas
   const [sendCustomerId, setSendCustomerId] = useState("");
@@ -85,7 +87,10 @@ export default function BillingPage({ sales, setSales, customers, showToast }) {
 
   const filtered = allBillingSales.filter(s => {
     const d = new Date(s.createdAt);
-    return filterMonths.has(d.getMonth()) && d.getFullYear() === filterYear;
+    if (!filterMonths.has(d.getMonth()) || d.getFullYear() !== filterYear) return false;
+    if (filterSearch.trim() && !s.customerName?.toLowerCase().includes(filterSearch.toLowerCase())) return false;
+    if (filterDate && s.createdAt.slice(0, 10) !== filterDate) return false;
+    return true;
   });
 
   const pending   = filtered.filter(s => s.billingStatus === "pending");
@@ -183,6 +188,30 @@ export default function BillingPage({ sales, setSales, customers, showToast }) {
             );
           })}
         </div>
+      </div>
+
+      {/* Filtros por cliente y fecha */}
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:20, alignItems:"center" }}>
+        <input
+          type="text"
+          placeholder="Buscar cliente..."
+          value={filterSearch}
+          onChange={e => setFilterSearch(e.target.value)}
+          style={{ padding:"6px 10px", borderRadius:7, border:"1px solid var(--border)", background:"var(--s1)", fontSize:".85em", minWidth:200 }}
+        />
+        <input
+          type="date"
+          value={filterDate}
+          onChange={e => setFilterDate(e.target.value)}
+          style={{ padding:"6px 10px", borderRadius:7, border:"1px solid var(--border)", background:"var(--s1)", fontSize:".85em" }}
+        />
+        {(filterSearch || filterDate) && (
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => { setFilterSearch(""); setFilterDate(""); }}>
+            Limpiar filtros
+          </button>
+        )}
       </div>
 
       {/* Tarjetas de resumen */}
