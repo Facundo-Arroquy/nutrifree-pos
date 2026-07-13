@@ -112,9 +112,12 @@ export default function OrdersKanbanPage({
   const [newPriceList, setNewPriceList]     = useState("retail");
   const [newDeliveryDate, setNewDeliveryDate] = useState(todayStr());
   const [newNotes, setNewNotes]             = useState("");
+  const [newNeedsBilling, setNewNeedsBilling] = useState(false);
   const [newProdSearch, setNewProdSearch]   = useState("");
   const [newFilterCat, setNewFilterCat]     = useState("Todos");
   const [saving, setSaving]                 = useState(false);
+  const [filterSearch, setFilterSearch]     = useState("");
+  const [filterDate, setFilterDate]         = useState("");
 
   // ── Datos ──────────────────────────────────────────────────────────────────
   const kanbanOrders = useMemo(() =>
@@ -129,7 +132,19 @@ export default function OrdersKanbanPage({
     [sales]
   );
 
-  const colOrders = (colId) => kanbanOrders.filter(s => s.status === colId);
+  const filteredKanban = useMemo(() => {
+    let result = kanbanOrders;
+    if (filterSearch.trim()) {
+      const q = filterSearch.toLowerCase();
+      result = result.filter(s => s.customerName?.toLowerCase().includes(q));
+    }
+    if (filterDate) {
+      result = result.filter(s => s.deliveryDate === filterDate);
+    }
+    return result;
+  }, [kanbanOrders, filterSearch, filterDate]);
+
+  const colOrders = (colId) => filteredKanban.filter(s => s.status === colId);
 
   // ── Helpers de stock ───────────────────────────────────────────────────────
   const buildStockDeltas = (items) => {
@@ -381,7 +396,7 @@ export default function OrdersKanbanPage({
   const openNew = () => {
     setNewCart([]); setNewCustomer(null); setNewCustSearch("");
     setNewPriceList("retail"); setNewDeliveryDate(todayStr());
-    setNewNotes(""); setNewProdSearch(""); setNewFilterCat("Todos");
+    setNewNotes(""); setNewProdSearch(""); setNewFilterCat("Todos"); setNewNeedsBilling(false);
     setShowNew(true);
   };
 
@@ -406,8 +421,8 @@ export default function OrdersKanbanPage({
         discountValue: 0,
         discountAmount: 0,
         deliveryDate: newDeliveryDate,
-        needsBilling: false,
-        billingStatus: null,
+        needsBilling: newNeedsBilling,
+        billingStatus: newNeedsBilling ? "pending" : null,
       };
       const { error } = await supabase.from("sales").insert(saleToDb(sale));
       if (error) throw error;
@@ -432,6 +447,35 @@ export default function OrdersKanbanPage({
         <button className="btn btn-primary" onClick={openNew}>
           <Ico n="plus" s={14}/> Nuevo Pedido
         </button>
+      </div>
+
+      {/* ─── Filtros ─────────────────────────────────────────────────────────── */}
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:16, alignItems:"center" }}>
+        <input
+          type="text"
+          placeholder="Buscar cliente..."
+          value={filterSearch}
+          onChange={e => setFilterSearch(e.target.value)}
+          style={{ padding:"6px 10px", borderRadius:7, border:"1px solid var(--border)", background:"var(--s1)", fontSize:".85em", minWidth:200 }}
+        />
+        <input
+          type="date"
+          value={filterDate}
+          onChange={e => setFilterDate(e.target.value)}
+          style={{ padding:"6px 10px", borderRadius:7, border:"1px solid var(--border)", background:"var(--s1)", fontSize:".85em" }}
+        />
+        {(filterSearch || filterDate) && (
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => { setFilterSearch(""); setFilterDate(""); }}>
+            Limpiar filtros
+          </button>
+        )}
+        {(filterSearch || filterDate) && (
+          <span style={{ fontSize:".8em", color:"var(--t4)" }}>
+            {filteredKanban.length} de {kanbanOrders.length} pedidos
+          </span>
+        )}
       </div>
 
       {/* ─── Kanban ──────────────────────────────────────────────────────────── */}
@@ -500,15 +544,26 @@ export default function OrdersKanbanPage({
                     <div style={{ fontSize: ".77em", color: "var(--t3)", marginBottom: 8, lineHeight: 1.4 }}>
                       {sale.items.map(i => `${i.name} ×${i.qty}`).join(", ")}
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
                       <span style={{ fontWeight: 700, fontSize: ".87em", color: "var(--green)" }}>
                         {$(sale.total)}
                       </span>
-                      {db && (
-                        <span className={`badge ${db.cls}`} style={{ fontSize: ".7em" }}>
-                          📅 {db.label}
-                        </span>
-                      )}
+                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        {sale.needsBilling && (
+                          <span style={{
+                            background: "var(--amberl,#fffbe6)", color: "var(--amber,#d97706)",
+                            border: "1px solid #fde68a", borderRadius: 99,
+                            padding: "2px 7px", fontSize: ".68em", fontWeight: 700, whiteSpace: "nowrap",
+                          }}>
+                            🧾 Factura
+                          </span>
+                        )}
+                        {db && (
+                          <span className={`badge ${db.cls}`} style={{ fontSize: ".7em" }}>
+                            📅 {db.label}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -777,6 +832,23 @@ export default function OrdersKanbanPage({
                     <textarea value={newNotes} onChange={e => setNewNotes(e.target.value)}
                       placeholder="Instrucciones especiales, detalles del encargo..."
                       style={{ marginTop: 4, minHeight: 60, width: "100%" }}/>
+                  </div>
+
+                  <div style={{ marginTop: 14 }}>
+                    <button
+                      type="button"
+                      onClick={() => setNewNeedsBilling(v => !v)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8,
+                        padding: "8px 14px", borderRadius: 8, cursor: "pointer",
+                        border: `1.5px solid ${newNeedsBilling ? "var(--amber,#d97706)" : "var(--border)"}`,
+                        background: newNeedsBilling ? "var(--amberl,#fffbe6)" : "var(--s1)",
+                        color: newNeedsBilling ? "var(--amber,#d97706)" : "var(--t3)",
+                        fontWeight: 600, fontSize: ".85em", transition: "all .15s",
+                      }}>
+                      <span style={{ fontSize: "1.1em" }}>🧾</span>
+                      {newNeedsBilling ? "Necesita factura ✓" : "Necesita factura"}
+                    </button>
                   </div>
                 </div>
               </div>
