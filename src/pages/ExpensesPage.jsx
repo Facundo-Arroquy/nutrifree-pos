@@ -42,7 +42,13 @@ function IngredientLinesTable({ lines, ingredients, withVat, vatRate, lineSubcat
                   </select>
                 </td>
                 <td><input type="number" min="0" step="0.01" value={line.qty} onChange={e=>updateLine(idx,"qty",e.target.value)} style={{ width:75 }}/></td>
-                <td><input type="text" value={line.unit||""} onChange={e=>updateLine(idx,"unit",e.target.value)} style={{ width:80 }} placeholder="kg"/></td>
+                <td>
+                  {/* Unidad fija = la del ingrediente. El stock y el costo se calculan en esta unidad,
+                      por eso no es editable: cargar otra unidad descuadraría stock/costo. */}
+                  <span style={{ display:"inline-block", minWidth:60, color: line.unit ? "var(--t2)" : "var(--t4)", fontSize:".9em" }}>
+                    {line.unit || "—"}
+                  </span>
+                </td>
                 <td><input type="number" min="0" step="0.01" value={line.totalPaid ?? ""} onChange={e=>updateLine(idx,"totalPaid",e.target.value)} style={{ width:100 }}/></td>
                 <td style={{ fontWeight:700, color:"var(--red)" }}>{$(effTotal)}</td>
                 {lineSubcats.length > 0 && (
@@ -198,32 +204,6 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       : [emptyLine(e.subcategory || "")];
     setForm({...e, ingredientLines: lines, withVat: e.withVat || false, subcategory: e.subcategory || ""});
     setModal(e);
-  };
-
-  // When saving an ingredient expense, update matching ingredient costs in recipes
-  const syncIngredientCosts = async (concept, unitPrice) => {
-    if (!unitPrice || !concept) return 0;
-    const lc = concept.toLowerCase().trim();
-    const matchingIngIds = new Set(
-      ingredients.filter(i => i.name.toLowerCase().includes(lc)).map(i => i.id)
-    );
-    if (matchingIngIds.size === 0) return 0;
-    let updatedRecipes = 0;
-    setRecipes(prev => prev.map(r => {
-      const hasMatch = r.ingredients.some(i => matchingIngIds.has(i.ingredientId));
-      if (!hasMatch) return r;
-      updatedRecipes++;
-      return {...r, ingredients: r.ingredients.map(i =>
-        matchingIngIds.has(i.ingredientId) ? {...i, cost: Number(unitPrice)} : i
-      )};
-    }));
-    for (const ingId of matchingIngIds) {
-      const { error } = await supabase.from("recipe_ingredients")
-        .update({ cost: Number(unitPrice) })
-        .eq("ingredient_id", ingId);
-      if (error) showToast("Error al sincronizar costo: " + error.message, "error");
-    }
-    return updatedRecipes;
   };
 
   // Sincroniza el cargo en supplier_payments cuando un gasto pendiente es editado.
@@ -387,13 +367,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       }
     }
     logAction?.(modal==="new" ? "crear" : "editar", "gasto", `"${data.concept}" — $${data.total} (${data.category})`);
-    if (data.category==="Ingredientes" && data.unitPrice > 0) {
-      const updated = await syncIngredientCosts(data.concept, data.unitPrice);
-      if (updated > 0) showToast(`Gasto guardado · Costo actualizado en ${updated} receta${updated!==1?"s":""}`);
-      else showToast("Gasto guardado");
-    } else {
-      showToast("Gasto guardado");
-    }
+    showToast("Gasto guardado");
     setModal(null);
     } finally {
       setSubmitting(false);
