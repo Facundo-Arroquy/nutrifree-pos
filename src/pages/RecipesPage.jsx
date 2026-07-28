@@ -15,6 +15,10 @@ import { supabase, recipeToDb, recipeIngredientToDb } from "../supabase.js";
 export default function RecipesPage({ recipes, setRecipes, products, ingredients, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast }) {
   const [modal, setModal] = useState(null);
   const [viewModal, setViewModal] = useState(null);
+  const [copyModal, setCopyModal] = useState(null); // receta origen
+  const [copyForm, setCopyForm] = useState({ productId:"", yield:"" });
+  const [copyProdSearch, setCopyProdSearch] = useState("");
+  const [copySubmitting, setCopySubmitting] = useState(false);
 
   useEffect(() => {
     if (!openRecipeId || !recipes.length) return;
@@ -151,6 +155,63 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
 
   const openNew = () => { setForm({ productId:"", prepTime:0, cookTime:0, yield:1, notes:"", minMargin:"", ingredients:[], steps:[] }); setProdSearch(""); setModal("new"); };
   const openEdit = r => { setForm({...r, ingredients:[...r.ingredients], steps:[...r.steps]}); setProdSearch(products.find(p=>p.id===r.productId)?.name||""); setModal(r); };
+
+  const openCopy = (e, r) => {
+    e.stopPropagation();
+    setCopyModal(r);
+    setCopyForm({ productId:"", yield: r.yield });
+    setCopyProdSearch("");
+  };
+
+  const saveCopy = async () => {
+    if (copySubmitting) return;
+    if (!copyForm.productId) { showToast("Seleccioná un producto destino", "error"); return; }
+    const yieldVal = Number(copyForm.yield);
+    if (!yieldVal || yieldVal <= 0) { showToast("El rendimiento debe ser mayor a 0", "error"); return; }
+    // Verificar que el producto destino no tenga ya una receta
+    const existe = recipes.find(r => r.productId === copyForm.productId);
+    if (existe) {
+      if (!confirm(`${products.find(p=>p.id===copyForm.productId)?.name} ya tiene una receta. ¿Sobreescribir?`)) return;
+    }
+    setCopySubmitting(true);
+    try {
+      const src = copyModal;
+      const newId = crypto.randomUUID();
+      const recipeData = {
+        ...src,
+        id: newId,
+        productId: copyForm.productId,
+        yield: yieldVal,
+        is_favorite: false,
+        needs_review: false,
+        review_reason: null,
+      };
+      if (existe) {
+        // Actualizar receta existente
+        const { error } = await supabase.from("recipes").update(recipeToDb(recipeData)).eq("id", existe.id);
+        if (error) { showToast("Error: " + error.message, "error"); return; }
+        await supabase.from("recipe_ingredients").delete().eq("recipe_id", existe.id);
+        if (src.ingredients.length > 0) {
+          const rows = src.ingredients.map(i => recipeIngredientToDb({ ...i, id: crypto.randomUUID() }, existe.id));
+          const { error: riErr } = await supabase.from("recipe_ingredients").insert(rows);
+          if (riErr) { showToast("Error al guardar ingredientes: " + riErr.message, "error"); return; }
+        }
+      } else {
+        // Insertar nueva receta
+        const { error } = await supabase.from("recipes").insert(recipeToDb(recipeData));
+        if (error) { showToast("Error: " + error.message, "error"); return; }
+        if (src.ingredients.length > 0) {
+          const rows = src.ingredients.map(i => recipeIngredientToDb({ ...i, id: crypto.randomUUID() }, newId));
+          const { error: riErr } = await supabase.from("recipe_ingredients").insert(rows);
+          if (riErr) { showToast("Error al guardar ingredientes: " + riErr.message, "error"); return; }
+        }
+      }
+      setCopyModal(null);
+      showToast("Receta copiada correctamente");
+    } finally {
+      setCopySubmitting(false);
+    }
+  };
 
   const addIngr = () => {
     if (!newIngr.ingredientId || !newIngr.qty) return;
@@ -331,6 +392,7 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
               )}
               <div style={{ display:"flex", gap:6, marginTop:12 }}>
                 <button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();openEdit(r);}}><Ico n="edit" s={12}/>Editar</button>
+                <button className="btn btn-secondary btn-sm" onClick={e=>openCopy(e,r)} title="Copiar receta a otro producto"><Ico n="copy" s={12}/>Copiar</button>
                 <button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();exportRecipePDF(r);}} title="Exportar PDF"><Ico n="download" s={12}/>PDF</button>
                 {r.needsReview && (
                   <button className="btn btn-amber btn-sm" onClick={e=>{e.stopPropagation();markReviewed(r.id);}}><Ico n="check" s={12}/>Revisado</button>
@@ -407,6 +469,76 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
           {viewModal.notes&&<div style={{ marginTop:12, background:"var(--amberl)", border:"1px solid var(--amberlb)", borderRadius:8, padding:"8px 12px", fontSize:".84em" }}>📝 {viewModal.notes}</div>}
         </Modal>
       )}
+
+      {/* COPY MODAL */}
+      {copyModal && (() => {
+        const srcProd = products.find(p => p.id === copyModal.productId);
+        const usedIds = new Set(recipes.map(r => r.productId));
+        // Filtrar productos que aún no tienen receta (y el origen mismo)
+        const available = products.filter(p => p.id !== copyModal.productId);
+        const filteredAvailable = available.filter(p =>
+          !copyProdSearch || p.name.toLowerCase().includes(copyProdSearch.toLowerCase())
+        );
+        return (
+          <Modal title="Copiar receta" onClose={() => setCopyModal(null)}>
+            <div style={{ marginBottom:16, background:"var(--s2)", borderRadius:8, padding:"10px 14px", fontSize:".86em" }}>
+              <span style={{ color:"var(--t3)" }}>Origen:</span>{" "}
+              <strong>{srcProd?.name || "Producto eliminado"}</strong>
+              {" · "}{copyModal.ingredients.length} ingredientes{" · "}rinde {copyModal.yield} unid.
+            </div>
+
+            <div className="form-group" style={{ marginBottom:14 }}>
+              <label className="lbl">Producto destino *</label>
+              <div style={{ position:"relative" }}>
+                <input
+                  value={copyProdSearch}
+                  onChange={e => { setCopyProdSearch(e.target.value); if (!e.target.value) setCopyForm(p=>({...p, productId:""})); }}
+                  placeholder="Buscar producto..."
+                  autoComplete="off"
+                />
+                {copyProdSearch && (() => {
+                  const exact = products.find(p => p.id === copyForm.productId);
+                  if (exact && exact.name.toLowerCase() === copyProdSearch.toLowerCase()) return null;
+                  if (!filteredAvailable.length) return null;
+                  return (
+                    <div style={{ position:"absolute", zIndex:99, background:"var(--s1)", border:"1px solid var(--border)", borderRadius:8, width:"100%", maxHeight:180, overflowY:"auto", boxShadow:"0 4px 16px #0002", top:"calc(100% + 4px)" }}>
+                      {filteredAvailable.map(p => (
+                        <div key={p.id} style={{ padding:"8px 12px", cursor:"pointer", fontSize:".88em", display:"flex", alignItems:"center", gap:8 }}
+                          onMouseDown={() => { setCopyForm(f=>({...f, productId:p.id})); setCopyProdSearch(p.name); }}>
+                          {p.name}
+                          {usedIds.has(p.id) && (
+                            <span style={{ fontSize:".72em", background:"var(--amberl)", color:"var(--amber)", border:"1px solid var(--amberlb)", borderRadius:4, padding:"1px 5px" }}>ya tiene receta</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            <div className="form-group" style={{ marginBottom:20 }}>
+              <label className="lbl">Rendimiento (unidades)</label>
+              <input
+                type="number"
+                min="1"
+                value={copyForm.yield}
+                onChange={e => setCopyForm(f=>({...f, yield:e.target.value}))}
+              />
+              <div style={{ fontSize:".76em", color:"var(--t3)", marginTop:4 }}>
+                El rendimiento original es <strong>{copyModal.yield}</strong> unidades. Podés cambiarlo para esta copia.
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setCopyModal(null)}>Cancelar</button>
+              <button className="btn btn-primary" onClick={saveCopy} disabled={copySubmitting}>
+                <Ico n="copy" s={13}/>{copySubmitting ? "Copiando..." : "Copiar receta"}
+              </button>
+            </div>
+          </Modal>
+        );
+      })()}
 
       {/* EDIT MODAL */}
       {modal && (
