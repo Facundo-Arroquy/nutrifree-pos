@@ -168,7 +168,6 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
     if (!copyForm.productId) { showToast("Seleccioná un producto destino", "error"); return; }
     const yieldVal = Number(copyForm.yield);
     if (!yieldVal || yieldVal <= 0) { showToast("El rendimiento debe ser mayor a 0", "error"); return; }
-    // Verificar que el producto destino no tenga ya una receta
     const existe = recipes.find(r => r.productId === copyForm.productId);
     if (existe) {
       if (!confirm(`${products.find(p=>p.id===copyForm.productId)?.name} ya tiene una receta. ¿Sobreescribir?`)) return;
@@ -176,36 +175,33 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
     setCopySubmitting(true);
     try {
       const src = copyModal;
-      const newId = crypto.randomUUID();
+      // Siempre usar el mismo ID en receta e ingredientes para evitar FK violation
+      const targetId = existe ? existe.id : crypto.randomUUID();
       const recipeData = {
         ...src,
-        id: newId,
+        id: targetId,
         productId: copyForm.productId,
         yield: yieldVal,
-        is_favorite: false,
-        needs_review: false,
-        review_reason: null,
+        isFavorite: false,
+        needsReview: false,
+        reviewReason: null,
       };
+
       if (existe) {
-        // Actualizar receta existente
-        const { error } = await supabase.from("recipes").update(recipeToDb(recipeData)).eq("id", existe.id);
+        const { error } = await supabase.from("recipes").update(recipeToDb(recipeData)).eq("id", targetId);
         if (error) { showToast("Error: " + error.message, "error"); return; }
-        await supabase.from("recipe_ingredients").delete().eq("recipe_id", existe.id);
-        if (src.ingredients.length > 0) {
-          const rows = src.ingredients.map(i => recipeIngredientToDb({ ...i, id: crypto.randomUUID() }, existe.id));
-          const { error: riErr } = await supabase.from("recipe_ingredients").insert(rows);
-          if (riErr) { showToast("Error al guardar ingredientes: " + riErr.message, "error"); return; }
-        }
+        await supabase.from("recipe_ingredients").delete().eq("recipe_id", targetId);
       } else {
-        // Insertar nueva receta
         const { error } = await supabase.from("recipes").insert(recipeToDb(recipeData));
         if (error) { showToast("Error: " + error.message, "error"); return; }
-        if (src.ingredients.length > 0) {
-          const rows = src.ingredients.map(i => recipeIngredientToDb({ ...i, id: crypto.randomUUID() }, newId));
-          const { error: riErr } = await supabase.from("recipe_ingredients").insert(rows);
-          if (riErr) { showToast("Error al guardar ingredientes: " + riErr.message, "error"); return; }
-        }
       }
+
+      if (src.ingredients.length > 0) {
+        const rows = src.ingredients.map(i => recipeIngredientToDb({ ...i, id: crypto.randomUUID() }, targetId));
+        const { error: riErr } = await supabase.from("recipe_ingredients").insert(rows);
+        if (riErr) { showToast("Error al guardar ingredientes: " + riErr.message, "error"); return; }
+      }
+
       setCopyModal(null);
       showToast("Receta copiada correctamente");
     } finally {
