@@ -64,10 +64,29 @@ serve(async (req) => {
         return new Response("ok", { headers: CORS });
       }
 
-      // Descontar stock atómicamente con RPC
-      const items = sale.items as Array<{ productId: string; qty: number; name: string }>;
+      // Descontar stock atómicamente con RPC.
+      // Los kits se resuelven a sus componentes: descontar el kit en sí no
+      // reflejaría el consumo real (un kit no tiene stock propio).
+      const items = sale.items as Array<{
+        productId: string; qty: number; name: string;
+        kitItems?: Array<{ productId: string; qty: number; name?: string }>;
+      }>;
+      const stockItems: Array<{ id: string; qty: number; name: string }> = [];
+      for (const item of items) {
+        if (item.kitItems?.length) {
+          for (const comp of item.kitItems) {
+            stockItems.push({
+              id: comp.productId,
+              qty: comp.qty * item.qty,
+              name: comp.name || item.name,
+            });
+          }
+        } else {
+          stockItems.push({ id: item.productId, qty: item.qty, name: item.name });
+        }
+      }
       const { error: stockErr } = await supabase.rpc("descontar_stock_pedido", {
-        p_items: items.map(i => ({ id: i.productId, qty: i.qty, name: i.name })),
+        p_items: stockItems,
       });
 
       if (stockErr) {

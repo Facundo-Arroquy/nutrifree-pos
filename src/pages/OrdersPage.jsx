@@ -5,12 +5,17 @@
  * de pago, cerrar pedidos y cancelar (devuelve stock automáticamente).
  * Cerrar un pedido "account" registra el cargo en cuenta corriente del cliente.
  *
+ * Stock: descuenta al pasar a "Listo para Retirar", o al cerrar si el pedido
+ * nunca pasó por ahí. Al cancelar restaura solo si se había descontado.
+ * Ver src/utils/stock.js.
+ *
  * Props: sales, setSales, products, setProducts, customers, setCustomers,
  *        accountPayments, setAccountPayments, setStockMovements, showToast
  */
 import { useState } from "react";
 import { Ico, Modal, $, fmtDT, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, PAY_ORDER_LABELS, todayStr, useSortable, SortableTh } from "../shared.jsx";
 import { supabase, accountPaymentToDb } from "../supabase.js";
+import { deductSaleStock, restoreSaleStock, applyStockResults, stockWarning, stockAlreadyDeducted } from "../utils/stock.js";
 
 export default function OrdersPage({ sales, setSales, products, setProducts, customers, setCustomers, accountPayments, setAccountPayments, setStockMovements, showToast }) {
   const [filter, setFilter] = useState("all");
@@ -55,6 +60,21 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
 
   const changeStatus = async (id, status) => {
     if (status === "closed") { console.error("[OrdersPage] Usar closeOrder() para cerrar ventas en cuenta, no changeStatus()"); return; }
+    const sale = sales.find(s => s.id === id);
+    if (!sale) return;
+    // Pasar a "Listo para Retirar" es el momento en que el pedido compromete
+    // stock. Si ya se descontó antes (venta del POS, pago web), no repetir.
+    if (status === "ready" && !stockAlreadyDeducted(sale)) {
+      try {
+        const stockResults = await deductSaleStock(sale.items);
+        setProducts(prev => applyStockResults(prev, stockResults));
+        const warning = stockWarning(stockResults);
+        if (warning) showToast(warning, "error");
+      } catch (err) {
+        showToast("Error al descontar stock: " + err.message, "error");
+        return;
+      }
+    }
     const { error } = await supabase.from("sales").update({ status }).eq("id", id);
     if (error) { showToast("Error al actualizar estado: " + error.message, "error"); return; }
     setSales(prev => prev.map(s => s.id===id ? {...s,status} : s));
@@ -116,6 +136,21 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
         });
       }
 
+      // Descontar stock si el pedido se cobra sin haber pasado por "Listo para
+      // Retirar". Sin esto, cerrar un pedido "open"/"preparing" desde acá lo
+      // dejaba cerrado y fuera del Kanban, así que su stock nunca se descontaba.
+      if (!stockAlreadyDeducted(sale)) {
+        try {
+          const stockResults = await deductSaleStock(sale.items);
+          setProducts(prev => applyStockResults(prev, stockResults));
+          const warning = stockWarning(stockResults);
+          if (warning) showToast(warning, "error");
+        } catch (err) {
+          showToast("Error al descontar stock: " + err.message, "error");
+          return;
+        }
+      }
+
       // Cerrar la venta después de registrar los pagos
       const { error: saleErr } = await supabase.from("sales").update({ status: "closed" }).eq("id", sale.id);
       if (saleErr) { showToast("Error al cerrar: " + saleErr.message, "error"); return; }
@@ -131,39 +166,29 @@ export default function OrdersPage({ sales, setSales, products, setProducts, cus
     if (submitting) return;
     setSubmitting(true);
     try {
-      // restore stock — build map of productId → qty to restore
-      const restoreMap = {};
-      for (const item of sale.items) {
-        if (item.kitItems?.length) {
-          for (const comp of item.kitItems) {
-            restoreMap[comp.productId] = (restoreMap[comp.productId] || 0) + comp.qty * item.qty;
-          }
-        } else {
-          restoreMap[item.productId] = (restoreMap[item.productId] || 0) + item.qty;
-        }
+      // Restaurar stock solo si el pedido lo había descontado: antes se
+      // restauraba siempre, inflando el stock al cancelar un pedido que nunca
+      // llegó a "Listo para Retirar".
+      let restoreDeltas = [];
+      try {
+        const restored = await restoreSaleStock(sale);
+        restoreDeltas = restored.deltas;
+        setProducts(prev => applyStockResults(prev, restored.results));
+      } catch (err) {
+        showToast("Error al restaurar stock: " + err.message, "error");
+        return;
       }
-      const restoreDeltas = Object.entries(restoreMap).map(([productId, qty]) => ({
-        id: productId,
-        delta: qty,
-        name: products.find(x => x.id === productId)?.name || productId,
-      }));
-      const { data: stockResults, error: stockErr } = await supabase.rpc("cancel_order_stocks", {
-        p_restore_deltas: restoreDeltas,
-        p_sale_id: sale.id,
-      });
-      if (stockErr) { showToast("Error al restaurar stock: " + stockErr.message, "error"); return; }
-      setProducts(prev => prev.map(p => {
-        const upd = (stockResults || []).find(r => r.id === p.id);
-        return upd ? { ...p, stock: upd.stock } : p;
-      }));
-      setStockMovements(prev => [
-        ...restoreDeltas.map(d => ({
-          id: crypto.randomUUID(), productId: d.id, productName: d.name,
-          qty: d.delta, type: "cancelación", notes: `Pedido ${sale.id}`,
-          createdAt: new Date().toISOString(),
-        })),
-        ...prev,
-      ]);
+      if (restoreDeltas.length) {
+        setStockMovements(prev => [
+          ...restoreDeltas.map(d => ({
+            id: crypto.randomUUID(), productId: d.id,
+            productName: d.name || products.find(x => x.id === d.id)?.name || d.id,
+            qty: d.delta, type: "cancelación", notes: `Pedido ${sale.id}`,
+            createdAt: new Date().toISOString(),
+          })),
+          ...prev,
+        ]);
+      }
       // reverse charge if was closed with account
       if (sale.status === "closed" && sale.paymentMethod === "account" && sale.customerId) {
         const reversal = { id: crypto.randomUUID(), customerId: sale.customerId, saleId: sale.id,

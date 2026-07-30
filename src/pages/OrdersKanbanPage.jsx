@@ -15,6 +15,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { Ico, Modal, $, uid, PAY_ORDER_LABELS, todayStr } from "../shared.jsx";
 import { supabase, saleToDb, accountPaymentToDb } from "../supabase.js";
+import { restoreSaleStock, syncStockForStatusChange, applyStockResults, stockWarning } from "../utils/stock.js";
 
 const COLUMNS = [
   { id: "open",      label: "Pendiente",          icon: "📋" },
@@ -45,7 +46,7 @@ export default function OrdersKanbanPage({
   // Usamos refs para evitar closures stale en los listeners de documento
   const touchRef  = useRef({ saleId: null, active: false, startX: 0, startY: 0, overCol: null });
   const salesRef        = useRef(sales);
-  const discountStockRef = useRef(null);
+  const syncStockRef = useRef(null);
   useEffect(() => { salesRef.current = sales; });
 
   const handleTouchStart = (e, sale) => {
@@ -80,7 +81,7 @@ export default function OrdersKanbanPage({
       const sale = salesRef.current.find(s => s.id === saleId);
       if (!sale || sale.status === overCol) return;
       try {
-        if (overCol === "ready") await discountStockRef.current(sale);
+        await syncStockRef.current(sale, overCol);
         const { error } = await supabase.from("sales").update({ status: overCol }).eq("id", saleId);
         if (error) throw error;
         setSales(prev => prev.map(s => s.id === saleId ? { ...s, status: overCol } : s));
@@ -147,37 +148,21 @@ export default function OrdersKanbanPage({
   const colOrders = (colId) => filteredKanban.filter(s => s.status === colId);
 
   // ── Helpers de stock ───────────────────────────────────────────────────────
-  const buildStockDeltas = (items) => {
-    const deltas = [];
-    for (const ci of items.filter(c => !c.isKit)) {
-      const ex = deltas.find(d => d.id === ci.productId);
-      if (ex) ex.delta += ci.qty;
-      else deltas.push({ id: ci.productId, delta: ci.qty, name: ci.name || "" });
+  // La lógica vive en src/utils/stock.js, compartida con POSPage y OrdersPage.
+  /** Descuenta o devuelve stock según lo requiera la transición de estado. */
+  const syncStock = async (sale, newStatus) => {
+    const { action, results } = await syncStockForStatusChange(sale, newStatus);
+    if (action === "none") return;
+    setProducts(prev => applyStockResults(prev, results));
+    if (action === "deduct") {
+      const warning = stockWarning(results);
+      if (warning) showToast(warning, "error");
+    } else {
+      showToast("Stock devuelto: el pedido volvió atrás", "info");
     }
-    for (const ci of items.filter(c => c.isKit)) {
-      for (const comp of (ci.kitItems || [])) {
-        const ex = deltas.find(d => d.id === comp.productId);
-        if (ex) ex.delta += comp.qty * ci.qty;
-        else deltas.push({ id: comp.productId, delta: comp.qty * ci.qty, name: comp.name || "" });
-      }
-    }
-    return deltas;
-  };
-
-  const discountStockForSale = async (sale) => {
-    const deltas = buildStockDeltas(sale.items);
-    if (deltas.length === 0) return;
-    const { data: stockResults, error: stockErr } = await supabase.rpc(
-      "complete_sale_stocks", { p_stock_deltas: deltas }
-    );
-    if (stockErr) throw stockErr;
-    setProducts(prev => prev.map(p => {
-      const upd = (stockResults || []).find(r => r.id === p.id);
-      return upd ? { ...p, stock: upd.stock } : p;
-    }));
   };
   // Actualizar ref en cada render para que onEnd (closure estática) use la versión fresca
-  discountStockRef.current = discountStockForSale;
+  syncStockRef.current = syncStock;
 
   // ── Drag & drop handlers ───────────────────────────────────────────────────
   const handleDragStart = (e, sale) => {
@@ -199,7 +184,8 @@ export default function OrdersKanbanPage({
     const sale = sales.find(s => s.id === saleId);
     if (!sale || sale.status === newStatus) { setDraggingId(null); return; }
     try {
-      if (newStatus === "ready") await discountStockForSale(sale);
+      // Cubre las dos direcciones: avanzar a "Listo" descuenta, volver atrás devuelve.
+      await syncStock(sale, newStatus);
       const { error } = await supabase.from("sales").update({ status: newStatus }).eq("id", saleId);
       if (error) throw error;
       setSales(prev => prev.map(s => s.id === saleId ? { ...s, status: newStatus } : s));
@@ -217,7 +203,7 @@ export default function OrdersKanbanPage({
     const next = { open: "preparing", preparing: "ready" }[sale.status];
     if (!next) return;
     try {
-      if (next === "ready") await discountStockForSale(sale);
+      await syncStock(sale, next);
       const { error } = await supabase.from("sales").update({ status: next }).eq("id", sale.id);
       if (error) throw error;
       setSales(prev => prev.map(s => s.id === sale.id ? { ...s, status: next } : s));
@@ -249,6 +235,9 @@ export default function OrdersKanbanPage({
     if (!payMethod) { showToast("Seleccioná un método de pago", "error"); return; }
     setSubmitting(true);
     try {
+      // Hoy el cobro solo se ofrece en "Listo para Retirar" (ya descontado),
+      // pero cubrimos el caso de cobrar antes para no cerrar sin descontar.
+      await syncStock(detail, "closed");
       const paidAt = new Date().toISOString();
       const { error } = await supabase.from("sales")
         .update({ status: "closed", payment_method: payMethod, paid_at: paidAt })
@@ -314,20 +303,9 @@ export default function OrdersKanbanPage({
   const cancelOrder = async (sale) => {
     if (!confirm("¿Cancelar este pedido?")) return;
     try {
-      // Solo restaurar stock si ya llegó a "Listo para Retirar" (único momento donde se descuenta)
-      if (sale.status === "ready") {
-        const restoreDeltas = buildStockDeltas(sale.items);
-        if (restoreDeltas.length > 0) {
-          const { data: stockResults, error: stockErr } = await supabase.rpc(
-            "cancel_order_stocks", { p_restore_deltas: restoreDeltas, p_sale_id: sale.id }
-          );
-          if (stockErr) throw stockErr;
-          setProducts(prev => prev.map(p => {
-            const upd = (stockResults || []).find(r => r.id === p.id);
-            return upd ? { ...p, stock: upd.stock } : p;
-          }));
-        }
-      }
+      // Restaura solo si el pedido ya había descontado stock.
+      const { results } = await restoreSaleStock(sale);
+      setProducts(prev => applyStockResults(prev, results));
       const { error } = await supabase.from("sales").update({ status: "cancelled" }).eq("id", sale.id);
       if (error) throw error;
       setSales(prev => prev.map(s => s.id === sale.id ? { ...s, status: "cancelled" } : s));

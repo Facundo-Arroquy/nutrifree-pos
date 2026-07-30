@@ -63,30 +63,52 @@ $$;
 
 -- ───────────────────────────────────────────────────────────────────────────
 -- 2. VENTA: descuenta stock de productos de forma atómica y relativa.
---    Usa GREATEST(0, ...) para no dejar stock negativo.
+--    Usa GREATEST(0, ...) para no dejar stock negativo, pero INFORMA el
+--    faltante en 'shortfall' en lugar de clamparlo en silencio, y marca con
+--    'missing' los productos que no existen (antes se ignoraban sin aviso).
+--    No lanza excepción: marcar un pedido como listo no debe bloquearse por
+--    stock: se registra y se avisa por UI. El flujo de pago web
+--    (descontar_stock_pedido) sí falla, porque ahí hay que reembolsar.
+--    El SELECT ... FOR UPDATE bloquea la fila hasta el commit, así que leer el
+--    stock previo y actualizarlo sigue siendo atómico frente a concurrencia.
 -- ───────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION complete_sale_stocks(
   p_stock_deltas jsonb   -- [{"id": "<text>", "delta": <numeric>}, ...]
 )
-RETURNS jsonb            -- [{"id": "<text>", "stock": <numeric>}, ...]
+RETURNS jsonb            -- [{"id","stock","shortfall","missing"}, ...]
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  v_prod      record;
-  v_new_stock numeric;
-  v_results   jsonb := '[]'::jsonb;
+  v_prod       record;
+  v_prev_stock numeric;
+  v_new_stock  numeric;
+  v_results    jsonb := '[]'::jsonb;
 BEGIN
   FOR v_prod IN
     SELECT x.id, x.delta
     FROM jsonb_to_recordset(COALESCE(p_stock_deltas, '[]'::jsonb)) AS x(id text, delta numeric)
   LOOP
+    SELECT stock INTO v_prev_stock FROM products WHERE id = v_prod.id FOR UPDATE;
+
+    IF NOT FOUND THEN
+      v_results := v_results || jsonb_build_array(
+        jsonb_build_object('id', v_prod.id, 'missing', true)
+      );
+      CONTINUE;
+    END IF;
+
     UPDATE products
-    SET stock = GREATEST(0, stock - v_prod.delta)
+    SET stock = GREATEST(0, v_prev_stock - v_prod.delta)
     WHERE id = v_prod.id
     RETURNING stock INTO v_new_stock;
 
     v_results := v_results || jsonb_build_array(
-      jsonb_build_object('id', v_prod.id, 'stock', v_new_stock)
+      jsonb_build_object(
+        'id',        v_prod.id,
+        'stock',     v_new_stock,
+        'shortfall', GREATEST(0, v_prod.delta - v_prev_stock),
+        'missing',   false
+      )
     );
   END LOOP;
 
