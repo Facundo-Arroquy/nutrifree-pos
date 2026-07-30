@@ -386,14 +386,14 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
                   {r.reviewReason}
                 </div>
               )}
-              <div style={{ display:"flex", gap:6, marginTop:12 }}>
+              <div style={{ display:"flex", gap:6, marginTop:12, flexWrap:"wrap", alignItems:"center" }}>
                 <button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();openEdit(r);}}><Ico n="edit" s={12}/>Editar</button>
                 <button className="btn btn-secondary btn-sm" onClick={e=>openCopy(e,r)} title="Copiar receta a otro producto"><Ico n="copy" s={12}/>Copiar</button>
                 <button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();exportRecipePDF(r);}} title="Exportar PDF"><Ico n="download" s={12}/>PDF</button>
                 {r.needsReview && (
                   <button className="btn btn-amber btn-sm" onClick={e=>{e.stopPropagation();markReviewed(r.id);}}><Ico n="check" s={12}/>Revisado</button>
                 )}
-                <button className="btn btn-danger btn-sm" onClick={e=>{e.stopPropagation();del(r.id);}}><Ico n="trash" s={12}/></button>
+                <button className="btn btn-danger btn-sm" style={{ marginLeft:"auto" }} onClick={e=>{e.stopPropagation();del(r.id);}}><Ico n="trash" s={12}/></button>
               </div>
             </div>
           );
