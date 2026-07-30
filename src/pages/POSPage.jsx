@@ -7,6 +7,9 @@
  * Al guardar un pedido abierto, ofrece registrar una fecha de entrega.
  * Los pedidos "account" generan automáticamente un cargo en cuenta corriente.
  *
+ * Stock: la venta directa ("closed") descuenta acá; el pedido abierto ("open")
+ * descuenta al pasar a "Listo para Retirar". Ver src/utils/stock.js.
+ *
  * Props: products, setProducts, customers, setCustomers, sales, setSales,
  *        accountPayments, setAccountPayments, showToast
  */
@@ -14,6 +17,7 @@ import { useState, useEffect } from "react";
 import { Ico, Modal, $, PAY_ORDER_LABELS, uid, todayStr } from "../shared.jsx";
 import { supabase, saleToDb, accountPaymentToDb } from "../supabase.js";
 import { sendBillingAlert } from "../utils/emailAlerts.js";
+import { deductSaleStock, applyStockResults, stockWarning } from "../utils/stock.js";
 
 export default function POSPage({ products, setProducts, customers, setCustomers, sales, setSales, accountPayments, setAccountPayments, showToast, logAction, frozenDiscount = 15 }) {
   const custBal = (id) =>
@@ -148,13 +152,17 @@ export default function POSPage({ products, setProducts, customers, setCustomers
     if (submitting) return;
     if (cart.length === 0) { showToast("El carrito está vacío", "error"); return; }
     setSubmitting(true);
-    for (const item of cart) {
-      const prod = products.find(p => p.id === item.productId);
-      if (!prod) continue;
-      const maxStock = getKitMaxStock(prod);
-      if (item.qty > maxStock) {
-        showToast(`Stock insuficiente para "${item.name}" (disponible: ${maxStock})`, "error");
-        setSubmitting(false); return;
+    // Solo la venta directa exige stock disponible ya: un pedido abierto se
+    // entrega a futuro y recién descuenta stock al pasar a "Listo para Retirar".
+    if (status === "closed") {
+      for (const item of cart) {
+        const prod = products.find(p => p.id === item.productId);
+        if (!prod) continue;
+        const maxStock = getKitMaxStock(prod);
+        if (item.qty > maxStock) {
+          showToast(`Stock insuficiente para "${item.name}" (disponible: ${maxStock})`, "error");
+          setSubmitting(false); return;
+        }
       }
     }
     const now = new Date().toISOString();
@@ -176,33 +184,23 @@ export default function POSPage({ products, setProducts, customers, setCustomers
       needsBilling: billSale,
       billingStatus: billSale ? "pending" : null,
     };
-    // deduct stock — construir mapa de deltas relativos (productos normales + componentes de kits)
-    const stockDeltas = [];
-    for (const ci of cart.filter(c => !c.isKit)) {
-      const ex = stockDeltas.find(d => d.id === ci.productId);
-      if (ex) ex.delta += ci.qty;
-      else stockDeltas.push({ id: ci.productId, delta: ci.qty });
-    }
-    for (const ci of cart.filter(c => c.isKit)) {
-      for (const comp of (ci.kitItems || [])) {
-        const ex = stockDeltas.find(d => d.id === comp.productId);
-        if (ex) ex.delta += comp.qty * ci.qty;
-        else stockDeltas.push({ id: comp.productId, delta: comp.qty * ci.qty });
-      }
-    }
     // Insertar la venta primero: si falla el stock, el pedido queda registrado y se puede corregir manualmente.
     // El orden inverso (stock antes que venta) era peor: dejaba el stock reducido sin venta registrada.
     const { error: saleErr } = await supabase.from("sales").insert(saleToDb(sale));
     if (saleErr) { showToast("Error al guardar venta: " + saleErr.message, "error"); setSubmitting(false); return; }
-    const { data: stockResults, error: stockErr } = await supabase.rpc("complete_sale_stocks", { p_stock_deltas: stockDeltas });
-    if (stockErr) {
-      console.error("[POSPage] Stock no se pudo descontar para la venta", sale.id, stockErr);
-      showToast("Venta guardada pero el stock no se descontó: " + stockErr.message, "error");
+    // Solo la venta directa descuenta acá. El pedido abierto descuenta al pasar
+    // a "Listo para Retirar" (ver src/utils/stock.js).
+    if (status === "closed") {
+      try {
+        const stockResults = await deductSaleStock(cart);
+        setProducts(prev => applyStockResults(prev, stockResults));
+        const warning = stockWarning(stockResults);
+        if (warning) showToast(warning, "error");
+      } catch (stockErr) {
+        console.error("[POSPage] Stock no se pudo descontar para la venta", sale.id, stockErr);
+        showToast("Venta guardada pero el stock no se descontó: " + stockErr.message, "error");
+      }
     }
-    setProducts(prev => prev.map(p => {
-      const upd = (stockResults || []).find(r => r.id === p.id);
-      return upd ? { ...p, stock: upd.stock } : p;
-    }));
     // if closed sale with account payment → record charge in account_payments
     if (status === "closed" && payMethod === "account" && selectedCustomer) {
       const newPayments = [];

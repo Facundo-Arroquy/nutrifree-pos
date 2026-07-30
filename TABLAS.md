@@ -22,3 +22,21 @@
 | `app_settings`         | Configuración de la app | Parámetros globales de la aplicación (nombre del negocio, moneda, etc.).                                   |
 | `audit_log`            | Registro de auditoría | Log de acciones importantes: ventas, producciones, eliminaciones y accesos, con usuario, acción y detalle.  |
 | `customer_inactive_dismissed` | Clientes inactivos contactados | Registro de clientes inactivos cuya alerta fue descartada: cliente, última venta al descartar, quién la descartó y cuándo. La alerta reaparece automáticamente si el cliente hace una nueva compra. |
+
+## Estados de `sales` y stock
+
+El campo `status` determina si el stock de la venta ya fue descontado — no hay
+columna aparte que lo registre:
+
+| Estado | Significado | ¿Stock descontado? |
+|---|---|---|
+| `pending`   | Pedido web esperando pago de MercadoPago | No |
+| `open`      | Pedido cargado, sin preparar | No |
+| `preparing` | En preparación | No |
+| `ready`     | Listo para retirar | **Sí** |
+| `delivered` | Entregado | **Sí** |
+| `closed`    | Cobrado y cerrado | **Sí** |
+| `cancelled` | Cancelado (el stock se devolvió si se había descontado) | No |
+
+La lógica que mantiene este invariante vive en `src/utils/stock.js`; ver
+`FUNCIONES.md`.
