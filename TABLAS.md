@@ -2,7 +2,7 @@
 
 | Tabla (nombre en DB)   | Traducción           | Contenido                                                                                                      |
 |------------------------|----------------------|----------------------------------------------------------------------------------------------------------------|
-| `products`             | Productos            | Nombre, categoría, precios (minorista/mayorista), unidad, stock, activo, foto, descripción, ítems de kit, `is_favorite` (boolean — favorito global compartido entre todos los usuarios). |
+| `products`             | Productos            | Nombre, categoría, precios (minorista/mayorista), unidad, stock, activo, foto, descripción, ítems de kit, `is_favorite` (boolean — favorito global compartido entre todos los usuarios). Si `kit_items` no está vacío el producto es un kit: su columna `stock` se ignora (el disponible se calcula con `availableStock` a partir de los componentes). |
 | `customers`            | Clientes             | Nombre, teléfono, dirección, notas, lista de precios, saldo en cuenta corriente, descuento, email, CUIT, `default_billing` (boolean — activa facturación automáticamente en el POS al seleccionar el cliente). |
 | `sales`                | Ventas / Pedidos     | Cliente, ítems comprados, total, método de pago, estado del pedido, descuento, fecha de entrega, facturación. |
 | `recipes`              | Recetas              | Producto asociado, tiempos de preparación y cocción, rendimiento, pasos (JSONB), margen mínimo, notas, `is_favorite` (boolean — favorito global compartido entre todos los usuarios). |

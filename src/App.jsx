@@ -536,6 +536,8 @@ export default function App() {
   }, [user, sales]);
 
   const MENU_PRODUCT_NAME = "Almuerzo y Cena del día";
+  /** Normaliza para comparar nombres sin depender de tildes ni mayúsculas. */
+  const normName = s => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
 
   const saveMenu = async () => {
     if (!menuLunchId || !menuDinnerId) { showToast("Seleccioná el almuerzo y la cena", "error"); return; }
@@ -544,14 +546,17 @@ export default function App() {
     const dinnerProd = products.find(p => p.id === menuDinnerId);
     if (!lunchProd || !dinnerProd) { showToast("Productos no encontrados", "error"); return; }
     const description = `Almuerzo: ${lunchProd.name} | Cena: ${dinnerProd.name}`;
-    const existing = products.find(p => p.name === MENU_PRODUCT_NAME);
+    // Comparar normalizado: "Almuerzo y Cena del Dia" y "…del día" son el mismo
+    // producto; con igualdad estricta se creaba un kit duplicado cada vez.
+    const existing = products.find(p => normName(p.name) === normName(MENU_PRODUCT_NAME));
 
     if (existing) {
       const { error } = await supabase.from("products")
-        .update({ kit_items: kitItems, description })
+        // stock 0: el kit no tiene stock propio, se deriva de sus componentes.
+        .update({ kit_items: kitItems, description, stock: 0 })
         .eq("id", existing.id);
       if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
-      setProducts(ps => ps.map(p => p.id === existing.id ? { ...p, kitItems, description } : p));
+      setProducts(ps => ps.map(p => p.id === existing.id ? { ...p, kitItems, description, stock: 0 } : p));
     } else {
       const newProd = {
         id: crypto.randomUUID(), name: MENU_PRODUCT_NAME,

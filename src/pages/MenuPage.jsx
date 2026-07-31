@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase, dbToProduct, saleToDb } from "../supabase.js";
 import { uid, todayStr } from "../shared.jsx";
+import { availableStock } from "../utils/stock.js";
 import "../menu.css";
 
 const WA_NUMBER = "5492281588834";
@@ -86,7 +87,7 @@ function QtyControl({ qty, stock, onAdd, onRemove }) {
 }
 
 // ── Drawer del carrito ───────────────────────────────────────────────────────
-function CartDrawer({ cartItems, products, onClose, onQtyChange, onCheckout }) {
+function CartDrawer({ cartItems, products, stockOf, onClose, onQtyChange, onCheckout }) {
   const total = cartItems.reduce((s, i) => s + i.subtotal, 0);
 
   return (
@@ -120,7 +121,7 @@ function CartDrawer({ cartItems, products, onClose, onQtyChange, onCheckout }) {
                         <span>{item.qty}</span>
                         <button
                           onClick={() => onQtyChange(item.productId, 1)}
-                          disabled={item.qty >= (prod?.stock ?? 0)}
+                          disabled={item.qty >= (prod ? stockOf(prod) : 0)}
                         >+</button>
                       </div>
                       <span className="cart-item-subtotal">{formatPrice(item.subtotal)}</span>
@@ -349,6 +350,7 @@ function ConfirmationScreen({ info, onBack }) {
 // ── Componente principal ─────────────────────────────────────────────────────
 export default function MenuPage({ onGoToLogin }) {
   const [products, setProducts] = useState([]);
+  const [kitComponents, setKitComponents] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -362,9 +364,20 @@ export default function MenuPage({ onGoToLogin }) {
     Promise.all([
       supabase.from("categories").select("*").order("name"),
       supabase.from("products").select("*").eq("show_in_menu", true).order("name"),
-    ]).then(([{ data: cats }, { data: prods }]) => {
+    ]).then(async ([{ data: cats }, { data: prods }]) => {
       setCategories(cats?.map(c => c.name) ?? []);
-      setProducts(prods?.map(dbToProduct) ?? []);
+      const menuProds = prods?.map(dbToProduct) ?? [];
+      setProducts(menuProds);
+
+      // Los componentes de un kit no suelen estar publicados en el menú, pero
+      // hacen falta para saber cuántos kits se pueden armar (su stock manda).
+      const compIds = [...new Set(
+        menuProds.flatMap(p => (p.kitItems || []).map(k => k.productId))
+      )].filter(id => id && !menuProds.some(p => p.id === id));
+      if (compIds.length) {
+        const { data: comps } = await supabase.from("products").select("*").in("id", compIds);
+        setKitComponents(comps?.map(dbToProduct) ?? []);
+      }
       setLoading(false);
     }).catch(err => {
       console.error("[MenuPage] Error al cargar datos:", err);
@@ -372,12 +385,20 @@ export default function MenuPage({ onGoToLogin }) {
     });
   }, []);
 
+  /** Catálogo para calcular stock: lo publicado + los componentes de los kits. */
+  const stockCatalog = useMemo(
+    () => [...products, ...kitComponents],
+    [products, kitComponents]
+  );
+  const stockOf = (prod) => availableStock(prod, stockCatalog);
+
   // ── Helpers del carrito ──────────────────────────────────────────────────
   const handleAdd = (prod) => {
-    if (prod.stock <= 0) return;
+    const stock = stockOf(prod);
+    if (stock <= 0) return;
     setCart(prev => {
       const current = prev[prod.id] ?? 0;
-      if (current >= prod.stock) return prev;
+      if (current >= stock) return prev;
       return { ...prev, [prod.id]: current + 1 };
     });
   };
@@ -416,8 +437,10 @@ export default function MenuPage({ onGoToLogin }) {
           originalPrice: price,
           priceOverridden: false,
           subtotal: price * qty,
-          isKit: false,
-          kitItems: [],
+          // Un kit debe viajar con sus componentes: el descuento de stock los
+          // expande, y sin ellos se descontaría del kit (que no tiene stock).
+          isKit: (prod.kitItems?.length ?? 0) > 0,
+          kitItems: prod.kitItems || [],
           includeInTicket: true,
           category: prod.category,
           frozen: false,
@@ -595,8 +618,9 @@ export default function MenuPage({ onGoToLogin }) {
               {prods.map(prod => {
                 const qty = cart[prod.id] ?? 0;
                 const hasPrice = prod.priceRetail > 0;
+                const stock = stockOf(prod);
                 return (
-                  <div key={prod.id} className={`product-card${prod.stock <= 0 ? " product-card--sin-stock" : ""}`}>
+                  <div key={prod.id} className={`product-card${stock <= 0 ? " product-card--sin-stock" : ""}`}>
                     <div className="product-card-accent" />
                     <div className="product-card-body">
                       <p className="product-name">{prod.name}</p>
@@ -612,7 +636,7 @@ export default function MenuPage({ onGoToLogin }) {
                         <div className="product-card-actions">
                           <QtyControl
                             qty={qty}
-                            stock={prod.stock}
+                            stock={stock}
                             onAdd={() => handleAdd(prod)}
                             onRemove={() => handleRemove(prod)}
                           />
@@ -666,6 +690,7 @@ export default function MenuPage({ onGoToLogin }) {
         <CartDrawer
           cartItems={cartItems}
           products={products}
+          stockOf={stockOf}
           onClose={() => setShowCart(false)}
           onQtyChange={handleQtyChange}
           onCheckout={() => { setShowCart(false); setShowCheckout(true); }}
