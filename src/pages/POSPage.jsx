@@ -17,7 +17,7 @@ import { useState, useEffect } from "react";
 import { Ico, Modal, $, PAY_ORDER_LABELS, uid, todayStr } from "../shared.jsx";
 import { supabase, saleToDb, accountPaymentToDb } from "../supabase.js";
 import { sendBillingAlert } from "../utils/emailAlerts.js";
-import { deductSaleStock, applyStockResults, stockWarning } from "../utils/stock.js";
+import { deductSaleStock, applyStockResults, stockWarning, availableStock } from "../utils/stock.js";
 
 export default function POSPage({ products, setProducts, customers, setCustomers, sales, setSales, accountPayments, setAccountPayments, showToast, logAction, frozenDiscount = 15 }) {
   const custBal = (id) =>
@@ -54,16 +54,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   };
 
   const categories = ["Todos", ...new Set(products.map(p => p.category))];
-  const getKitMaxStock = (prod) => {
-    if (!prod.kitItems?.length) return prod.stock;
-    let max = Infinity;
-    for (const comp of prod.kitItems) {
-      const compProd = products.find(p => p.id === comp.productId);
-      if (!compProd) return 0;
-      max = Math.min(max, Math.floor(compProd.stock / comp.qty));
-    }
-    return isFinite(max) ? max : 0;
-  };
+  const getKitMaxStock = (prod) => availableStock(prod, products);
 
   const filtered = products
     .filter(p => p.active &&

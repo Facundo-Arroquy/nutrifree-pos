@@ -56,6 +56,35 @@ export const buildStockDeltas = (items = []) => {
 };
 
 /**
+ * Stock realmente disponible de un producto.
+ *
+ * Un kit no tiene stock propio: nunca se descuenta su columna `stock` (las
+ * ventas se expanden a componentes en `buildStockDeltas`), así que ese valor es
+ * ruido. Lo disponible es cuántos kits completos se pueden armar, o sea el
+ * mínimo de `stock_componente / cantidad_en_el_kit` sobre todos los componentes.
+ *
+ * Ej.: kit = 1 pan de carne (stock 20) + 1 canastita (stock 15) → 15 kits.
+ *
+ * @param {object} product producto a evaluar
+ * @param {Array} products catálogo donde buscar los componentes
+ * @returns {number} unidades disponibles (0 si falta algún componente)
+ */
+export const availableStock = (product, products = []) => {
+  const comps = product?.kitItems?.filter(c => c?.productId && c.qty > 0) || [];
+  if (!comps.length) return product?.stock ?? 0;
+  let available = Infinity;
+  for (const comp of comps) {
+    const compProd = products.find(p => p.id === comp.productId);
+    if (!compProd) return 0; // componente borrado: no se puede armar el kit
+    available = Math.min(available, Math.floor((compProd.stock ?? 0) / comp.qty));
+  }
+  return Math.max(0, isFinite(available) ? available : 0);
+};
+
+/** ¿El producto es un kit (tiene componentes)? */
+export const isKitProduct = (product) => (product?.kitItems?.length ?? 0) > 0;
+
+/**
  * Aplica al estado local de productos los stocks devueltos por las RPC.
  * @param {Array} products lista actual
  * @param {Array<{id: string, stock: number}>} results filas de la RPC

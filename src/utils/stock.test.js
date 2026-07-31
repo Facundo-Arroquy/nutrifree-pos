@@ -16,6 +16,8 @@ vi.mock("../supabase.js", () => ({ supabase: { rpc } }));
 
 const {
   buildStockDeltas,
+  availableStock,
+  isKitProduct,
   stockAlreadyDeducted,
   applyStockResults,
   stockWarning,
@@ -90,6 +92,64 @@ describe("buildStockDeltas", () => {
   it("devuelve lista vacía sin items", () => {
     expect(buildStockDeltas()).toEqual([]);
     expect(buildStockDeltas([])).toEqual([]);
+  });
+});
+
+describe("availableStock", () => {
+  const catalogo = [
+    { id: "pan",  name: "Pan de carne",  stock: 20 },
+    { id: "cana", name: "Canastitas",    stock: 15 },
+    { id: "flan", name: "Flan",          stock: 0 },
+  ];
+
+  it("devuelve el stock propio de un producto simple", () => {
+    expect(availableStock({ id: "pan", stock: 20 }, catalogo)).toBe(20);
+    expect(availableStock({ id: "x", stock: 7, kitItems: [] }, catalogo)).toBe(7);
+  });
+
+  it("el kit vale lo que el componente con menos stock (20 y 15 → 15)", () => {
+    const kit = { id: "k", stock: 30, kitItems: [
+      { productId: "pan", qty: 1 }, { productId: "cana", qty: 1 },
+    ]};
+    expect(availableStock(kit, catalogo)).toBe(15);
+  });
+
+  it("ignora el stock propio del kit aunque esté cargado a mano", () => {
+    const kit = { id: "k", stock: 999, kitItems: [{ productId: "cana", qty: 1 }] };
+    expect(availableStock(kit, catalogo)).toBe(15);
+  });
+
+  it("divide por la cantidad que lleva cada componente", () => {
+    const kit = { id: "k", stock: 0, kitItems: [
+      { productId: "pan", qty: 3 },   // 20/3 → 6
+      { productId: "cana", qty: 2 },  // 15/2 → 7
+    ]};
+    expect(availableStock(kit, catalogo)).toBe(6);
+  });
+
+  it("es 0 si algún componente no tiene stock", () => {
+    const kit = { id: "k", stock: 50, kitItems: [
+      { productId: "pan", qty: 1 }, { productId: "flan", qty: 1 },
+    ]};
+    expect(availableStock(kit, catalogo)).toBe(0);
+  });
+
+  it("es 0 si un componente ya no existe en el catálogo", () => {
+    const kit = { id: "k", stock: 50, kitItems: [{ productId: "borrado", qty: 1 }] };
+    expect(availableStock(kit, catalogo)).toBe(0);
+  });
+
+  it("tolera productos sin datos", () => {
+    expect(availableStock(undefined, catalogo)).toBe(0);
+    expect(availableStock({ id: "k", kitItems: [{ productId: "pan", qty: 1 }] })).toBe(0);
+  });
+});
+
+describe("isKitProduct", () => {
+  it("distingue kits de productos simples", () => {
+    expect(isKitProduct({ kitItems: [{ productId: "p", qty: 1 }] })).toBe(true);
+    expect(isKitProduct({ kitItems: [] })).toBe(false);
+    expect(isKitProduct({})).toBe(false);
   });
 });
 

@@ -10,6 +10,7 @@
 import { useState } from "react";
 import { Ico, Modal, $, uid, useSortable, SortableTh, exportXlsx } from "../shared.jsx";
 import { supabase, productToDb } from "../supabase.js";
+import { availableStock, isKitProduct } from "../utils/stock.js";
 
 export default function ProductsPage({ products, setProducts, categories, recipes, ingredients, showToast, logAction }) {
   const [modal, setModal] = useState(null);
@@ -29,7 +30,7 @@ export default function ProductsPage({ products, setProducts, categories, recipe
     category: p => p.category,
     priceRetail:    p => p.priceRetail,
     priceWholesale: p => p.priceWholesale,
-    stock:    p => p.stock,
+    stock:    p => availableStock(p, products),
   };
 
   const cats = ["Todos", ...categories];
@@ -65,7 +66,7 @@ export default function ProductsPage({ products, setProducts, categories, recipe
       const marginWholesale = cost !== "" && p.priceWholesale > 0
         ? (((p.priceWholesale - cost) / p.priceWholesale) * 100).toFixed(1)
         : "";
-      return [p.name, p.category, p.priceRetail, p.priceWholesale, cost !== "" ? Number(cost.toFixed(2)) : "", marginRetail, marginWholesale, p.unit, p.stock, p.active?"Sí":"No", p.description||""];
+      return [p.name, p.category, p.priceRetail, p.priceWholesale, cost !== "" ? Number(cost.toFixed(2)) : "", marginRetail, marginWholesale, p.unit, availableStock(p, products), p.active?"Sí":"No", p.description||""];
     });
     exportXlsx(headers, rows, "productos");
   };
@@ -175,7 +176,19 @@ export default function ProductsPage({ products, setProducts, categories, recipe
                 <td data-label="P. Minorista" style={{ fontWeight:600, color:"var(--green)" }}>{$(p.priceRetail)}</td>
                 <td data-label="P. Mayorista" style={{ color:"var(--t2)" }}>{$(p.priceWholesale)}</td>
                 <td data-label="Stock">
-                  <span style={{ fontWeight:600, color:p.stock<=2?"var(--red)":p.stock<=5?"var(--amber)":"var(--t1)" }}>{p.stock}</span>
+                  {(() => {
+                    // Un kit no tiene stock propio: mostramos cuántos se pueden
+                    // armar con el stock de sus componentes.
+                    const stock = availableStock(p, products);
+                    return (
+                      <span
+                        style={{ fontWeight:600, color:stock<=2?"var(--red)":stock<=5?"var(--amber)":"var(--t1)" }}
+                        title={isKitProduct(p) ? "Calculado según el stock de los componentes del kit" : undefined}
+                      >
+                        {stock}{isKitProduct(p) && <span style={{ color:"var(--t3)", fontWeight:500 }}> (kit)</span>}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td data-label="Estado">
                   <button className={`badge ${p.active?"badge-green":"badge-gray"}`} onClick={e=>{e.stopPropagation();toggleActive(p.id);}}>
@@ -214,7 +227,13 @@ export default function ProductsPage({ products, setProducts, categories, recipe
             </div>
             <div className="form-group"><label className="lbl">Precio minorista</label><input type="number" value={form.priceRetail} onChange={e=>set("priceRetail",e.target.value)}/></div>
             <div className="form-group"><label className="lbl">Precio mayorista</label><input type="number" value={form.priceWholesale} onChange={e=>set("priceWholesale",e.target.value)}/></div>
-            <div className="form-group"><label className="lbl">Stock actual</label><input type="number" value={form.stock} onChange={e=>set("stock",e.target.value)}/></div>
+            <div className="form-group"><label className="lbl">Stock actual</label>
+              {/* El stock de un kit se deriva de sus componentes: editarlo a mano
+                  no tendría efecto, porque las ventas descuentan los componentes. */}
+              {form.isKit
+                ? <input type="number" value={availableStock(form, products)} disabled title="Calculado según el stock de los componentes"/>
+                : <input type="number" value={form.stock} onChange={e=>set("stock",e.target.value)}/>}
+            </div>
             <div className="form-group"><label className="lbl">Activo</label>
               <select value={form.active?"true":"false"} onChange={e=>set("active",e.target.value==="true")}>
                 <option value="true">Sí</option>

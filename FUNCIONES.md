@@ -50,6 +50,15 @@ simétricas: entrar a un estado descontado descuenta, salir de él devuelve.
 | `syncStockForStatusChange(sale, newStatus)` | Descuenta, devuelve o no hace nada según lo que requiera la transición. Devuelve `{action, results, deltas}`. |
 | `applyStockResults(products, results)` | Aplica al estado local de React los stocks devueltos por las RPC. |
 | `stockWarning(results)` | Arma el aviso de faltantes y productos inexistentes. `null` si salió limpio. |
+| `availableStock(product, products)` | Stock realmente disponible. En un kit: mínimo de `stock_componente / qty` (0 si falta un componente). |
+| `isKitProduct(product)` | ¿El producto tiene componentes? |
+
+**Kits:** un kit **no tiene stock propio** — su columna `products.stock` nunca se
+descuenta (las ventas se expanden a componentes). Lo disponible es cuántos kits
+se pueden armar: ej. kit = 1 pan de carne (20) + 1 canastita (15) → **15**.
+`availableStock` es la única fuente para mostrar y limitar stock de kits
+(`POSPage`, `ProductsPage`, `MenuPage`); en el alta/edición de un kit el campo
+"Stock actual" se muestra calculado y deshabilitado.
 
 Tests en `src/utils/stock.test.js` (`npm test`).
 
