@@ -17,6 +17,7 @@
 import { useState, useRef, useCallback } from "react";
 import { Ico } from "../shared.jsx";
 import { supabase, ingredientToDb, productToDb, recipeToDb, recipeIngredientToDb } from "../supabase.js";
+import PriceUpdatePanel from "../components/PriceUpdatePanel.jsx";
 
 // ─── DEFINICIONES DE PLANTILLAS ──────────────────────────────────────────────
 
@@ -496,7 +497,10 @@ export default function ImportPage({ ingredients, setIngredients, products, setP
     { key: "ingredients", label: "Ingredientes", icon: "ingredients" },
     { key: "products",    label: "Productos",    icon: "products" },
     { key: "recipes",     label: "Recetas",      icon: "recipes" },
+    { key: "prices",      label: "Precios",      icon: "products" },
   ];
+
+  const isPrices = activeTab === "prices";
 
   return (
     <div className="page">
@@ -504,7 +508,11 @@ export default function ImportPage({ ingredients, setIngredients, products, setP
       <div className="page-header">
         <div>
           <h2 className="page-title">Importar datos</h2>
-          <p className="page-sub">Cargá ingredientes, productos o recetas masivamente desde un archivo CSV.</p>
+          <p className="page-sub">
+            {isPrices
+              ? "Descargá tus productos en una planilla, editá los precios y subila para actualizarlos de una."
+              : "Cargá ingredientes, productos o recetas masivamente desde un archivo CSV."}
+          </p>
         </div>
       </div>
 
@@ -537,6 +545,9 @@ export default function ImportPage({ ingredients, setIngredients, products, setP
         ))}
       </div>
 
+      {isPrices ? (
+        <PriceUpdatePanel products={products} setProducts={setProducts} showToast={showToast} />
+      ) : (
       <div className="import-cols" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
 
         {/* COLUMNA IZQUIERDA: instrucciones + plantilla */}
@@ -622,6 +633,7 @@ export default function ImportPage({ ingredients, setIngredients, products, setP
           {result && <ResultBanner result={result} onClose={() => setResult(null)} />}
         </div>
       </div>
+      )}
     </div>
   );
 }

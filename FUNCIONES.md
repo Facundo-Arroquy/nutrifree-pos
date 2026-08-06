@@ -69,5 +69,40 @@ Tests en `src/utils/stock.test.js` (`npm test`).
 | `ProductionPage` | `apply_production`: suma producto, descuenta ingredientes. |
 | `ProductionLogPage` | `adjust_product_stock`: suma producto por producción registrada. |
 | `IngredientsPage`, `ExpensesPage` | `adjust_ingredient_stock`: ajustes y compras de ingredientes. |
-| `ProductsPage`, `ImportPage` | Escritura **absoluta** del campo `stock` (edición manual e import CSV). |
+| `ProductsPage`, `ImportPage` (pestañas Ingredientes/Productos/Recetas) | Escritura **absoluta** del campo `stock` (edición manual e import CSV). |
 | `mp-webhook` (Edge Function) | `descontar_stock_pedido` al aprobarse el pago; reembolsa si no hay stock. |
+
+> La pestaña **Precios** de `ImportPage` es la excepción: nunca escribe `stock`.
+> Ver `src/utils/priceImport.js`.
+
+## `src/utils/priceImport.js` — actualización masiva de precios
+
+Motor de la pestaña **Precios** de `ImportPage` (UI en `src/components/PriceUpdatePanel.jsx`).
+A diferencia de las otras pestañas de importación, que parten de una plantilla
+vacía y hacen upsert de la fila entera, acá la planilla se genera **con los
+productos ya cargados** y el importador escribe **solo** `price_retail` y
+`price_wholesale`.
+
+**Ciclo:** descargar `.xlsx` → editar las columnas de precio en Excel → volver a
+subir el mismo archivo → revisar el diff → aplicar.
+
+| Función | Qué hace |
+|---|---|
+| `buildPriceSheet(products, {onlyActive})` | Arma la matriz de la planilla (`id`, `producto`, `categoria`, `precio_minorista`, `precio_mayorista`) ordenada por categoría y nombre. |
+| `parsePriceSheet(matrix)` | Normaliza el archivo subido: encabezados sin acentos ni mayúsculas, filas vacías descartadas. Devuelve `{rows, missing}`. |
+| `parsePrice(value)` | Interpreta precios en formato es-AR (`"$ 1.234,50"`) y en-US (`"1,234.50"`). Celda vacía → `null`. |
+| `diffPriceRows(rows, products)` | Compara contra la base y devuelve `{changes, unchanged, errors}`. Solo produce cambios de precio. |
+| `changeToDbPatch(change)` | Patch mínimo para Supabase: únicamente las columnas de precio que cambiaron. |
+| `applyChangeToProduct(product, change)` | Aplica el cambio al estado local de React sin tocar el resto de los campos. |
+
+**Invariantes:**
+- El match es por `id`, no por nombre: renombrar un producto en la planilla no
+  rompe nada y **nunca se crean productos nuevos** desde acá (un `id` inexistente
+  se reporta como error).
+- Una celda de precio **vacía significa "no cambiar"**, no "poner en 0".
+- Si algún precio de la fila es negativo, la fila entera se descarta.
+- Ediciones en `producto` o `categoria` se ignoran silenciosamente.
+- Los cambios se agrupan por patch idéntico y se aplican con un `update ... in(ids)`
+  por grupo (subir 200 productos al mismo precio = 1 sola query).
+
+Tests en `src/utils/priceImport.test.js` (`npm test`).
