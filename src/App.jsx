@@ -42,6 +42,7 @@ import BillingPage from "./pages/BillingPage.jsx";
 import CustomersPage from "./pages/CustomersPage.jsx";
 import ProductsPage from "./pages/ProductsPage.jsx";
 import ProductionPage from "./pages/ProductionPage.jsx";
+import ViandaProjectionPage from "./pages/ViandaProjectionPage.jsx";
 import RecipesPage from "./pages/RecipesPage.jsx";
 import IngredientsPage from "./pages/IngredientsPage.jsx";
 import ExpensesPage from "./pages/ExpensesPage.jsx";
@@ -495,6 +496,7 @@ export default function App() {
     recipes:          ["admin", "vendor", "cocina"],
     production:       ["admin", "vendor", "cocina"],
     "production-log": ["admin", "vendor", "cocina"],
+    "vianda-forecast":["admin", "vendor", "cocina"],
   };
   const canAccess = (pageId) => {
     if (user?.isDemo) return true;
@@ -694,6 +696,7 @@ export default function App() {
     { id:"recipes",     label:"Recetas",         icon:"recipes",     roles:["admin","vendor","cocina"], section:"productos" },
     { id:"ingredients", label:"Ingredientes",    icon:"ingredients", roles:["admin","vendor"], section:"productos" },
     { id:"production",      label:"Producción",        icon:"production",  roles:["admin","vendor","cocina"], section:"productos" },
+    { id:"vianda-forecast", label:"Proyección de Viandas", icon:"reports", roles:["admin","vendor","cocina"], section:"productos" },
     { id:"production-log",  label:"Reg. Producción",   icon:"production",  roles:["admin","vendor","cocina"], section:"productos" },
     { id:"cash",        label:"Cierre de Caja",  icon:"cash",        roles:["admin","vendor"], section:"finanzas" },
     { id:"expenses",    label:"Gastos",          icon:"expenses",    roles:["admin","vendor"], section:"finanzas" },
@@ -880,6 +883,7 @@ export default function App() {
             {page==="products" && <ProductsPage {...props}/>}
             {page==="production" && <ProductionPage {...props}/>}
             {page==="production-log" && <ProductionLogPage {...props}/>}
+            {page==="vianda-forecast" && (canAccess("vianda-forecast") ? <ViandaProjectionPage {...props}/> : <AccessDenied/>)}
             {page==="hours-bank" && (canAccess("hours-bank") ? <HoursBankPage {...props}/> : <AccessDenied/>)}
             {page==="recipes" && <RecipesPage {...props}/>}
             {page==="ingredients" && <IngredientsPage {...props}/>}

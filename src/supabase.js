@@ -255,6 +255,44 @@ export const cashShiftToDb = s => ({
   counted_cash: s.countedCash, difference: s.difference, notes: s.notes,
 });
 
+// ─── PROYECCIÓN DE VIANDAS ────────────────────────────────────────────────
+export const dbToViandaPlan = r => ({
+  id: r.id, weekStart: r.week_start,
+  safetyMarginPct: Number(r.safety_margin_pct ?? 18),
+  notes: r.notes || "", createdBy: r.created_by || "",
+  createdAt: r.created_at,
+});
+
+export const viandaPlanToDb = p => ({
+  id: p.id, week_start: p.weekStart,
+  safety_margin_pct: Number(p.safetyMarginPct) || 0,
+  notes: p.notes || null, created_by: p.createdBy || null,
+  updated_at: new Date().toISOString(),
+});
+
+export const dbToViandaPlanItem = r => ({
+  id: r.id, planId: r.plan_id, date: r.date,
+  productId: r.product_id, productName: r.product_name,
+  forecastQty: Number(r.forecast_qty) || 0,
+  recommendedQty: Number(r.recommended_qty) || 0,
+  producedQty: r.produced_qty == null ? null : Number(r.produced_qty),
+  actualQty: r.actual_qty == null ? null : Number(r.actual_qty),
+  confidence: r.confidence || null,
+  forecastDetail: r.forecast_detail || null,
+});
+
+export const viandaPlanItemToDb = i => ({
+  id: i.id, plan_id: i.planId, date: i.date,
+  product_id: i.productId, product_name: i.productName,
+  forecast_qty: Number(i.forecastQty) || 0,
+  recommended_qty: Number(i.recommendedQty) || 0,
+  produced_qty: i.producedQty == null ? null : Number(i.producedQty),
+  actual_qty: i.actualQty == null ? null : Number(i.actualQty),
+  confidence: i.confidence || null,
+  forecast_detail: i.forecastDetail || null,
+  updated_at: new Date().toISOString(),
+});
+
 // ─── PRODUCCIONES & BANCO DE HORAS ────────────────────────────────────────
 export const dbToProduction = r => ({
   id: r.id, recipeId: r.recipe_id, createdAt: r.created_at,

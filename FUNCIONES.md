@@ -71,3 +71,85 @@ Tests en `src/utils/stock.test.js` (`npm test`).
 | `IngredientsPage`, `ExpensesPage` | `adjust_ingredient_stock`: ajustes y compras de ingredientes. |
 | `ProductsPage`, `ImportPage` | Escritura **absoluta** del campo `stock` (edición manual e import CSV). |
 | `mp-webhook` (Edge Function) | `descontar_stock_pedido` al aprobarse el pago; reembolsa si no hay stock. |
+
+---
+
+## `src/utils/viandaForecast.js` — proyección de demanda de viandas
+
+Motor puro (no toca Supabase ni el DOM) que responde "si programo el menú X para
+el día D, ¿cuántas unidades voy a vender?". Lo usa `ViandaProjectionPage`.
+
+### Modelo
+
+No es un promedio. Es **mixto: mitad de arriba hacia abajo, mitad de abajo hacia
+arriba**, y esa mezcla no es un capricho — sale de medir el error contra el
+historial real:
+
+1. **Total del día** = `nivel_diario × f_día_semana × f_mes × f_calendario ×
+   f_tendencia × sesgo_global`. Es la parte fuerte del modelo: hay 90+ días de
+   historial y en el backtest quedó en ~21% de error.
+2. **Reparto** de ese total entre los menús programados, según el nivel propio de
+   cada uno.
+3. **Nivel propio** de cada menú, reestacionalizado, como estimación
+   independiente.
+4. La proyección final mezcla 3 y 2 con peso `BOTTOM_UP_BLEND = 0.65`.
+
+El nivel base se calcula sobre observaciones **desestacionalizadas** (cada venta
+se divide por los factores de su propio día) para no contar dos veces el efecto
+del día de la semana en un menú que solo se ofrece los lunes.
+
+**Los días sin oferta no cuentan como demanda cero:** solo se promedian los días
+en que el menú estuvo efectivamente a la venta.
+
+**Por qué repartir el total importa:** el negocio ofrece ~10 menús por día y
+vende ~53 viandas diarias con muy poca varianza. Si un día se ofrecen 6 menús se
+venden ~8 de cada uno; si se ofrecen 16, ~3. Un modelo plato-por-plato no ve ese
+efecto.
+
+| Función | Qué hace |
+|---|---|
+| `extractViandaHistory(sales, products)` | Unidades de vianda por producto y por día. Expande kits a componentes, ignora canceladas y usa `delivery_date` si existe. |
+| `dowFactors` / `monthFactors` / `trendFactor` | Factores de día de semana, estacionalidad mensual y tendencia, con encogimiento hacia 1 cuando hay pocos datos. |
+| `calendarFactor(date)` | Feriados (×0.5) y días puente (×0.85). Solo eventos discretos: la estacionalidad de temporada la aporta `f_mes`. |
+| `holidaysFor(year)` / `easterSunday(year)` | Feriados nacionales argentinos, incluidos los móviles (Pascua) y los trasladables (Ley 27.399). Los puentes por decreto se agregan a mano en `EXTRA_HOLIDAYS`. |
+| `dailyBaseLevel(ctx)` / `forecastDayTotal(ctx, date)` | Total de viandas de un día promedio y proyección del total de un día concreto. |
+| `menuLevel(ctx, productId, fallback)` | Nivel propio del menú, encogido hacia `fallback` (el menú promedio del día). Ese encogimiento es también el arranque en frío. |
+| `learnedBias(planItems, productId)` | Corrección aprendida: cuánto se equivocó el modelo en las semanas cerradas. Global, y por menú encogido sobre el global. |
+| `buildForecastContext(sales, products, planItems, refDate)` | Precalcula historial y factores para toda la semana. |
+| `forecastPlan(ctx, plan, opts)` | **Entrada principal.** Los menús del mismo día se resuelven juntos porque se reparten el total. |
+| `forecastMenu(ctx, opts)` | Atajo para un menú suelto; si ese día hay otros, pasarlos en `dayPlan`. |
+| `accuracyReport(planItems)` | MAPE, sesgo, aciertos dentro de ±15% y veces que faltó producción. |
+| `actualUnitsFor(ctx, productId, date)` | Lo realmente vendido, para cerrar el ciclo sin carga manual. |
+
+### Margen de seguridad
+
+`recomendado = ceil(proyección × (1 + margen))`. El margen es configurable
+(18% por defecto) y se **amplía solo** en los menús inciertos: ×1.2 con confianza
+media y ×1.5 con confianza baja. Un menú sobre el que se sabe poco merece más
+colchón, no menos.
+
+### Precisión medida (backtest sobre el historial real, últimos 42 días)
+
+| Métrica | Valor |
+|---|---|
+| Total de viandas del día | ~21% de error (WAPE) |
+| Por menú individual | ±3.6 unidades (MAE), 54% dentro de ±2 u. |
+
+El número confiable es el **total del día**; la asignación plato por plato tiene
+un techo bajo porque el catálogo rota constantemente (la mitad de los menús tiene
+menos de 3 días de historial) y cada plato vende ~5 unidades. Por eso la pantalla
+muestra el total proyectado por día además del detalle por menú.
+
+Tests en `src/utils/viandaForecast.test.js` (`npm test`).
+
+## `src/utils/viandaPlans.js` — persistencia de la planificación
+
+| Función | Qué hace |
+|---|---|
+| `fetchViandaPlans()` | Carga todas las planificaciones y sus ítems. |
+| `saveViandaPlan({...})` | Guarda una semana: borra los menús que se sacaron, inserta los nuevos, actualiza los que siguen. Los ítems ya cerrados se preservan intactos. |
+| `syncActualSales(items, ctx)` | Cierra el ciclo: completa `actual_qty` de los días pasados leyéndolo del historial de ventas. |
+| `saveProducedQty(item, qty)` | Registra cuántas unidades se produjeron finalmente. |
+
+Las consultas se limitan a `select / eq / order` y el filtrado fino va en
+memoria: es lo único que soporta el cliente del modo demo.

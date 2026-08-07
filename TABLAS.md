@@ -22,6 +22,16 @@
 | `app_settings`         | Configuración de la app | Parámetros globales de la aplicación (nombre del negocio, moneda, etc.).                                   |
 | `audit_log`            | Registro de auditoría | Log de acciones importantes: ventas, producciones, eliminaciones y accesos, con usuario, acción y detalle.  |
 | `customer_inactive_dismissed` | Clientes inactivos contactados | Registro de clientes inactivos cuya alerta fue descartada: cliente, última venta al descartar, quién la descartó y cuándo. La alerta reaparece automáticamente si el cliente hace una nueva compra. |
+| `vianda_plans`         | Planificación semanal de viandas | Una fila por semana planificada: `week_start` (lunes, único), margen de seguridad aplicado, notas y quién la creó. |
+| `vianda_plan_items`    | Menús programados    | Un menú programado para un día: producto, `forecast_qty` (proyección **congelada** al generarla), `recommended_qty` (proyección + margen), `produced_qty` (lo que se produjo), `actual_qty` (lo vendido real), confianza y `forecast_detail` (JSONB con los factores usados). Único por (`date`, `product_id`). |
+
+## Por qué la proyección se congela
+
+`vianda_plan_items.forecast_qty` guarda la proyección tal como se calculó esa
+semana y nunca se recalcula. El modelo aprende comparando lo proyectado
+*entonces* contra lo vendido: recalcular al vuelo borraría la evidencia del error
+y el sesgo no podría estimarse. Al reguardar una semana, los ítems que ya tienen
+`actual_qty` se preservan intactos.
 
 ## Estados de `sales` y stock
 
