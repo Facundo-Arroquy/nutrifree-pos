@@ -16,7 +16,7 @@ export default function ProductsPage({ products, setProducts, categories, recipe
   const [modal, setModal] = useState(null);
   const [filterCat, setFilterCat] = useState("Todos");
   const [search, setSearch] = useState("");
-  const emptyForm = { name:"", category:"Viandas", priceRetail:0, priceWholesale:0, unit:"unit", stock:0, active:true, description:"", isKit:false, kitItems:[] };
+  const emptyForm = { name:"", category:"Viandas", priceRetail:0, priceWholesale:0, unit:"unit", stock:0, active:true, description:"", freezable:false, isKit:false, kitItems:[] };
   const [form, setForm] = useState(emptyForm);
   const [kitProductId, setKitProductId] = useState("");
   const [kitQty, setKitQty] = useState(1);
@@ -57,7 +57,7 @@ export default function ProductsPage({ products, setProducts, categories, recipe
   };
 
   const exportExcel = () => {
-    const headers = ["Nombre","Categoría","Precio Minorista","Precio Mayorista","Costo (receta)","Margen Minorista (%)","Margen Mayorista (%)","Unidad","Stock","Activo","Descripción"];
+    const headers = ["Nombre","Categoría","Precio Minorista","Precio Mayorista","Costo (receta)","Margen Minorista (%)","Margen Mayorista (%)","Unidad","Stock","Activo","Apto freezer","Descripción"];
     const rows = products.map(p => {
       const cost = getRecipeCost(p);
       const marginRetail = cost !== "" && p.priceRetail > 0
@@ -66,7 +66,7 @@ export default function ProductsPage({ products, setProducts, categories, recipe
       const marginWholesale = cost !== "" && p.priceWholesale > 0
         ? (((p.priceWholesale - cost) / p.priceWholesale) * 100).toFixed(1)
         : "";
-      return [p.name, p.category, p.priceRetail, p.priceWholesale, cost !== "" ? Number(cost.toFixed(2)) : "", marginRetail, marginWholesale, p.unit, availableStock(p, products), p.active?"Sí":"No", p.description||""];
+      return [p.name, p.category, p.priceRetail, p.priceWholesale, cost !== "" ? Number(cost.toFixed(2)) : "", marginRetail, marginWholesale, p.unit, availableStock(p, products), p.active?"Sí":"No", p.freezable?"Sí":"No", p.description||""];
     });
     exportXlsx(headers, rows, "productos");
   };
@@ -134,6 +134,19 @@ export default function ProductsPage({ products, setProducts, categories, recipe
     setProducts(p => p.map(x => x.id===id ? {...x, showInMenu} : x));
   };
 
+  // Marca si el producto es **apto para freezer**. No describe cómo se vende hoy
+  // (fresco o congelado), sino si aguanta el freezer: por eso lo que sobra de un
+  // producto apto no se tira necesariamente.
+  const toggleFreezable = async (id) => {
+    const product = products.find(p => p.id === id);
+    if (!product) return;
+    const freezable = !product.freezable;
+    const { error } = await supabase.from("products").update({ freezable }).eq("id", id);
+    if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
+    setProducts(p => p.map(x => x.id===id ? {...x, freezable} : x));
+    logAction?.("estado", "producto", `"${product.name}" → ${freezable ? "apto freezer" : "no apto freezer"}`);
+  };
+
   return (
     <div className="page">
       <div className="page-header">
@@ -160,7 +173,7 @@ export default function ProductsPage({ products, setProducts, categories, recipe
             <SortableTh col="priceRetail" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>P. Minorista</SortableTh>
             <SortableTh col="priceWholesale" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>P. Mayorista</SortableTh>
             <SortableTh col="stock" sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}>Stock</SortableTh>
-            <th>Estado</th><th>Menú</th><th></th>
+            <th>Estado</th><th>Menú</th><th>Freezer</th><th></th>
           </tr></thead>
           <tbody>
             {filtered.map(p => (
@@ -200,12 +213,19 @@ export default function ProductsPage({ products, setProducts, categories, recipe
                     {p.showInMenu?"En menú":"Oculto"}
                   </button>
                 </td>
+                <td data-label="Freezer">
+                  <button className={`badge ${p.freezable?"badge-blue":"badge-gray"}`}
+                    onClick={e=>{e.stopPropagation();toggleFreezable(p.id);}}
+                    title={p.freezable ? "Apto para freezer" : "No apto para freezer"}>
+                    {p.freezable?"❄️ Apto":"No apto"}
+                  </button>
+                </td>
                 <td data-label="" style={{ whiteSpace:"nowrap", textAlign:"right" }}>
                   <button className="btn btn-ghost btn-icon btn-sm" onClick={e=>{e.stopPropagation();del(p.id);}}><Ico n="trash" s={13} c="var(--red)"/></button>
                 </td>
               </tr>
             ))}
-            {filtered.length===0&&<tr><td colSpan={8}><div className="empty"><div className="empty-icon">📦</div><h3>Sin productos</h3></div></td></tr>}
+            {filtered.length===0&&<tr><td colSpan={9}><div className="empty"><div className="empty-icon">📦</div><h3>Sin productos</h3></div></td></tr>}
           </tbody>
         </table>
       </div>
@@ -238,6 +258,12 @@ export default function ProductsPage({ products, setProducts, categories, recipe
               <select value={form.active?"true":"false"} onChange={e=>set("active",e.target.value==="true")}>
                 <option value="true">Sí</option>
                 <option value="false">No</option>
+              </select>
+            </div>
+            <div className="form-group"><label className="lbl">¿Apto para freezer?</label>
+              <select value={form.freezable?"true":"false"} onChange={e=>set("freezable",e.target.value==="true")}>
+                <option value="false">No</option>
+                <option value="true">Sí</option>
               </select>
             </div>
             <div className="form-group full"><label className="lbl">Descripción</label><textarea value={form.description} onChange={e=>set("description",e.target.value)}/></div>

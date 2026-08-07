@@ -35,17 +35,17 @@ export async function fetchViandaPlans() {
  * que siguen. Los ítems ya cerrados conservan su `actualQty` y su proyección
  * original — recalcularla borraría la evidencia que alimenta el aprendizaje.
  *
- * @param {object} args { weekStart, safetyMarginPct, notes, rows, userEmail, existingPlan, existingItems }
+ * @param {object} args { weekStart, serviceLevelPct, notes, rows, userEmail, existingPlan, existingItems }
  * @returns {Promise<{plan: object, items: Array}>}
  */
 export async function saveViandaPlan({
-  weekStart, safetyMarginPct, notes = "", rows = [],
+  weekStart, serviceLevelPct, notes = "", rows = [],
   userEmail = "", existingPlan = null, existingItems = [],
 }) {
   const plan = {
     id: existingPlan?.id || crypto.randomUUID(),
     weekStart,
-    safetyMarginPct,
+    serviceLevelPct,
     notes,
     createdBy: existingPlan?.createdBy || userEmail,
   };
@@ -70,7 +70,11 @@ export async function saveViandaPlan({
       producedQty: prev?.producedQty ?? null,
       actualQty: null,
       confidence: row.confidence,
-      forecastDetail: { factors: row.factors, samples: row.samples, coldStart: row.coldStart },
+      forecastDetail: {
+        factors: row.factors, samples: row.samples,
+        coldStart: row.coldStart, coverage: row.coverage,
+        serviceLevelPct: row.serviceLevelPct,
+      },
     };
   });
 

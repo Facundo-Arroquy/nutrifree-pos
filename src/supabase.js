@@ -45,6 +45,7 @@ export const dbToProduct = r => ({
   kitItems: r.kit_items || [],
   isFavorite: r.is_favorite ?? false,
   showInMenu: r.show_in_menu ?? false,
+  freezable: r.freezable ?? false,
 });
 
 export const productToDb = p => ({
@@ -55,6 +56,7 @@ export const productToDb = p => ({
   kit_items: p.kitItems || [],
   is_favorite: p.isFavorite ?? false,
   show_in_menu: p.showInMenu ?? false,
+  freezable: p.freezable ?? false,
 });
 
 export const dbToCustomer = r => ({
@@ -258,14 +260,14 @@ export const cashShiftToDb = s => ({
 // ─── PROYECCIÓN DE VIANDAS ────────────────────────────────────────────────
 export const dbToViandaPlan = r => ({
   id: r.id, weekStart: r.week_start,
-  safetyMarginPct: Number(r.safety_margin_pct ?? 18),
+  serviceLevelPct: Number(r.service_level_pct ?? 90),
   notes: r.notes || "", createdBy: r.created_by || "",
   createdAt: r.created_at,
 });
 
 export const viandaPlanToDb = p => ({
   id: p.id, week_start: p.weekStart,
-  safety_margin_pct: Number(p.safetyMarginPct) || 0,
+  service_level_pct: Number(p.serviceLevelPct) || 90,
   notes: p.notes || null, created_by: p.createdBy || null,
   updated_at: new Date().toISOString(),
 });

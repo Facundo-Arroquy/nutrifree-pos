@@ -5,7 +5,7 @@
  *  1. Se elige una semana y se arman los menús de cada día con un dropdown que
  *     lista los productos de la categoría "Viandas".
  *  2. El motor (`utils/viandaForecast.js`) proyecta la demanda de cada menú
- *     programado y recomienda cuánto producir sumando un margen de seguridad.
+ *     programado y recomienda cuánto producir según el nivel de servicio elegido.
  *  3. Al guardar, la proyección queda congelada en `vianda_plan_items`.
  *  4. Pasado el día, "Actualizar ventas reales" completa lo efectivamente
  *     vendido; el modelo mide su error y corrige el sesgo de la próxima semana.
@@ -18,6 +18,7 @@ import {
   VIANDA_CATEGORY, DOW_LABELS,
   mondayOf, weekDays, addDays, dayDiff, todayDayStr, dowOf, isHoliday, fmtDayEs,
   buildForecastContext, forecastPlan, accuracyReport, menuReliability,
+  HISTORY_START, DEFAULT_SERVICE_LEVEL,
 } from "../utils/viandaForecast.js";
 import { buildLearningDoc } from "../utils/viandaLearningDoc.js";
 import {
@@ -26,7 +27,7 @@ import {
 
 const CONFIDENCE_BADGE = { alta: "badge-green", media: "badge-amber", baja: "badge-red" };
 const CONFIDENCE_DOT = { alta: "🟢", media: "🟡", baja: "🔴" };
-const DEFAULT_MARGIN = 18;
+const SERVICE_LEVELS = [75, 80, 85, 90, 95];
 
 /** Descarga un texto como archivo. */
 const downloadText = (filename, text, mime = "text/markdown;charset=utf-8") => {
@@ -49,7 +50,7 @@ const fmtDayLabel = (date) => {
 export default function ViandaProjectionPage({ products, sales, user, showToast, logAction }) {
   const [weekStart, setWeekStart] = useState(() => mondayOf(addDays(todayDayStr(), 7)));
   const [plan, setPlan] = useState({});          // { "YYYY-MM-DD": [productId, …] }
-  const [margin, setMargin] = useState(DEFAULT_MARGIN);
+  const [serviceLevel, setServiceLevel] = useState(DEFAULT_SERVICE_LEVEL);
   const [savedPlans, setSavedPlans] = useState([]);
   const [savedItems, setSavedItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -96,7 +97,7 @@ export default function ViandaProjectionPage({ products, sales, user, showToast,
       if (grid[it.date]) grid[it.date] = [...grid[it.date], it.productId];
     }
     setPlan(grid);
-    setMargin(savedPlans.find(p => p.weekStart === weekStart)?.safetyMarginPct ?? DEFAULT_MARGIN);
+    setServiceLevel(savedPlans.find(p => p.weekStart === weekStart)?.serviceLevelPct ?? DEFAULT_SERVICE_LEVEL);
   }, [weekStart, savedPlans, savedItems]);
 
   // ─── Proyección ──────────────────────────────────────────────────────────
@@ -114,8 +115,8 @@ export default function ViandaProjectionPage({ products, sales, user, showToast,
           productName: products.find(p => p.id === productId)?.name || "—",
         }))
     );
-    return forecastPlan(ctx, flat, { safetyMarginPct: Number(margin) || 0 });
-  }, [days, plan, products, ctx, margin]);
+    return forecastPlan(ctx, flat, { serviceLevelPct: Number(serviceLevel) });
+  }, [days, plan, products, ctx, serviceLevel]);
 
   const totals = useMemo(() => rows.reduce(
     (acc, r) => ({ forecast: acc.forecast + r.forecast, recommended: acc.recommended + r.recommended }),
@@ -175,7 +176,7 @@ export default function ViandaProjectionPage({ products, sales, user, showToast,
     try {
       const { plan: savedPlan, items } = await saveViandaPlan({
         weekStart,
-        safetyMarginPct: Number(margin) || 0,
+        serviceLevelPct: Number(serviceLevel),
         rows,
         userEmail: user?.email || "",
         existingPlan: currentPlan,
@@ -224,14 +225,15 @@ export default function ViandaProjectionPage({ products, sales, user, showToast,
   const openLearningDoc = () => {
     setLearningDoc(buildLearningDoc({
       plans: savedPlans, items: savedItems, ctx,
-      marginPct: Number(margin) || 0, generatedAt: today,
+      serviceLevelPct: Number(serviceLevel), generatedAt: today,
     }));
     logAction?.("ver", "proyección de viandas", "Documento de aprendizaje");
   };
 
   const exportPlan = () => exportXlsx(
-    ["Fecha", "Día", "Menú", "Proyección de ventas", "Cantidad a producir", "Confianza"],
-    rows.map(r => [r.date, DOW_LABELS[dowOf(r.date)], r.productName, r.forecast, r.recommended, r.confidence]),
+    ["Fecha", "Día", "Menú", "Proyección de ventas", "Cantidad a producir", "Confianza", "Freezable"],
+    rows.map(r => [r.date, DOW_LABELS[dowOf(r.date)], r.productName, r.forecast, r.recommended, r.confidence,
+      products.find(p => p.id === r.productId)?.freezable ? "Sí" : "No"]),
     `proyeccion-viandas-${weekStart}`
   );
 
@@ -285,15 +287,19 @@ export default function ViandaProjectionPage({ products, sales, user, showToast,
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <label className="lbl" style={{ whiteSpace: "nowrap" }}>Margen de seguridad</label>
-          <input type="number" min="0" max="100" step="1" value={margin}
-            onChange={e => setMargin(e.target.value)} style={{ width: 78 }} />
-          <span style={{ fontSize: ".85em", color: "var(--t3)" }}>%</span>
+          <label className="lbl" style={{ whiteSpace: "nowrap" }}>Nivel de servicio</label>
+          <select value={serviceLevel} onChange={e => setServiceLevel(Number(e.target.value))} style={{ width: 96 }}>
+            {SERVICE_LEVELS.map(v => <option key={v} value={v}>{v}%</option>)}
+          </select>
         </div>
 
-        <div style={{ flex: 1, minWidth: 200, fontSize: ".8em", color: "var(--t3)", display: "flex", gap: 7, alignItems: "center" }}>
+        <div style={{ flex: 1, minWidth: 220, fontSize: ".8em", color: "var(--t3)", display: "flex", gap: 7, alignItems: "flex-start" }}>
           <Ico n="alert" s={14} c="var(--amber)" />
-          El margen se amplía automáticamente en los menús de baja confianza.
+          <span>
+            Producir para que la comida alcance <strong>{serviceLevel} de cada 100 días</strong>.
+            El colchón se calcula sobre el total del día, no sobre cada plato: los menús se
+            sustituyen entre sí.
+          </span>
         </div>
 
         <button className="btn btn-blue btn-sm" onClick={syncActuals} disabled={syncing || !pendingSync}>
@@ -363,7 +369,7 @@ export default function ViandaProjectionPage({ products, sales, user, showToast,
                           const r = reliability.get(p.id);
                           return (
                             <option key={p.id} value={p.id}>
-                              {CONFIDENCE_DOT[r.confidence]} {p.name} — confianza {r.confidence}
+                              {CONFIDENCE_DOT[r.confidence]} {p.name}{p.freezable ? " ❄️" : ""} — confianza {r.confidence}
                               {r.samples > 0 ? ` · ${r.samples} día(s) · ~${r.avgUnits} u.` : " · sin historial"}
                             </option>
                           );
@@ -381,6 +387,14 @@ export default function ViandaProjectionPage({ products, sales, user, showToast,
                         {rel.samples > 0
                           ? <span>{rel.samples} día(s) de historial · ~{rel.avgUnits} u./día</span>
                           : <span>menú nuevo: hereda el promedio</span>}
+                        {viandas.find(p => p.id === productId)?.freezable && (
+                          <span className="badge badge-blue" style={{ fontSize: ".92em", padding: "1px 7px" }}
+                            title="Apto para freezer">❄️ apto freezer</span>
+                        )}
+                        {viandas.find(p => p.id === productId)?.freezable && (
+                          <span className="badge badge-blue" style={{ fontSize: ".92em", padding: "1px 7px" }}
+                            title="Lo que sobre se congela: producir de más no es desperdicio">❄️ freezable</span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -437,11 +451,18 @@ export default function ViandaProjectionPage({ products, sales, user, showToast,
                       {fmtDayLabel(r.date)}
                       {r.factors.holiday && <span className="badge badge-red" style={{ marginLeft: 6 }}>Feriado</span>}
                     </td>
-                    <td data-label="Menú" style={{ fontWeight: 600 }}>{r.productName}</td>
+                    <td data-label="Menú" style={{ fontWeight: 600 }}>
+                      {r.productName}
+                      {products.find(p => p.id === r.productId)?.freezable && (
+                        <span title="Se puede freezar: lo que sobra no se pierde" style={{ marginLeft: 5 }}>❄️</span>
+                      )}
+                    </td>
                     <td data-label="Proyección" style={{ textAlign: "right", fontWeight: 600 }}>{r.forecast} u.</td>
                     <td data-label="A producir" style={{ textAlign: "right", fontWeight: 700, color: "var(--green)" }}>
                       {r.recommended} u.
-                      <div style={{ fontSize: ".72em", color: "var(--t4)", fontWeight: 400 }}>+{r.effectiveMarginPct}%</div>
+                      {r.coverage.extra > 0 && (
+                        <div style={{ fontSize: ".72em", color: "var(--t4)", fontWeight: 400 }}>+{r.coverage.extra} de colchón</div>
+                      )}
                     </td>
                     <td data-label="Confianza">
                       <span className={`badge ${CONFIDENCE_BADGE[r.confidence]}`}>{r.confidence}</span>
@@ -483,6 +504,15 @@ export default function ViandaProjectionPage({ products, sales, user, showToast,
                           <span><strong>Tendencia</strong> ×{r.factors.trend}</span>
                           <span><strong>Aprendizaje</strong> ×{r.factors.bias}</span>
                           <span style={{ color: "var(--t4)" }}>· {r.samples} día(s) de historial de este menú</span>
+                          <span style={{ width: "100%", color: "var(--t3)", marginTop: 4 }}>
+                            <strong>Producción:</strong> el cupo del día es {r.coverage.dayQuota} u.
+                            (×{r.coverage.dayMultiplier} sobre lo proyectado, para cubrir el {r.serviceLevelPct}% de los días)
+                            y a este menú le tocan {r.recommended}.
+                            {r.coverage.soloEstePlato > r.recommended && (
+                              <> Cubrir <em>solo este plato</em> al {r.serviceLevelPct}% pediría {r.coverage.soloEstePlato} u.,
+                              pero si falta, el cliente elige otro menú del día.</>
+                            )}
+                          </span>
                         </div>
                       </td>
                     </tr>

@@ -139,7 +139,7 @@ export function dataReadiness(ctx, items) {
 }
 
 /** Traduce los números en cosas para hacer. Es la parte que se lee primero. */
-export function buildInsights({ global, weekly, menus, dows, readiness, pendingSync, marginPct }) {
+export function buildInsights({ global, weekly, menus, dows, readiness, pendingSync, serviceLevelPct }) {
   const out = [];
 
   if (global.n === 0) {
@@ -160,12 +160,12 @@ export function buildInsights({ global, weekly, menus, dows, readiness, pendingS
   if (global.bias > 1.08) {
     out.push({
       tipo: "sesgo",
-      texto: `El modelo se queda corto: se vende un ${Math.round((global.bias - 1) * 100)}% más de lo proyectado. Ya lo corrige solo, pero mientras tanto conviene sostener el margen de seguridad en ${Math.max(marginPct, Math.round((global.bias - 1) * 100) + 10)}% o más.`,
+      texto: `El modelo se queda corto: se vende un ${Math.round((global.bias - 1) * 100)}% más de lo proyectado. Ya lo corrige solo, pero mientras tanto conviene subir el nivel de servicio por encima de ${serviceLevelPct}%.`,
     });
   } else if (global.bias < 0.92) {
     out.push({
       tipo: "sesgo",
-      texto: `El modelo se pasa: se vende un ${Math.round((1 - global.bias) * 100)}% menos de lo proyectado. Ya lo corrige solo; si venís tirando comida, bajá el margen de seguridad.`,
+      texto: `El modelo se pasa: se vende un ${Math.round((1 - global.bias) * 100)}% menos de lo proyectado. Ya lo corrige solo; si venís tirando comida, bajá el nivel de servicio.`,
     });
   } else {
     out.push({ tipo: "ok", texto: "El modelo no muestra sesgo sistemático: en promedio proyecta lo que efectivamente se vende." });
@@ -175,7 +175,7 @@ export function buildInsights({ global, weekly, menus, dows, readiness, pendingS
     const pct = Math.round((global.shortages / global.n) * 100);
     out.push({
       tipo: pct > 15 ? "riesgo" : "info",
-      texto: `En ${global.shortages} de ${global.n} casos (${pct}%) se vendió más de lo que se recomendó producir.${pct > 15 ? " Es alto: subí el margen de seguridad." : " Está dentro de lo esperable para un margen de seguridad."}`,
+      texto: `En ${global.shortages} de ${global.n} casos (${pct}%) se vendió más de lo que se recomendó producir de ese menú. Con nivel de servicio ${serviceLevelPct}% eso es esperable y no significa venta perdida: quien no encuentra su plato elige otro. Lo que importa es si faltó comida en el día.`,
     });
   }
 
@@ -232,10 +232,10 @@ export function buildInsights({ global, weekly, menus, dows, readiness, pendingS
 /**
  * Arma el documento completo.
  *
- * @param {object} args { plans, items, ctx, marginPct, generatedAt }
+ * @param {object} args { plans, items, ctx, serviceLevelPct, generatedAt }
  * @returns {object} secciones estructuradas + `markdown`
  */
-export function buildLearningDoc({ plans = [], items = [], ctx = null, marginPct = 18, generatedAt = todayDayStr() }) {
+export function buildLearningDoc({ plans = [], items = [], ctx = null, serviceLevelPct = 90, generatedAt = todayDayStr() }) {
   const closed = closedItems(items);
   const pendingSync = items.filter(it => it.actualQty == null && dayDiff(generatedAt, it.date) > 0).length;
 
@@ -250,7 +250,7 @@ export function buildLearningDoc({ plans = [], items = [], ctx = null, marginPct
   const dows = dowBreakdown(closed);
   const readiness = dataReadiness(ctx, items);
   const biasNow = ctx ? learnedBias(items, null, generatedAt) : { biasGlobal: 1, samples: 0 };
-  const insights = buildInsights({ global, weekly, menus, dows, readiness, pendingSync, marginPct });
+  const insights = buildInsights({ global, weekly, menus, dows, readiness, pendingSync, serviceLevelPct });
 
   const doc = {
     generatedAt,
@@ -263,7 +263,8 @@ export function buildLearningDoc({ plans = [], items = [], ctx = null, marginPct
     global,
     biasAplicado: biasNow.biasGlobal,
     pendingSync,
-    marginPct,
+    serviceLevelPct,
+    historyFrom: ctx?.historyFrom ?? null,
     weekly,
     menus,
     dows,
@@ -287,6 +288,15 @@ export function renderMarkdown(doc) {
   L.push("Este documento resume lo que el sistema aprendió comparando lo que proyectó");
   L.push("contra lo que realmente se vendió. Se regenera cuando quieras: cada semana");
   L.push("que se cierra lo hace más preciso.");
+  L.push("");
+  if (doc.historyFrom) {
+    L.push(`> El modelo solo mira ventas desde el **${doc.historyFrom}**: antes de esa fecha`);
+    L.push("> el sistema no se usaba de forma consistente y esos datos no representan");
+    L.push("> demanda real.");
+  }
+  L.push("");
+  L.push(`Nivel de servicio configurado: **${doc.serviceLevelPct}%** — se produce para que la`);
+  L.push("comida del día alcance esa proporción de los días.");
   L.push("");
 
   // 1. Qué mirar primero

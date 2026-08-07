@@ -8,8 +8,9 @@
  *  3. El nivel base se desestacionaliza antes de promediar, para no contar dos
  *     veces el efecto del día de la semana.
  *  4. Las ventas recientes pesan más que las viejas.
- *  5. La recomendación siempre supera la proyección (margen de seguridad).
+ *  5. El colchón de producción se decide sobre el día, no sobre cada plato.
  *  6. El sesgo aprendido corrige proyecciones sistemáticamente cortas.
+ *  7. Las ventas anteriores al 1/6/2026 se ignoran: el sistema no se usaba bien.
  */
 import { describe, it, expect } from "vitest";
 import {
@@ -21,6 +22,7 @@ import {
   learnedBias, buildForecastContext, forecastMenu, forecastPlan,
   confidenceOf, accuracyReport, actualUnitsFor,
   dailyBaseLevel, forecastDayTotal, menuLevel,
+  HISTORY_START, quantile, allocateIntegers, dayCoverageMultiplier, coverageMultiplier,
 } from "./viandaForecast.js";
 
 const PRODUCTS = [
@@ -249,19 +251,10 @@ describe("forecastMenu", () => {
     expect(forecastMenu(ctx, { productId: "m1", date: "2026-08-10" }).forecast).toBeGreaterThan(12);
   });
 
-  it("aplica el margen de seguridad: recomendado siempre por encima de lo proyectado", () => {
+  it("nunca recomienda producir menos de lo que proyecta vender", () => {
     const ctx = buildForecastContext(mondaySales(10, 20), PRODUCTS, [], "2026-08-07");
-    const r = forecastMenu(ctx, { productId: "m1", date: "2026-08-10", safetyMarginPct: 20 });
-    expect(r.recommended).toBeGreaterThan(r.forecast);
-    expect(r.recommended).toBe(24); // ceil(20 × 1.20)
-  });
-
-  it("amplía el margen cuando la confianza es baja", () => {
-    const ctx = buildForecastContext(mondaySales(10, 20), PRODUCTS, [], "2026-08-07");
-    const conocido = forecastMenu(ctx, { productId: "m1", date: "2026-08-10", safetyMarginPct: 20 });
-    const nuevo = forecastMenu(ctx, { productId: "nuevo", date: "2026-08-10", safetyMarginPct: 20 });
-    expect(conocido.effectiveMarginPct).toBe(20);
-    expect(nuevo.effectiveMarginPct).toBe(30); // 20 × 1.5 por confianza baja
+    const r = forecastMenu(ctx, { productId: "m1", date: "2026-08-10" });
+    expect(r.recommended).toBeGreaterThanOrEqual(r.forecast);
   });
 
   it("castiga la proyección de un feriado", () => {
@@ -355,6 +348,112 @@ describe("nivel diario y reparto entre menús", () => {
     const nuevo = menuLevel(ctx, "jamas-vendido", fallback);
     expect(nuevo.coldStart).toBe(true);
     expect(nuevo.level).toBeCloseTo(fallback, 1);
+  });
+});
+
+// ─── CORTE DEL HISTORIAL ────────────────────────────────────────────────────
+
+describe("corte del historial", () => {
+  it("ignora las ventas anteriores al 1/6/2026", () => {
+    const { byDate } = extractViandaHistory([
+      sale("2026-05-31", [item("m1", 40)]),  // sistema todavía inconsistente
+      sale("2026-06-01", [item("m1", 10)]),  // primer día confiable
+    ], PRODUCTS);
+    expect(byDate.has("2026-05-31")).toBe(false);
+    expect(byDate.get("2026-06-01")).toBe(10);
+    expect(HISTORY_START).toBe("2026-06-01");
+  });
+
+  it("permite mover el corte para analizar otro período", () => {
+    const { byDate } = extractViandaHistory(
+      [sale("2026-04-10", [item("m1", 7)])], PRODUCTS, { from: "2026-01-01" });
+    expect(byDate.get("2026-04-10")).toBe(7);
+  });
+
+  it("no deja que los datos viejos ensucien la proyección", () => {
+    const viejas = Array.from({ length: 20 }, (_, i) => sale(addDays("2026-05-30", -i), [item("m1", 60)]));
+    const nuevas = Array.from({ length: 20 }, (_, i) => sale(addDays("2026-08-06", -i), [item("m1", 10)]));
+    const ctx = buildForecastContext([...viejas, ...nuevas], PRODUCTS, [], "2026-08-07");
+    const r = forecastMenu(ctx, { productId: "m1", date: "2026-08-10" });
+    expect(r.forecast).toBeLessThan(20); // ni rastro de los 60 de mayo
+  });
+
+  it("deja registrado en el contexto desde cuándo mira", () => {
+    expect(buildForecastContext([], PRODUCTS, [], "2026-08-07").historyFrom).toBe(HISTORY_START);
+  });
+});
+
+// ─── CUÁNTO PRODUCIR ────────────────────────────────────────────────────────
+
+describe("nivel de servicio", () => {
+  const estable = (dias, menus, qty) =>
+    Array.from({ length: dias }, (_, d) =>
+      sale(addDays("2026-08-06", -d), Array.from({ length: menus }, (_, m) => item(`p${m}`, qty))));
+
+  it("calcula percentiles interpolando", () => {
+    expect(quantile([1, 2, 3, 4, 5], 0.5)).toBe(3);
+    expect(quantile([1, 2, 3, 4, 5], 0.9)).toBeCloseTo(4.6);
+    expect(quantile([], 0.9)).toBe(null);
+    expect(quantile([7], 0.9)).toBe(7);
+  });
+
+  it("reparte enteros sin perder ni inventar unidades", () => {
+    expect(allocateIntegers([1, 1, 1], 10).reduce((s, v) => s + v, 0)).toBe(10);
+    expect(allocateIntegers([3, 1], 8)).toEqual([6, 2]);
+    expect(allocateIntegers([0, 0], 5)).toEqual([0, 0]);
+  });
+
+  it("pide más colchón cuanto más alto el nivel de servicio", () => {
+    const ctx = buildForecastContext(estable(40, 4, 8), PRODUCTS, [], "2026-08-07");
+    const m80 = dayCoverageMultiplier(ctx, 80);
+    const m95 = dayCoverageMultiplier(ctx, 95);
+    expect(m95).toBeGreaterThanOrEqual(m80);
+    expect(m80).toBeGreaterThanOrEqual(1);
+  });
+
+  it("recomienda más unidades al subir el nivel de servicio", () => {
+    // Demanda irregular: el colchón tiene que notarse.
+    const irregular = Array.from({ length: 40 }, (_, d) =>
+      sale(addDays("2026-08-06", -d), [item("p0", 3 + (d % 7) * 4), item("p1", 5)]));
+    const ctx = buildForecastContext(irregular, PRODUCTS, [], "2026-08-07");
+    const plan = [{ date: "2026-08-10", productId: "p0", productName: "A" },
+                  { date: "2026-08-10", productId: "p1", productName: "B" }];
+    const bajo = forecastPlan(ctx, plan, { serviceLevelPct: 75 }).reduce((s, r) => s + r.recommended, 0);
+    const alto = forecastPlan(ctx, plan, { serviceLevelPct: 95 }).reduce((s, r) => s + r.recommended, 0);
+    expect(alto).toBeGreaterThan(bajo);
+  });
+
+  it("nunca recomienda producir menos de lo proyectado", () => {
+    const ctx = buildForecastContext(estable(40, 5, 6), PRODUCTS, [], "2026-08-07");
+    const rows = forecastPlan(ctx, ["p0", "p1", "p2"].map(id => ({ date: "2026-08-10", productId: id, productName: id })));
+    for (const r of rows) expect(r.recommended).toBeGreaterThanOrEqual(r.forecast);
+  });
+
+  it("decide el colchón sobre el día entero, no sobre cada plato", () => {
+    // Un plato con demanda muy errática no debe inflar la producción por sí solo:
+    // si falta, el cliente elige otro menú del día.
+    const errático = Array.from({ length: 40 }, (_, d) =>
+      sale(addDays("2026-08-06", -d), [item("p0", d % 10 === 0 ? 40 : 2), item("p1", 8)]));
+    const ctx = buildForecastContext(errático, PRODUCTS, [], "2026-08-07");
+    const rows = forecastPlan(ctx, [
+      { date: "2026-08-10", productId: "p0", productName: "A" },
+      { date: "2026-08-10", productId: "p1", productName: "B" },
+    ], { serviceLevelPct: 90 });
+    const fila = rows.find(r => r.productId === "p0");
+    // Cubrir ese plato solo pediría bastante más de lo que se termina produciendo.
+    expect(fila.coverage.soloEstePlato).toBeGreaterThan(fila.recommended);
+  });
+
+  it("el total a producir del día es el cupo repartido", () => {
+    const ctx = buildForecastContext(estable(40, 4, 9), PRODUCTS, [], "2026-08-07");
+    const rows = forecastPlan(ctx, ["p0", "p1", "p2", "p3"].map(id => ({ date: "2026-08-10", productId: id, productName: id })));
+    const total = rows.reduce((s, r) => s + r.recommended, 0);
+    expect(total).toBeGreaterThanOrEqual(rows[0].coverage.dayQuota - rows.length);
+  });
+
+  it("un menú sin historial se apoya en la dispersión general", () => {
+    const ctx = buildForecastContext(estable(40, 4, 9), PRODUCTS, [], "2026-08-07");
+    expect(coverageMultiplier(ctx, "nunca-vendido", 90).source).toBe("general");
   });
 });
 

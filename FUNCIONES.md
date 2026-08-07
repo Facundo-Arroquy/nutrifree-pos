@@ -116,19 +116,48 @@ efecto.
 | `menuLevel(ctx, productId, fallback)` | Nivel propio del menú, encogido hacia `fallback` (el menú promedio del día). Ese encogimiento es también el arranque en frío. |
 | `learnedBias(planItems, productId)` | Corrección aprendida: cuánto se equivocó el modelo en las semanas cerradas. Global, y por menú encogido sobre el global. |
 | `buildForecastContext(sales, products, planItems, refDate)` | Precalcula historial y factores para toda la semana. |
-| `forecastPlan(ctx, plan, opts)` | **Entrada principal.** Los menús del mismo día se resuelven juntos porque se reparten el total. |
+| `forecastPlan(ctx, plan, opts)` | **Entrada principal.** Los menús del mismo día se resuelven juntos porque se reparten el total y el cupo de producción. |
+| `dayCoverageMultiplier(ctx, nivel)` | Cuánto producir de más sobre el total del día para cubrir el nivel de servicio. |
+| `coverageMultiplier(ctx, id, nivel)` | Lo mismo para un plato solo. Se muestra como referencia en el detalle, no decide la producción. |
+| `allocateIntegers(pesos, total)` | Reparte el cupo del día en enteros por el método del mayor resto. |
+| `menuReliability(ctx, productId)` | Confianza, días de historial y unidades promedio de un menú, sin depender del día. |
+| `quantile(ordenados, p)` | Percentil con interpolación lineal. |
 | `forecastMenu(ctx, opts)` | Atajo para un menú suelto; si ese día hay otros, pasarlos en `dayPlan`. |
 | `accuracyReport(planItems)` | MAPE, sesgo, aciertos dentro de ±15% y veces que faltó producción. |
 | `actualUnitsFor(ctx, productId, date)` | Lo realmente vendido, para cerrar el ciclo sin carga manual. |
 
-### Margen de seguridad
+### Cuánto producir: nivel de servicio
 
-`recomendado = ceil(proyección × (1 + margen))`. El margen es configurable
-(18% por defecto) y se **amplía solo** en los menús inciertos: ×1.2 con confianza
-media y ×1.5 con confianza baja. Un menú sobre el que se sabe poco merece más
-colchón, no menos.
+La proyección es el valor **central**: producir exactamente eso deja sin stock
+cerca de la mitad de los días. El colchón no es un porcentaje fijo — sale de la
+dispersión real del historial y de un **nivel de servicio** elegido (90% por
+defecto): *"que la comida alcance 9 de cada 10 días"*.
 
-### Precisión medida (backtest sobre el historial real, últimos 42 días)
+**El colchón se calcula sobre el total del día y después se reparte**, no sobre
+cada plato por separado. Medido sobre el historial real:
+
+| Política | Producir (demanda = 888 u.) | Sobrante | Días sin comida |
+|---|---:|---:|---:|
+| Cubrir cada plato al 90% | 2126 u. | 157% | — |
+| **Cubrir el día al 90%** | **1293 u.** | **46%** | **1 de 19** |
+
+Cubrir cada plato por separado obliga a producir 2,4 veces lo que se vende:
+inviable para comida fresca. La diferencia es que los menús **se sustituyen entre
+sí** — quien no encuentra su plato elige otro —, así que lo que no puede faltar
+es la comida del día, no un plato en particular.
+
+El reparto del cupo usa el método del mayor resto (`allocateIntegers`), para no
+perder ni inventar unidades al redondear.
+
+### Corte del historial
+
+`HISTORY_START = "2026-06-01"`. Antes de esa fecha el sistema no se usaba de
+forma consistente y esas ventas no representan demanda real: se ignoran a
+propósito. Es preferible un modelo con menos datos que uno con datos que mienten.
+`buildForecastContext(..., { from })` permite mover el corte para analizar otro
+período.
+
+### Precisión medida (backtest sobre el historial real)
 
 | Métrica | Valor |
 |---|---|
@@ -139,6 +168,22 @@ El número confiable es el **total del día**; la asignación plato por plato ti
 un techo bajo porque el catálogo rota constantemente (la mitad de los menús tiene
 menos de 3 días de historial) y cada plato vende ~5 unidades. Por eso la pantalla
 muestra el total proyectado por día además del detalle por menú.
+
+### Qué significa la confianza
+
+Mide **cuánto se puede creer el número**, no el volumen ni la probabilidad de
+vender al menos esa cantidad. Sale de dos cosas: cuántos días se ofreció el menú
+(`samples`) y qué tan parejo vendió (`cv`).
+
+| Etiqueta | Criterio |
+|---|---|
+| alta | 8+ días de historial y `cv` ≤ 0.45 |
+| media | 4+ días y `cv` ≤ 0.75, o 8+ días con más dispersión |
+| baja | menos de 2 días (arranque en frío) o poco historial y disperso |
+
+Un plato que vende 2 unidades todos los días tiene confianza **alta**: se sabe
+bien que va a vender 2. `menuReliability` la expone para mostrarla en el desplegable
+al elegir un menú.
 
 Tests en `src/utils/viandaForecast.test.js` (`npm test`).
 

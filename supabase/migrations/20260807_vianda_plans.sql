@@ -53,3 +53,13 @@ create policy auth_full_access on public.vianda_plans
 drop policy if exists auth_full_access on public.vianda_plan_items;
 create policy auth_full_access on public.vianda_plan_items
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+-- El colchón de producción dejó de ser un porcentaje fijo: ahora se elige un
+-- nivel de servicio (qué proporción de días la producción tiene que alcanzar) y
+-- la cantidad sale de la dispersión real del historial. `safety_margin_pct`
+-- queda por compatibilidad con las planificaciones ya guardadas.
+alter table public.vianda_plans
+  add column if not exists service_level_pct numeric not null default 90;
+
+comment on column public.vianda_plans.service_level_pct is
+  'Nivel de servicio objetivo: % de días en que la producción del día debe alcanzar para cubrir la demanda.';

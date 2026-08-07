@@ -122,7 +122,7 @@ describe("dataReadiness", () => {
 describe("buildInsights", () => {
   const base = {
     global: { n: 20, bias: 1, shortages: 0 }, weekly: [], menus: [], dows: [],
-    readiness: { factores: [{ factor: "X", estado: "listo" }] }, pendingSync: 0, marginPct: 18,
+    readiness: { factores: [{ factor: "X", estado: "listo" }] }, pendingSync: 0, serviceLevelPct: 90,
   };
 
   it("guía el arranque cuando no hay nada cerrado", () => {
@@ -136,11 +136,11 @@ describe("buildInsights", () => {
     expect(out.some(i => i.texto.includes("4 día(s)"))).toBe(true);
   });
 
-  it("recomienda subir el margen cuando el modelo se queda corto", () => {
+  it("recomienda subir el nivel de servicio cuando el modelo se queda corto", () => {
     const out = buildInsights({ ...base, global: { n: 20, bias: 1.3, shortages: 0 } });
     const sesgo = out.find(i => i.tipo === "sesgo");
     expect(sesgo.texto).toContain("30%");
-    expect(sesgo.texto).toContain("margen de seguridad");
+    expect(sesgo.texto).toContain("nivel de servicio");
   });
 
   it("avisa cuando el modelo se pasa", () => {
@@ -158,9 +158,11 @@ describe("buildInsights", () => {
     expect(out.some(i => i.tipo === "menú")).toBe(false);
   });
 
-  it("marca como riesgo que falte producción seguido", () => {
+  it("marca como riesgo que falte producción seguido, aclarando que hay sustitución", () => {
     const out = buildInsights({ ...base, global: { n: 20, bias: 1, shortages: 8 } });
-    expect(out.find(i => i.texto.includes("8 de 20")).tipo).toBe("riesgo");
+    const aviso = out.find(i => i.texto.includes("8 de 20"));
+    expect(aviso.tipo).toBe("riesgo");
+    expect(aviso.texto).toContain("elige otro");
   });
 
   it("reconoce cuando la proyección viene mejorando", () => {
