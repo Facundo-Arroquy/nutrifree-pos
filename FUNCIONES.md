@@ -75,6 +75,63 @@ Tests en `src/utils/stock.test.js` (`npm test`).
 > La pestaña **Precios** de `ImportPage` es la excepción: nunca escribe `stock`.
 > Ver `src/utils/priceImport.js`.
 
+## `src/utils/supplierAccount.js` — cuenta corriente de proveedores
+
+Única fuente de verdad de la deuda con proveedores, compartida por `ExpensesPage`,
+`SuppliersPage`, `CashShiftPage` y `ReportsPage`.
+
+**Modelo:** la tabla `supplier_payments` es un libro de movimientos. Un `charge`
+es deuda que generamos (un gasto), un `payment` es plata que le pagamos. Un
+movimiento con `expense_id` está imputado a ese gasto; sin `expense_id` es
+apertura, ajuste o pago a cuenta. Signo del saldo: **positivo = el proveedor nos
+debe** (saldo a favor), **negativo = le debemos**.
+
+**Invariante:** todo gasto con proveedor tiene su `charge` —uno solo, garantizado
+por el índice `uniq_sp_expense_charge`—, se haya cargado como pagado o pendiente
+(si nace pagado, se generan `charge` + `payment` juntos, neto 0). El estado de
+pago —`pending` / `partial` / `paid`— **se deriva** de los pagos imputados;
+`expenses.payment_status` es sólo un espejo desnormalizado para filtros y
+reportes, que se mantiene sincronizado.
+
+**Excepción:** los gastos anteriores a este modelo no tienen ningún movimiento.
+Para ellos `hasLedger()` da `false` y vale su `payment_status` guardado — leerlos
+como "sin pagos" los mostraría a todos como pendientes. Por el mismo motivo, un
+gasto sin cargo nunca se ofrece para pagar: generaría un `payment` sin `charge`
+que lo respalde y dejaría al proveedor con saldo a favor de la nada.
+
+**No hay tope de pagos por gasto:** un gasto admite tantos `payment` como haga
+falta hasta cubrir su cargo (el índice `uniq_supplier_payment_per_expense`, que
+permitía uno solo, se eliminó). Que no se pague de más lo garantiza
+`allocatePayment`, que nunca imputa más que el saldo restante.
+
+| Función | Qué hace |
+|---|---|
+| `supplierBalance(movs, supplierId)` | Saldo del proveedor: pagos − cargos. |
+| `supplierDebt(movs, supplierId)` | Lo que le debemos (0 si está al día o a favor). |
+| `availableCredit(movs, supplierId)` | Saldo a favor no imputado a ningún gasto. |
+| `expensePaid(movs, expenseId)` | Total ya imputado a ese gasto (suma de parciales). |
+| `expenseRemaining(expense, movs)` | Lo que falta pagar del gasto. |
+| `expenseStatus(expense, movs)` | Estado derivado: `pending` / `partial` / `paid`. |
+| `unpaidSupplierExpenses(expenses, movs, supplierId)` | Gastos con saldo, del más viejo al más nuevo (FIFO). |
+| `allocatePayment({...})` | Reparte un pago: aplica el saldo a favor y el monto ingresado FIFO sobre los gastos tildados; lo que sobra queda a favor. |
+| `buildPaymentMovements({...})` | Traduce esa imputación a las filas de `supplier_payments`. |
+| `planExpenseLedger({expense, movs})` | Reconcilia los movimientos de un gasto con su estado: crea/ajusta el cargo, completa el pago, arrastra el proveedor. Devuelve `{insert, update, remove, paymentStatus}`. |
+| `expenseStatusUpdates(expenses, movs, ids, method)` | Qué gastos quedaron con el espejo `payment_status` desactualizado. |
+
+**Pago desde Proveedores:** el botón "Pagar" abre `components/SupplierPayModal.jsx`,
+que lista los gastos pendientes con checkbox y acepta un monto libre. Con dos
+gastos de $50.000 y un pago de $70.000, el más viejo queda saldado y el segundo
+parcialmente pagado, mostrando el importe original tachado junto al saldo que
+queda. El saldo a favor se aplica solo, siempre a los gastos más viejos, con el
+par `payment` imputado + `charge` de consumo (mismo patrón que en clientes).
+
+**Caja:** los egresos del turno se cuentan por una sola vía para no descontar dos
+veces — los gastos **sin** proveedor por el gasto, los gastos **con** proveedor
+por su movimiento en la cuenta corriente, que es cuando la plata sale de verdad.
+Los movimientos con método `balance` son saldo a favor y no mueven efectivo.
+
+Tests en `src/utils/supplierAccount.test.js` (`npm test`).
+
 ## `src/utils/priceImport.js` — actualización masiva de precios
 
 Motor de la pestaña **Precios** de `ImportPage` (UI en `src/components/PriceUpdatePanel.jsx`).

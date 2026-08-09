@@ -6,15 +6,22 @@
  *    Al guardar actualiza `ingredients.unit_cost` y `recipe_ingredients.cost` en DB.
  *  - Otras categorías: formulario simple con concepto, proveedor, cantidad y precio.
  *
- * Los gastos con paymentStatus="pending" se pueden cerrar después eligiendo método
- * de pago (genera movimiento en supplier_payments si tiene proveedor asociado).
+ * Todo gasto con proveedor genera su cargo en la cuenta corriente del proveedor
+ * (supplier_payments). El estado de pago —pendiente / parcial / pagado— se DERIVA
+ * de los pagos imputados a ese gasto, así que un mismo gasto puede estar pagado a
+ * medias. La deuda se puede saldar desde acá ("Cerrar") o desde Proveedores,
+ * eligiendo varios gastos a la vez. Ver utils/supplierAccount.js.
  *
  * Props: expenses, setExpenses, expenseCategories, ingredients, setIngredients,
- *        recipes, setRecipes, suppliers, setSupplierPayments, showToast, logAction
+ *        recipes, setRecipes, suppliers, supplierPayments, setSupplierPayments,
+ *        showToast, logAction
  */
 import { useState } from "react";
 import { Ico, Modal, $, fmtDate, uid, todayStr, PAY_LABELS, useSortable, SortableTh } from "../shared.jsx";
 import { supabase, expenseToDb, supplierPaymentToDb } from "../supabase.js";
+import {
+  planExpenseLedger, expenseStatus, expenseRemaining, expensePaidAmount, expensePaid, expenseChargeAmount,
+} from "../utils/supplierAccount.js";
 
 const EXPENSE_UNITS = ["unidades", "kg", "g", "litros", "porciones"];
 
@@ -104,9 +111,10 @@ function IngredientLinesTable({ lines, ingredients, withVat, vatRate, lineSubcat
   );
 }
 
-function CloseExpenseModal({ expense, onClose, onConfirm }) {
+function CloseExpenseModal({ expense, remaining, onClose, onConfirm }) {
   const [payMethod, setPayMethod] = useState(expense.paymentMethod||"cash");
   const [submitting, setSubmitting] = useState(false);
+  const parcial = remaining < expense.total;
   const handleConfirm = async () => {
     if (submitting) return;
     setSubmitting(true);
@@ -117,7 +125,12 @@ function CloseExpenseModal({ expense, onClose, onConfirm }) {
       <div style={{ background:"var(--s2)", borderRadius:8, padding:"12px 14px", marginBottom:16 }}>
         <div style={{ fontWeight:700 }}>{expense.concept}</div>
         <div style={{ fontSize:".83em", color:"var(--t3)", marginTop:2 }}>{expense.supplier||"Sin proveedor"} · {fmtDate(expense.date)}</div>
-        <div style={{ fontWeight:800, color:"var(--red)", fontSize:"1.15em", marginTop:6 }}>{$(expense.total)}</div>
+        <div style={{ fontWeight:800, color:"var(--red)", fontSize:"1.15em", marginTop:6 }}>
+          {parcial
+            ? <><span style={{ textDecoration:"line-through", color:"var(--t4)", fontWeight:500 }}>{$(expense.total)}</span> {$(remaining)}</>
+            : $(expense.total)}
+        </div>
+        {parcial && <div style={{ fontSize:".8em", color:"var(--t3)", marginTop:2 }}>Ya se pagaron {$(expense.total - remaining)}. Se registra el resto.</div>}
       </div>
       <div className="section-title">Seleccioná el método de pago</div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:20 }}>
@@ -192,6 +205,12 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
 
   const { sortBy, sortDir, toggleSort } = useSortable("date", "desc");
 
+  // Estado real del gasto: si tiene cuenta corriente se deriva de los pagos
+  // imputados; si no (sin proveedor o histórico sin cargo), vale `paymentStatus`.
+  const statusOf    = e => expenseStatus(e, supplierPayments);
+  const paidOf      = e => expensePaidAmount(e, supplierPayments);
+  const remainingOf = e => expenseRemaining(e, supplierPayments);
+
   const dateFiltered = expenses.filter(inRange);
   const cats = ["Todos", ...expenseCategories];
 
@@ -201,7 +220,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
     : expenseSubcategories.filter(s => s.categoryName === filterCat);
 
   const filtered = dateFiltered
-    .filter(e => filterStatus==="all" || e.paymentStatus===filterStatus)
+    .filter(e => filterStatus==="all" || (filterStatus==="unpaid" ? statusOf(e)!=="paid" : statusOf(e)===filterStatus))
     .filter(e => filterCat==="Todos" || e.category===filterCat)
     .filter(e => {
       if (filterSubcat === "Todos") return true;
@@ -219,14 +238,16 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       else if (sortBy === "total")         { av = a.total ?? 0; bv = b.total ?? 0; }
       else if (sortBy === "category")      { av = a.category ?? ""; bv = b.category ?? ""; }
       else if (sortBy === "paymentMethod") { av = a.paymentMethod ?? ""; bv = b.paymentMethod ?? ""; }
-      else if (sortBy === "paymentStatus") { av = a.paymentStatus ?? ""; bv = b.paymentStatus ?? ""; }
+      else if (sortBy === "paymentStatus") { av = statusOf(a); bv = statusOf(b); }
       else                                 { av = a.date ?? ""; bv = b.date ?? ""; }
       let v = typeof av === "string" ? av.localeCompare(bv, undefined, { sensitivity:"base" }) : (av - bv);
       return sortDir === "asc" ? v : -v;
     });
 
-  const totalPaid    = dateFiltered.filter(e=>e.paymentStatus==="paid").reduce((a,b)=>a+b.total,0);
-  const totalPending = dateFiltered.filter(e=>e.paymentStatus==="pending").reduce((a,b)=>a+b.total,0);
+  // Se suma lo efectivamente pagado y lo que falta, no el total de gastos según
+  // su estado: con pagos parciales un mismo gasto aporta a las dos columnas.
+  const totalPaid    = dateFiltered.reduce((a,e)=>a+paidOf(e),0);
+  const totalPending = dateFiltered.reduce((a,e)=>a+remainingOf(e),0);
 
   const openNew  = () => { setForm(emptyForm); setModal("new"); };
   const openEdit = e  => {
@@ -237,25 +258,58 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
     setModal(e);
   };
 
-  // Sincroniza el cargo en supplier_payments cuando un gasto pendiente es editado.
-  // Crea, actualiza o elimina el cargo según el estado actual del gasto.
-  const syncExpenseCharge = async (expenseId, supplierId, total, date, concept) => {
-    const existing = supplierPayments.find(p => p.expenseId === expenseId && p.type === "charge");
-    if (!supplierId) {
-      if (existing) {
-        await supabase.from("supplier_payments").delete().eq("id", existing.id);
-        setSupplierPayments(prev => prev.filter(p => p.id !== existing.id));
-      }
-    } else if (existing) {
-      if (existing.supplierId !== supplierId || existing.amount !== total) {
-        await supabase.from("supplier_payments").update({ supplier_id: supplierId, amount: total }).eq("id", existing.id);
-        setSupplierPayments(prev => prev.map(p => p.id === existing.id ? { ...p, supplierId, amount: total } : p));
-      }
-    } else {
-      const charge = { id:crypto.randomUUID(), supplierId, expenseId, amount:total, type:"charge", paymentMethod:null, date, notes:concept };
-      await supabase.from("supplier_payments").insert(supplierPaymentToDb(charge));
-      setSupplierPayments(prev => [...prev, charge]);
+  // Mapeo de los cambios del plan (camelCase) a columnas de la DB.
+  const MOVEMENT_COLUMNS = { supplierId:"supplier_id", amount:"amount", date:"date", notes:"notes", paymentMethod:"payment_method" };
+
+  /**
+   * Deja la cuenta corriente del proveedor consistente con el gasto: crea o
+   * ajusta el cargo, completa el pago si se marcó como pagado y arrastra los
+   * movimientos si cambió de proveedor. Devuelve el estado de pago derivado.
+   */
+  const syncExpenseLedger = async (expense) => {
+    const plan = planExpenseLedger({ expense, movements: supplierPayments });
+    let movements = supplierPayments;
+
+    if (plan.remove.length > 0) {
+      const { error } = await supabase.from("supplier_payments").delete().in("id", plan.remove);
+      if (error) showToast("Error al limpiar la cuenta del proveedor: " + error.message, "error");
+      else movements = movements.filter(m => !plan.remove.includes(m.id));
     }
+    for (const { id, changes } of plan.update) {
+      const patch = Object.fromEntries(Object.entries(changes).map(([k, v]) => [MOVEMENT_COLUMNS[k], v]));
+      const { error } = await supabase.from("supplier_payments").update(patch).eq("id", id);
+      if (error) showToast("Error al actualizar la cuenta del proveedor: " + error.message, "error");
+      else movements = movements.map(m => m.id === id ? { ...m, ...changes } : m);
+    }
+    if (plan.insert.length > 0) {
+      const { error } = await supabase.from("supplier_payments").insert(plan.insert.map(supplierPaymentToDb));
+      if (error) showToast("Error al registrar en la cuenta del proveedor: " + error.message, "error");
+      else movements = [...movements, ...plan.insert];
+    }
+    if (movements !== supplierPayments) setSupplierPayments(movements);
+    return plan.paymentStatus;
+  };
+
+  /**
+   * Guarda el gasto y sincroniza la cuenta del proveedor en un solo paso.
+   * Si el estado derivado no coincide con el del formulario (p. ej. el gasto ya
+   * tenía pagos parciales), manda el derivado y se corrige la fila del gasto.
+   */
+  const persistExpense = async (data, isNew) => {
+    const expense = isNew ? { ...data, id: uid() } : { ...data, id: modal.id };
+    const table = supabase.from("expenses");
+    const { error } = isNew ? await table.insert(expenseToDb(expense)) : await table.update(expenseToDb(expense)).eq("id", expense.id);
+    if (error) { showToast(`Error al ${isNew ? "guardar" : "actualizar"}: ` + error.message, "error"); return null; }
+
+    const derived = await syncExpenseLedger(expense);
+    if (derived !== expense.paymentStatus) {
+      await supabase.from("expenses").update({ payment_status: derived }).eq("id", expense.id);
+      expense.paymentStatus = derived;
+    }
+    setExpenses(p => isNew
+      ? (p.some(x => x.id === expense.id) ? p : [expense, ...p])
+      : p.map(e => e.id === expense.id ? { ...e, ...expense } : e));
+    return expense;
   };
 
   const save = async () => {
@@ -295,32 +349,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       const concept = validLines.map(l => ingredients.find(i=>i.id===l.ingredientId)?.name||"").filter(Boolean).join(", ");
       const total   = validLines.reduce((a,b)=>a+b.subtotal, 0);
       const data = { ...form, concept, quantity: validLines.reduce((a,b)=>a+Number(b.qty||0),0), unitPrice:0, total, paymentMethod:form.paymentMethod||null };
-      if (modal==="new") {
-        const newExp = {...data, id:uid()};
-        const { error } = await supabase.from("expenses").insert(expenseToDb(newExp));
-        if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
-        setExpenses(p => p.some(x => x.id === newExp.id) ? p : [newExp, ...p]);
-        if (newExp.supplierId && newExp.paymentStatus==="pending") {
-          const charge = { id:crypto.randomUUID(), supplierId:newExp.supplierId, expenseId:newExp.id, amount:newExp.total, type:"charge", paymentMethod:null, date:newExp.date, notes:newExp.concept };
-          await supabase.from("supplier_payments").insert(supplierPaymentToDb(charge));
-          setSupplierPayments(prev => [...prev, charge]);
-        }
-      } else {
-        const prevStatus = modal.paymentStatus;
-        const { error } = await supabase.from("expenses").update(expenseToDb(data)).eq("id", modal.id);
-        if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
-        setExpenses(p => p.map(e => e.id===modal.id ? {...e,...data} : e));
-        if (prevStatus === "pending" && data.paymentStatus === "paid" && data.supplierId) {
-          const alreadyPaid = supplierPayments.some(p => p.expenseId === modal.id && p.type === "payment");
-          if (!alreadyPaid) {
-            const payment = { id:crypto.randomUUID(), supplierId:data.supplierId, expenseId:modal.id, amount:data.total, type:"payment", paymentMethod:data.paymentMethod||"cash", date:todayStr(), notes:"Pago de gasto" };
-            await supabase.from("supplier_payments").insert(supplierPaymentToDb(payment));
-            setSupplierPayments(prev => [...prev, payment]);
-          }
-        } else if (data.paymentStatus === "pending") {
-          await syncExpenseCharge(modal.id, data.supplierId, data.total, data.date, concept);
-        }
-      }
+      if (!await persistExpense(data, modal === "new")) return;
       // Actualizar stock (relativo+atómico) y unit_cost de cada ingrediente
       const isNew = modal === "new";
       const prevLines = isNew ? [] : (modal.ingredientLines || []);
@@ -391,32 +420,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       total: Number(form.total)||0,
       paymentMethod: form.paymentMethod||null,
     };
-    if (modal==="new") {
-      const newExp = {...data, id:uid()};
-      const { error } = await supabase.from("expenses").insert(expenseToDb(newExp));
-      if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
-      setExpenses(p => p.some(x => x.id === newExp.id) ? p : [newExp, ...p]);
-      if (newExp.supplierId && newExp.paymentStatus==="pending") {
-        const charge = { id:crypto.randomUUID(), supplierId:newExp.supplierId, expenseId:newExp.id, amount:newExp.total, type:"charge", paymentMethod:null, date:newExp.date, notes:newExp.concept };
-        await supabase.from("supplier_payments").insert(supplierPaymentToDb(charge));
-        setSupplierPayments(prev => [...prev, charge]);
-      }
-    } else {
-      const prevStatus = modal.paymentStatus;
-      const { error } = await supabase.from("expenses").update(expenseToDb(data)).eq("id", modal.id);
-      if (error) { showToast("Error al actualizar: " + error.message, "error"); return; }
-      setExpenses(p => p.map(e => e.id===modal.id ? {...e,...data} : e));
-      if (prevStatus === "pending" && data.paymentStatus === "paid" && data.supplierId) {
-        const alreadyPaid = supplierPayments.some(p => p.expenseId === modal.id && p.type === "payment");
-        if (!alreadyPaid) {
-          const payment = { id:crypto.randomUUID(), supplierId:data.supplierId, expenseId:modal.id, amount:data.total, type:"payment", paymentMethod:data.paymentMethod||"cash", date:todayStr(), notes:"Pago de gasto" };
-          await supabase.from("supplier_payments").insert(supplierPaymentToDb(payment));
-          setSupplierPayments(prev => [...prev, payment]);
-        }
-      } else if (data.paymentStatus === "pending") {
-        await syncExpenseCharge(modal.id, data.supplierId, data.total, data.date, data.concept);
-      }
-    }
+    if (!await persistExpense(data, modal === "new")) return;
     logAction?.(modal==="new" ? "crear" : "editar", "gasto", `"${data.concept}" — $${data.total} (${data.category})`);
     showToast("Gasto guardado");
     setModal(null);
@@ -439,20 +443,25 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
     }
   };
 
+  /**
+   * Cierra un gasto pagando lo que falte. Si tiene proveedor, el pago entra a su
+   * cuenta corriente imputado a este gasto (respetando pagos parciales previos).
+   */
   const closeExpense = async (expense, paymentMethod) => {
-    if (expense.paymentStatus === "paid") { showToast("Este gasto ya fue pagado", "error"); setPayModal(null); return; }
+    if (statusOf(expense) === "paid") { showToast("Este gasto ya fue pagado", "error"); setPayModal(null); return; }
+    const falta = expenseRemaining(expense, supplierPayments);
+
     const { error } = await supabase.from("expenses").update({ payment_method: paymentMethod, payment_status:"paid" }).eq("id", expense.id);
     if (error) { showToast("Error al cerrar gasto: " + error.message, "error"); return; }
     setExpenses(p => p.map(e => e.id===expense.id ? {...e, paymentMethod, paymentStatus:"paid"} : e));
+
     if (expense.supplierId) {
-      const alreadyPaid = supplierPayments.some(p => p.expenseId === expense.id && p.type === "payment");
-      if (!alreadyPaid) {
-        const payment = { id:crypto.randomUUID(), supplierId:expense.supplierId, expenseId:expense.id, amount:expense.total, type:"payment", paymentMethod, date:todayStr(), notes:"Pago de gasto" };
-        await supabase.from("supplier_payments").insert(supplierPaymentToDb(payment));
-        setSupplierPayments(prev => [...prev, payment]);
-      }
+      const payment = { id:crypto.randomUUID(), supplierId:expense.supplierId, expenseId:expense.id, amount:falta, type:"payment", paymentMethod, date:todayStr(), notes:"Pago del gasto" };
+      const { error: pe } = await supabase.from("supplier_payments").insert(supplierPaymentToDb(payment));
+      if (pe) showToast("Error al registrar el pago al proveedor: " + pe.message, "error");
+      else setSupplierPayments(prev => [...prev, payment]);
     }
-    logAction?.("pagar", "gasto", `"${expense.concept}" — $${expense.total} — ${PAY_LABELS[paymentMethod]||paymentMethod}`);
+    logAction?.("pagar", "gasto", `"${expense.concept}" — $${falta} — ${PAY_LABELS[paymentMethod]||paymentMethod}`);
     setPayModal(null);
     showToast("Gasto cerrado ✓");
   };
@@ -477,7 +486,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       </div>
 
       <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
-        {[["all","Todos"],["pending","Pendientes"],["paid","Pagados"]].map(([v,l]) => (
+        {[["all","Todos"],["unpaid","Con saldo"],["pending","Pendientes"],["partial","Parciales"],["paid","Pagados"]].map(([v,l]) => (
           <button key={v} className={`btn btn-sm ${filterStatus===v?"btn-primary":"btn-secondary"}`} onClick={()=>setFilterStatus(v)}>{l}</button>
         ))}
       </div>
@@ -522,14 +531,23 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
             <th></th>
           </tr></thead>
           <tbody>
-            {filtered.map(e => (
+            {filtered.map(e => {
+              const status = statusOf(e);
+              const falta  = remainingOf(e);
+              return (
               <tr key={e.id} className="tr-click" onClick={()=>openEdit(e)}>
                 <td data-label="Fecha" style={{ fontSize:".82em", color:"var(--t3)", whiteSpace:"nowrap" }}>{fmtDate(e.date)}</td>
                 <td data-label="Proveedor" style={{ fontWeight:600 }}>{e.supplier||"—"}</td>
                 <td data-label="Concepto">{e.concept}</td>
                 <td data-label="Cant." style={{ color:"var(--t2)", whiteSpace:"nowrap" }}>{e.quantity} {e.unit}</td>
                 <td data-label="P. Unit." style={{ color:"var(--t2)" }}>{$(e.unitPrice)}</td>
-                <td data-label="Total" style={{ fontWeight:700, color:"var(--red)" }}>{$(e.total)}</td>
+                <td data-label="Total" style={{ fontWeight:700, color:"var(--red)", whiteSpace:"nowrap" }}>
+                  {/* En un gasto parcialmente pagado se tacha el importe original
+                      y se muestra al lado lo que todavía se debe. */}
+                  {status === "partial"
+                    ? <><span style={{ textDecoration:"line-through", color:"var(--t4)", fontWeight:500 }}>{$(e.total)}</span> {$(falta)}</>
+                    : $(e.total)}
+                </td>
                 <td data-label="Categoría"><span className="tag">{e.category}</span></td>
                 <td data-label="Subcategoría" style={{ fontSize:".82em", color:"var(--t3)" }}>
                   {e.category === "Ingredientes"
@@ -542,13 +560,15 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
                 </td>
                 <td data-label="Método" style={{ fontSize:".82em", color:"var(--t3)" }}>{e.paymentMethod ? PAY_LABELS[e.paymentMethod]||e.paymentMethod : <span style={{color:"var(--t4)"}}>—</span>}</td>
                 <td data-label="Estado">
-                  {e.paymentStatus==="paid"
+                  {status==="paid"
                     ? <span className="badge badge-green">Pagado</span>
-                    : <span className="badge badge-amber">Pendiente</span>}
+                    : status==="partial"
+                      ? <span className="badge badge-amber" style={{ fontWeight:700 }}>Parcial — debe {$(falta)}</span>
+                      : <span className="badge badge-amber">Pendiente</span>}
                 </td>
                 <td data-label="" onClick={ev=>ev.stopPropagation()} style={{ whiteSpace:"nowrap" }}>
                   <div style={{ display:"flex", gap:4, alignItems:"center", justifyContent:"flex-end" }}>
-                    {e.paymentStatus==="pending" && (
+                    {status!=="paid" && (
                       <button className="btn btn-sm btn-primary" style={{ fontSize:".76em", padding:"4px 9px" }} onClick={()=>setPayModal(e)}>
                         <Ico n="check" s={12}/>Cerrar
                       </button>
@@ -557,7 +577,8 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {filtered.length===0 && <tr><td colSpan={11}><div className="empty"><div className="empty-icon">💸</div><h3>Sin gastos</h3></div></td></tr>}
           </tbody>
         </table>
@@ -614,12 +635,34 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
                 {Object.entries(PAY_LABELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}
               </select>
             </div>
-            <div className="form-group"><label className="lbl">Estado de pago</label>
-              <select value={form.paymentStatus} onChange={e=>set("paymentStatus",e.target.value)}>
-                <option value="pending">Pendiente</option>
-                <option value="paid">Pagado</option>
-              </select>
-            </div>
+            {(() => {
+              // Con pagos ya imputados el estado lo manda la cuenta corriente:
+              // para revertir hay que borrar el movimiento desde Proveedores.
+              const yaPagado = modal !== "new" && form.supplierId ? expensePaid(supplierPayments, modal.id) : 0;
+              if (yaPagado > 0) {
+                const falta = Math.max(0, expenseChargeAmount(modal, supplierPayments) - yaPagado);
+                return (
+                  <div className="form-group"><label className="lbl">Estado de pago</label>
+                    <div style={{ padding:"9px 0" }}>
+                      {falta > 0
+                        ? <span className="badge badge-amber" style={{ fontWeight:700 }}>Parcial — debe {$(falta)}</span>
+                        : <span className="badge badge-green">Pagado</span>}
+                      <div style={{ fontSize:".76em", color:"var(--t3)", marginTop:4 }}>
+                        Pagado {$(yaPagado)}. Se gestiona desde la cuenta del proveedor.
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div className="form-group"><label className="lbl">Estado de pago</label>
+                  <select value={form.paymentStatus} onChange={e=>set("paymentStatus",e.target.value)}>
+                    <option value="pending">Pendiente</option>
+                    <option value="paid">Pagado</option>
+                  </select>
+                </div>
+              );
+            })()}
             <div className="form-group full"><label className="lbl">Notas</label><textarea value={form.notes||""} onChange={e=>set("notes",e.target.value)} placeholder="Observaciones opcionales..."/></div>
           </div>
 
@@ -666,7 +709,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
         </Modal>
       )}
 
-      {payModal && <CloseExpenseModal expense={payModal} onClose={()=>setPayModal(null)} onConfirm={closeExpense}/>}
+      {payModal && <CloseExpenseModal expense={payModal} remaining={remainingOf(payModal)} onClose={()=>setPayModal(null)} onConfirm={closeExpense}/>}
     </div>
   );
 }

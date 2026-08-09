@@ -208,6 +208,12 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 input:hover,select:hover{border-color:var(--border2)}
 input:focus,select:focus,textarea:focus{border-color:var(--green);background:white;box-shadow:0 0 0 3px rgba(137,184,173,.15)}
 input[type="date"]{color-scheme:light}
+/* La regla de arriba pone appearance:none en todos los inputs, lo que deja el
+   checkbox invisible (sin tilde). Se le devuelve un aspecto propio. */
+input[type="checkbox"]{appearance:none;-webkit-appearance:none;width:18px;height:18px;min-width:18px;padding:0;border-radius:5px;border:1.5px solid var(--border2);background:var(--s2);cursor:pointer;position:relative;flex-shrink:0}
+input[type="checkbox"]:checked{background:var(--green);border-color:var(--green)}
+input[type="checkbox"]:checked::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid white;border-width:0 2px 2px 0;transform:rotate(45deg)}
+input[type="checkbox"]:focus-visible{box-shadow:0 0 0 3px rgba(137,184,173,.3)}
 textarea{resize:vertical;min-height:72px}
 .input-group{display:flex;gap:0}
 .input-group input{border-radius:8px 0 0 8px;flex:1}
