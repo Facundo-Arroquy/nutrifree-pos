@@ -141,13 +141,14 @@ productos ya cargados** y el importador escribe **solo** `price_retail` y
 `price_wholesale`.
 
 **Ciclo:** descargar `.xlsx` → editar las columnas de precio en Excel → volver a
-subir el mismo archivo → revisar el diff → aplicar.
+subir el mismo archivo → **auditar la planilla** → revisar el diff → aplicar.
 
 | Función | Qué hace |
 |---|---|
 | `buildPriceSheet(products, {onlyActive})` | Arma la matriz de la planilla (`id`, `producto`, `categoria`, `precio_minorista`, `precio_mayorista`) ordenada por categoría y nombre. |
 | `parsePriceSheet(matrix)` | Normaliza el archivo subido: encabezados sin acentos ni mayúsculas, filas vacías descartadas. Devuelve `{rows, missing}`. |
 | `parsePrice(value)` | Interpreta precios en formato es-AR (`"$ 1.234,50"`) y en-US (`"1,234.50"`). Celda vacía → `null`. |
+| `auditPriceSheet(rows, products)` | Verifica que la planilla siga íntegra: `{missing, duplicates, renamed, expected}`. |
 | `diffPriceRows(rows, products)` | Compara contra la base y devuelve `{changes, unchanged, errors}`. Solo produce cambios de precio. |
 | `changeToDbPatch(change)` | Patch mínimo para Supabase: únicamente las columnas de precio que cambiaron. |
 | `applyChangeToProduct(product, change)` | Aplica el cambio al estado local de React sin tocar el resto de los campos. |
@@ -161,5 +162,22 @@ subir el mismo archivo → revisar el diff → aplicar.
 - Ediciones en `producto` o `categoria` se ignoran silenciosamente.
 - Los cambios se agrupan por patch idéntico y se aplican con un `update ... in(ids)`
   por grupo (subir 200 productos al mismo precio = 1 sola query).
+
+**Integridad de la planilla.** Excel no permite bloquear el borrado de filas
+dejando las celdas de precio editables: haría falta escribir estilos por celda
+—para desbloquearlas— y la build community de SheetJS no los escribe, así que
+proteger la hoja la volvería de solo lectura. El control se hace entonces al
+importar, con `auditPriceSheet`:
+
+| Detecta | Qué pasa |
+|---|---|
+| **Filas borradas** — falta algún producto que debería estar | Aviso con la lista; hay que tildar "actualizar igual" para seguir. Los que faltan quedan con su precio actual. |
+| **Ids repetidos** — la misma fila pegada dos veces | **Bloquea**: no se puede saber qué precio vale. Sin opción de forzar. |
+| **Nombres corridos** — el `producto` de la fila no es el de la base | Aviso con las filas; hay que confirmar. Es la señal de una columna de precios pegada desfasada, que asignaría precios al producto equivocado. |
+| **Columnas borradas o renombradas** | `parsePriceSheet` devuelve `missing` y no se procesa nada. |
+
+El alcance se infiere de la propia planilla: si no trae ningún producto inactivo
+se asume que se descargó con "solo activos", así que los inactivos ausentes no
+cuentan como filas borradas.
 
 Tests en `src/utils/priceImport.test.js` (`npm test`).

@@ -6,6 +6,8 @@
  *  2. Solo se aplican cambios de precio: tocar otras columnas no pisa nada.
  *  3. Celda de precio vacía = "no cambiar", no = "poner en 0".
  *  4. Formatos de Excel en es-AR ("$ 1.234,50") se interpretan bien.
+ *  5. La planilla llega íntegra: filas borradas, ids repetidos o nombres
+ *     corridos frenan la actualización en vez de aplicarse a ciegas.
  */
 import { describe, it, expect } from "vitest";
 import {
@@ -14,6 +16,7 @@ import {
   buildPriceSheet,
   parsePriceSheet,
   diffPriceRows,
+  auditPriceSheet,
   changeToDbPatch,
   applyChangeToProduct,
 } from "./priceImport.js";
@@ -197,5 +200,69 @@ describe("aplicación de cambios", () => {
     expect(updated.stock).toBe(20);
     expect(updated.active).toBe(true);
     expect(updated.category).toBe("Panadería");
+  });
+});
+
+describe("integridad de la planilla", () => {
+  // La planilla que baja el usuario trae p1 y p2 (activos); p3 está inactivo.
+  const sheetRow = (id, name, line) => ({ id, name, retail: null, wholesale: null, line });
+
+  it("no marca nada cuando vuelven todos los productos activos", () => {
+    const rows = [sheetRow("p1", "Brownie", 2), sheetRow("p2", "Pan de molde", 3)];
+    const audit = auditPriceSheet(rows, PRODUCTS);
+    expect(audit.missing).toEqual([]);
+    expect(audit.duplicates).toEqual([]);
+    expect(audit.renamed).toEqual([]);
+    expect(audit.expected).toBe(2);
+  });
+
+  it("detecta las filas borradas", () => {
+    const rows = [sheetRow("p1", "Brownie", 2)];
+    const audit = auditPriceSheet(rows, PRODUCTS);
+    expect(audit.missing).toEqual([{ id: "p2", name: "Pan de molde" }]);
+  });
+
+  it("no cuenta como borrados los inactivos si la planilla bajó solo con activos", () => {
+    const rows = [sheetRow("p1", "Brownie", 2), sheetRow("p2", "Pan de molde", 3)];
+    expect(auditPriceSheet(rows, PRODUCTS).missing).toEqual([]);
+  });
+
+  it("si la planilla incluye inactivos, también exige que estén todos", () => {
+    // Trae p3 (inactivo) → se descargó con "todos", así que falta p2.
+    const rows = [sheetRow("p1", "Brownie", 2), sheetRow("p3", "Alfajor viejo", 3)];
+    const audit = auditPriceSheet(rows, PRODUCTS);
+    expect(audit.missing).toEqual([{ id: "p2", name: "Pan de molde" }]);
+    expect(audit.expected).toBe(3);
+  });
+
+  it("detecta ids repetidos por copiar y pegar", () => {
+    const rows = [sheetRow("p1", "Brownie", 2), sheetRow("p1", "Brownie", 3), sheetRow("p2", "Pan de molde", 4)];
+    expect(auditPriceSheet(rows, PRODUCTS).duplicates).toEqual([
+      { id: "p1", name: "Brownie", lines: [2, 3] },
+    ]);
+  });
+
+  // El desastre clásico: ordenar la planilla y pegar la columna de precios
+  // corrida, que asigna el precio de un producto a otro sin ningún aviso.
+  it("detecta nombres que no coinciden con la base", () => {
+    const rows = [sheetRow("p1", "Pan de molde", 2), sheetRow("p2", "Pan de molde", 3)];
+    const audit = auditPriceSheet(rows, PRODUCTS);
+    expect(audit.renamed).toEqual([
+      { id: "p1", sheetName: "Pan de molde", dbName: "Brownie", line: 2 },
+    ]);
+  });
+
+  it("ignora la columna nombre si vino vacía", () => {
+    const rows = [sheetRow("p1", "", 2), sheetRow("p2", "", 3)];
+    expect(auditPriceSheet(rows, PRODUCTS).renamed).toEqual([]);
+  });
+
+  it("los ids desconocidos no se cuentan como duplicados ni rompen la auditoría", () => {
+    const rows = [sheetRow("p1", "Brownie", 2), sheetRow("p2", "Pan de molde", 3), sheetRow("nuevo", "Inventado", 4)];
+    const audit = auditPriceSheet(rows, PRODUCTS);
+    expect(audit.missing).toEqual([]);
+    expect(audit.duplicates).toEqual([]);
+    // El id inexistente ya lo reporta diffPriceRows como error de fila.
+    expect(diffPriceRows(rows, PRODUCTS).errors).toHaveLength(1);
   });
 });
