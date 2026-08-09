@@ -4,35 +4,40 @@
  * El saldo de cada proveedor se calcula como la suma de supplier_payments:
  * charges (deudas generadas por gastos) menos payments (pagos realizados).
  * Valor negativo = deuda pendiente con el proveedor.
- * Permite registrar pagos manuales independientes de un gasto.
  *
- * Props: suppliers, setSuppliers, supplierPayments, setSupplierPayments, showToast
+ * Desde acá se paga la deuda igual que en la cuenta corriente de clientes: se
+ * eligen los gastos a pagar, se ingresa un monto y el pago se imputa FIFO (del
+ * gasto más viejo al más nuevo), dejando los gastos parcialmente pagados con su
+ * saldo restante. Ver utils/supplierAccount.js y components/SupplierPayModal.jsx.
+ *
+ * Props: suppliers, setSuppliers, expenses, setExpenses, supplierPayments,
+ *        setSupplierPayments, showToast, logAction
  */
 import { useState } from "react";
-import { Ico, Modal, $, fmtDate, todayStr, PAY_LABELS, useSortable, SortableTh } from "../shared.jsx";
+import { Ico, Modal, $, fmtDate, useSortable, SortableTh } from "../shared.jsx";
 import { supabase, supplierToDb, supplierPaymentToDb } from "../supabase.js";
+import SupplierPayModal, { SUPPLIER_PAY_LABELS } from "../components/SupplierPayModal.jsx";
+import { supplierBalance, expenseStatusUpdates } from "../utils/supplierAccount.js";
 
-export default function SuppliersPage({ suppliers, setSuppliers, supplierPayments, setSupplierPayments, showToast }) {
+export default function SuppliersPage({ suppliers, setSuppliers, expenses = [], setExpenses, supplierPayments, setSupplierPayments, showToast, logAction }) {
   const emptyForm = { name:"", phone:"", email:"", address:"", notes:"" };
   const [modal, setModal] = useState(null); // null | "new" | supplier obj
   const [accountModal, setAccountModal] = useState(null); // supplier obj
   const [payModal, setPayModal] = useState(null); // supplier obj
   const [form, setForm] = useState(emptyForm);
-  const [payForm, setPayForm] = useState({ amount:"", paymentMethod:"cash", notes:"" });
   const [search, setSearch] = useState("");
   const { sortBy, sortDir, toggleSort } = useSortable("name", "asc");
   const [submitting, setSubmitting] = useState(false);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  const supplierBal = (id) =>
-    supplierPayments.filter(p => p.supplierId === id)
-      .reduce((sum, p) => p.type === "payment" ? sum + p.amount : sum - p.amount, 0);
+  const supplierBal = (id) => supplierBalance(supplierPayments, id);
 
   const totalDebt = suppliers.reduce((sum, s) => {
     const bal = supplierBal(s.id);
     return bal < 0 ? sum + Math.abs(bal) : sum;
   }, 0);
+  const conDeuda = suppliers.filter(s => supplierBal(s.id) < 0).length;
 
   const openNew = () => { setForm(emptyForm); setModal("new"); };
   const openEdit = (s) => { setForm({ name:s.name, phone:s.phone||"", email:s.email||"", address:s.address||"", notes:s.notes||"" }); setModal(s); };
@@ -79,25 +84,68 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
     showToast("Proveedor eliminado");
   };
 
-  const registerPayment = async () => {
+  /**
+   * Registra el pago: inserta los movimientos calculados por el modal y
+   * sincroniza el estado de los gastos afectados (pendiente/parcial/pagado).
+   */
+  const registerPayment = async (rows, summary) => {
     if (submitting) return;
-    const amount = Number(payForm.amount);
-    if (!amount || amount <= 0) { showToast("Ingresá un monto válido", "error"); return; }
+    if (rows.length === 0) { showToast("No hay nada para registrar", "error"); return; }
     setSubmitting(true);
     try {
-      const payment = { id: crypto.randomUUID(), supplierId: payModal.id, expenseId: null, amount, type: "payment", paymentMethod: payForm.paymentMethod, date: todayStr(), notes: payForm.notes || "Pago manual" };
-      const { error } = await supabase.from("supplier_payments").insert(supplierPaymentToDb(payment));
-      if (error) { showToast("Error: " + error.message, "error"); return; }
-      setSupplierPayments(prev => [...prev, payment]);
-      setPayForm({ amount:"", paymentMethod:"cash", notes:"" });
+      const { error } = await supabase.from("supplier_payments").insert(rows.map(supplierPaymentToDb));
+      if (error) { showToast("Error al registrar el pago: " + error.message, "error"); return; }
+      const movements = [...supplierPayments, ...rows];
+      setSupplierPayments(movements);
+
+      const touched = [...new Set(rows.map(r => r.expenseId).filter(Boolean))];
+      const updates = expenseStatusUpdates(expenses, movements, touched, summary.paymentMethod);
+      for (const u of updates) {
+        const patch = { payment_status: u.paymentStatus };
+        if (u.paymentMethod) patch.payment_method = u.paymentMethod;
+        const { error: ue } = await supabase.from("expenses").update(patch).eq("id", u.id);
+        if (ue) showToast("Error al actualizar el gasto: " + ue.message, "error");
+      }
+      if (updates.length > 0) {
+        setExpenses?.(prev => prev.map(e => {
+          const u = updates.find(x => x.id === e.id);
+          return u ? { ...e, paymentStatus: u.paymentStatus, ...(u.paymentMethod ? { paymentMethod: u.paymentMethod } : {}) } : e;
+        }));
+      }
+
+      const saldados = updates.filter(u => u.paymentStatus === "paid").length;
+      logAction?.("pago", "proveedor", `"${payModal.name}" — ${$(summary.cashUsed + summary.leftover)} (${SUPPLIER_PAY_LABELS[summary.paymentMethod] || summary.paymentMethod})`);
       setPayModal(null);
-      showToast("Pago registrado ✓");
+      showToast(saldados > 0 ? `Pago registrado · ${saldados} gasto${saldados !== 1 ? "s" : ""} saldado${saldados !== 1 ? "s" : ""} ✓` : "Pago registrado ✓");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const PAY_OPTS = [["cash","Efectivo"],["transfer","Transferencia"],["card","Tarjeta"],["check","Cheque"]];
+  /** Revierte un pago registrado por error y recalcula el estado del gasto. */
+  const deleteMovement = async (mov) => {
+    if (mov.type === "charge" && mov.expenseId) {
+      showToast("El cargo lo genera el gasto: editalo o eliminalo desde Gastos", "error");
+      return;
+    }
+    if (!confirm(`¿Eliminar este movimiento de ${$(mov.amount)}?`)) return;
+    const { error } = await supabase.from("supplier_payments").delete().eq("id", mov.id);
+    if (error) { showToast("Error: " + error.message, "error"); return; }
+    const movements = supplierPayments.filter(p => p.id !== mov.id);
+    setSupplierPayments(movements);
+    if (mov.expenseId) {
+      const updates = expenseStatusUpdates(expenses, movements, [mov.expenseId]);
+      for (const u of updates) await supabase.from("expenses").update({ payment_status: u.paymentStatus }).eq("id", u.id);
+      if (updates.length > 0) {
+        setExpenses?.(prev => prev.map(e => {
+          const u = updates.find(x => x.id === e.id);
+          return u ? { ...e, paymentStatus: u.paymentStatus } : e;
+        }));
+      }
+    }
+    logAction?.("eliminar", "proveedor", `Movimiento de ${$(mov.amount)} — ${mov.notes || ""}`);
+    showToast("Movimiento eliminado");
+  };
 
   return (
     <div className="page">
@@ -109,9 +157,10 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
         </div>
       </div>
 
-      <div className="stats-row" style={{ gridTemplateColumns:"repeat(2,1fr)" }}>
+      <div className="stats-row" style={{ gridTemplateColumns:"repeat(3,1fr)" }}>
         <div className="stat"><div className="stat-num">{suppliers.length}</div><div className="stat-label">Proveedores</div><div className="stat-icon">🏭</div></div>
         <div className="stat stat-amber"><div className="stat-num">{$(totalDebt)}</div><div className="stat-label">Deuda pendiente total</div><div className="stat-icon">💳</div></div>
+        <div className="stat"><div className="stat-num">{conDeuda}</div><div className="stat-label">Proveedores con deuda</div><div className="stat-icon">📋</div></div>
       </div>
 
       <div className="table-wrap">
@@ -150,6 +199,7 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
                   </td>
                   <td data-label="" onClick={ev=>ev.stopPropagation()} style={{ whiteSpace:"nowrap" }}>
                     <div style={{ display:"flex", gap:4, alignItems:"center", justifyContent:"flex-end" }}>
+                      <button className="btn btn-sm btn-primary" onClick={()=>setPayModal(s)}><Ico n="check" s={12}/>Pagar</button>
                       <button className="btn btn-sm btn-secondary" onClick={()=>{ setAccountModal(s); }}>Ver cuenta</button>
                       <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>del(s.id)}><Ico n="trash" s={13} c="var(--red)"/></button>
                     </div>
@@ -202,24 +252,36 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
             </div>
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Fecha</th><th>Tipo</th><th>Monto</th><th>Método</th><th>Notas</th></tr></thead>
+                <thead><tr><th>Fecha</th><th>Tipo</th><th>Monto</th><th>Método</th><th>Gasto</th><th>Notas</th><th></th></tr></thead>
                 <tbody>
-                  {movements.map(m => (
-                    <tr key={m.id}>
-                      <td data-label="Fecha" style={{ fontSize:".82em", color:"var(--t3)", whiteSpace:"nowrap" }}>{fmtDate(m.date)}</td>
-                      <td data-label="Tipo">
-                        {m.type==="charge"
-                          ? <span className="badge badge-amber">Cargo</span>
-                          : <span className="badge badge-green">Pago</span>}
-                      </td>
-                      <td data-label="Monto" style={{ fontWeight:700, color: m.type==="charge" ? "var(--red)" : "var(--green)" }}>
-                        {m.type==="charge" ? "-" : "+"}{$(m.amount)}
-                      </td>
-                      <td data-label="Método" style={{ fontSize:".82em", color:"var(--t3)" }}>{m.paymentMethod ? PAY_LABELS[m.paymentMethod]||m.paymentMethod : "—"}</td>
-                      <td data-label="Notas" style={{ fontSize:".82em", color:"var(--t3)" }}>{m.notes||"—"}</td>
-                    </tr>
-                  ))}
-                  {movements.length===0 && <tr><td colSpan={5} style={{ textAlign:"center", color:"var(--t4)", padding:"20px 0" }}>Sin movimientos</td></tr>}
+                  {movements.map(m => {
+                    const isCredit = m.paymentMethod === "balance";
+                    const gasto = m.expenseId ? expenses.find(e => e.id === m.expenseId) : null;
+                    return (
+                      <tr key={m.id}>
+                        <td data-label="Fecha" style={{ fontSize:".82em", color:"var(--t3)", whiteSpace:"nowrap" }}>{fmtDate(m.date)}</td>
+                        <td data-label="Tipo">
+                          {m.type==="charge"
+                            ? <span className="badge badge-amber">Cargo</span>
+                            : <span className="badge badge-green">Pago</span>}
+                        </td>
+                        <td data-label="Monto" style={{ fontWeight:700, color: isCredit ? "var(--t4)" : m.type==="charge" ? "var(--red)" : "var(--green)" }}>
+                          {m.type==="charge" ? "-" : "+"}{$(m.amount)}
+                        </td>
+                        <td data-label="Método" style={{ fontSize:".82em", color:"var(--t3)" }}>{m.paymentMethod ? SUPPLIER_PAY_LABELS[m.paymentMethod]||m.paymentMethod : "—"}</td>
+                        <td data-label="Gasto" style={{ fontSize:".82em", color:"var(--t3)" }}>{gasto ? gasto.concept : m.expenseId ? "(gasto eliminado)" : <span style={{color:"var(--t4)"}}>A cuenta</span>}</td>
+                        <td data-label="Notas" style={{ fontSize:".82em", color:"var(--t3)" }}>{m.notes||"—"}</td>
+                        <td data-label="">
+                          {m.type==="payment" && (
+                            <button className="btn btn-ghost btn-icon btn-sm" title="Eliminar movimiento" onClick={()=>deleteMovement(m)}>
+                              <Ico n="trash" s={13} c="var(--red)"/>
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {movements.length===0 && <tr><td colSpan={7} style={{ textAlign:"center", color:"var(--t4)", padding:"20px 0" }}>Sin movimientos</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -230,29 +292,16 @@ export default function SuppliersPage({ suppliers, setSuppliers, supplierPayment
         );
       })()}
 
-      {/* Modal registrar pago manual */}
+      {/* Modal de pago con imputación a gastos */}
       {payModal && (
-        <Modal title={`Registrar pago — ${payModal.name}`} onClose={()=>{ setPayModal(null); setAccountModal(payModal); }}>
-          <div className="form-grid">
-            <div className="form-group full"><label className="lbl">Monto *</label><input type="number" min="0" step="0.01" autoFocus value={payForm.amount} onChange={e=>setPayForm(p=>({...p,amount:e.target.value}))} placeholder="0.00"/></div>
-            <div className="form-group full"><label className="lbl">Método de pago</label>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                {PAY_OPTS.map(([k,v]) => (
-                  <button key={k} className={`btn ${payForm.paymentMethod===k?"btn-primary":"btn-secondary"}`} onClick={()=>setPayForm(p=>({...p,paymentMethod:k}))}>
-                    {payForm.paymentMethod===k && <Ico n="check" s={13}/>}{v}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="form-group full"><label className="lbl">Notas</label><input value={payForm.notes} onChange={e=>setPayForm(p=>({...p,notes:e.target.value}))} placeholder="Observaciones..."/></div>
-          </div>
-          <div className="modal-footer">
-            <button className="btn btn-secondary" onClick={()=>{ setPayModal(null); setAccountModal(payModal); }}>Cancelar</button>
-            <button className="btn btn-primary" onClick={registerPayment} disabled={submitting}>
-              <Ico n="check" s={13}/>{submitting ? "Registrando..." : "Registrar pago"}
-            </button>
-          </div>
-        </Modal>
+        <SupplierPayModal
+          supplier={payModal}
+          expenses={expenses}
+          movements={supplierPayments}
+          submitting={submitting}
+          onClose={()=>setPayModal(null)}
+          onConfirm={registerPayment}
+        />
       )}
     </div>
   );

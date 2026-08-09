@@ -10,13 +10,14 @@
  * Al cerrar, persiste todos los totales en cash_shifts con status="closed".
  * El historial muestra todos los turnos cerrados previos.
  *
- * Props: sales, expenses, accountPayments, user, cashShifts, setCashShifts, showToast
+ * Props: sales, expenses, accountPayments, supplierPayments, suppliers, user,
+ *        cashShifts, setCashShifts, showToast
  */
 import { useState } from "react";
 import { Ico, Modal, $, fmtDT, fmtTime, PAY_LABELS } from "../shared.jsx";
 import { supabase, cashShiftToDb } from "../supabase.js";
 
-export default function CashShiftPage({ sales, expenses, accountPayments, user, cashShifts, setCashShifts, showToast }) {
+export default function CashShiftPage({ sales, expenses, accountPayments, supplierPayments, suppliers, user, cashShifts, setCashShifts, showToast }) {
   const [openModal, setOpenModal] = useState(false);
   const [closeModal, setCloseModal] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -49,13 +50,36 @@ export default function CashShiftPage({ sales, expenses, accountPayments, user, 
   const apTransfer = shiftAccPayments.filter(p => p.paymentMethod === "transfer").reduce((sum,p) => sum + p.amount, 0);
   const apCard     = shiftAccPayments.filter(p => p.paymentMethod === "card").reduce((sum,p) => sum + p.amount, 0);
 
-  // Todos los gastos registrados durante el turno (independientemente del método)
+  // Egresos del turno. Se cuentan por una sola vía para no descontar dos veces:
+  //  - Gastos SIN proveedor: por el gasto, cuando se carga ya pagado.
+  //  - Gastos CON proveedor: por el movimiento en su cuenta corriente, que es
+  //    cuando la plata sale de verdad (puede ser días después de cargar el gasto).
   const shiftExpenses = openShift
-    ? expenses.filter(e => e.createdAt && new Date(e.createdAt) >= shiftStart)
+    ? expenses.filter(e => !e.supplierId && e.paymentStatus === "paid" && e.createdAt && new Date(e.createdAt) >= shiftStart)
     : [];
+  // Pagos a proveedores hechos durante el turno. "balance" es saldo a favor: no mueve plata.
+  const shiftSupplierPayments = openShift
+    ? (supplierPayments || []).filter(p => p.type === "payment" && p.paymentMethod !== "balance" && p.createdAt && new Date(p.createdAt) >= shiftStart)
+    : [];
+  const byMethod = (method) =>
+    shiftExpenses.filter(e => e.paymentMethod === method).reduce((sum,e) => sum + (e.total || 0), 0) +
+    shiftSupplierPayments.filter(p => p.paymentMethod === method).reduce((sum,p) => sum + (p.amount || 0), 0);
+
   // Solo los pagados en efectivo reducen el cajón
-  const eCash     = shiftExpenses.filter(e => e.paymentMethod === "cash").reduce((sum,e) => sum + (e.total || 0), 0);
-  const eTransfer = shiftExpenses.filter(e => e.paymentMethod === "transfer").reduce((sum,e) => sum + (e.total || 0), 0);
+  const eCash     = byMethod("cash");
+  const eTransfer = byMethod("transfer");
+
+  // Vista unificada de egresos para la tabla del turno.
+  const shiftEgresses = [
+    ...shiftExpenses.map(e => ({ key: e.id, concept: e.concept || "—", category: e.category, paymentMethod: e.paymentMethod, total: e.total })),
+    ...shiftSupplierPayments.map(p => ({
+      key: p.id,
+      concept: `Pago a ${(suppliers || []).find(s => s.id === p.supplierId)?.name || "proveedor"}`,
+      category: "Proveedores",
+      paymentMethod: p.paymentMethod,
+      total: p.amount,
+    })),
+  ];
 
   // Efectivo esperado = inicial + ventas ef. + cobros ef. − egresos ef.
   const expectedCash = openShift ? openShift.initialCash + sCash + apCash - eCash : 0;
@@ -270,15 +294,15 @@ export default function CashShiftPage({ sales, expenses, accountPayments, user, 
           )}
 
           {/* Tabla gastos del turno */}
-          {shiftExpenses.length > 0 && (
+          {shiftEgresses.length > 0 && (
             <div style={{ marginBottom:22 }}>
-              <div className="section-title">Gastos del turno</div>
+              <div className="section-title">Egresos del turno</div>
               <div className="table-wrap">
                 <table>
                   <thead><tr><th>Concepto</th><th>Categoría</th><th>Método</th><th>Total</th></tr></thead>
                   <tbody>
-                    {shiftExpenses.map(e => (
-                      <tr key={e.id}>
+                    {shiftEgresses.map(e => (
+                      <tr key={e.key}>
                         <td data-label="Concepto">{e.concept || "—"}</td>
                         <td data-label="Categoría" style={{ color:"var(--t3)", fontSize:".82em" }}>{e.category}</td>
                         <td data-label="Método"><span className={`badge ${e.paymentMethod==="cash"?"badge-green":e.paymentMethod==="transfer"?"badge-blue":"badge-gray"}`}>{PAY_LABELS[e.paymentMethod] || e.paymentMethod || "—"}</span></td>

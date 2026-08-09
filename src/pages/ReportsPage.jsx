@@ -13,6 +13,7 @@
  */
 import { useState, useMemo, useCallback } from "react";
 import { Ico, $, fmtDate, fmtTime, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, useSortable, SortableTh, exportXlsx } from "../shared.jsx";
+import { expenseStatus, expensePaidAmount, expenseRemaining } from "../utils/supplierAccount.js";
 
 // ─── Bar chart (CSS-based, no library) ────────────────────────────────────────
 function TrendChart({ points }) {
@@ -67,7 +68,15 @@ function MarginBar({ pct }) {
   );
 }
 
-export default function ReportsPage({ sales, products, recipes, expenses, expenseCategories, expenseSubcategories = [], accountPayments, customers, stockMovements, setPage, setHighlightRecipeId }) {
+export default function ReportsPage({ sales, products, recipes, expenses, expenseCategories, expenseSubcategories = [], accountPayments, supplierPayments = [], customers, stockMovements, setPage, setHighlightRecipeId }) {
+  // Un gasto con proveedor puede estar pagado a medias: su estado y sus importes
+  // se derivan de la cuenta corriente, no del campo `paymentStatus`.
+  const expStatus    = e => expenseStatus(e, supplierPayments);
+  const expPaid      = e => expensePaidAmount(e, supplierPayments);
+  const expRemaining = e => expenseRemaining(e, supplierPayments);
+  // Los desgloses por categoría siguen contando el gasto completo en cuanto
+  // empezó a pagarse (antes eran binarios: o pagado o pendiente).
+  const started      = e => expPaid(e) > 0;
   const presets = useMemo(() => {
     const now = new Date();
     const t = now.toISOString().slice(0,10);
@@ -297,7 +306,7 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
       if (!dayMap[d]) dayMap[d] = { sales:0, expenses:0 };
       dayMap[d].sales += s.total;
     });
-    pExpenses.filter(e => e.paymentStatus === "paid").forEach(e => {
+    pExpenses.filter(started).forEach(e => {
       if (!e.date) return;
       if (!dayMap[e.date]) dayMap[e.date] = { sales:0, expenses:0 };
       dayMap[e.date].expenses += e.total;
@@ -329,7 +338,7 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
     const MON = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
     return Object.entries(mo).sort(([a],[b])=>a.localeCompare(b))
       .map(([mon, v]) => ({ label:MON[Number(mon.slice(5))-1], sales:v.sales, expenses:v.expenses, net:v.sales-v.expenses }));
-  }, [closedSales, pExpenses, trendMode]);
+  }, [closedSales, pExpenses, trendMode, supplierPayments]);
 
   const trendIndicator = useMemo(() => {
     if (trendPoints.length < 2) return null;
@@ -362,7 +371,7 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
     else if (expSortBy === "supplier")      { av = a.supplier ?? ""; bv = b.supplier ?? ""; }
     else if (expSortBy === "category")      { av = a.category ?? ""; bv = b.category ?? ""; }
     else if (expSortBy === "paymentMethod") { av = a.paymentMethod ?? ""; bv = b.paymentMethod ?? ""; }
-    else if (expSortBy === "paymentStatus") { av = a.paymentStatus ?? ""; bv = b.paymentStatus ?? ""; }
+    else if (expSortBy === "paymentStatus") { av = expStatus(a); bv = expStatus(b); }
     else if (expSortBy === "total")         { av = a.total ?? 0; bv = b.total ?? 0; }
     else                                    { av = a.date ?? ""; bv = b.date ?? ""; }
     const v = typeof av === "string" ? av.localeCompare(bv, undefined, { sensitivity:"base" }) : (av - bv);
@@ -378,24 +387,24 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
       e.category || "",
       expSubcatLabel(e),
       PAY_LABELS[e.paymentMethod] || e.paymentMethod || "-",
-      e.paymentStatus === "paid" ? "Pagado" : "Pendiente",
+      { paid:"Pagado", partial:"Parcial", pending:"Pendiente" }[expStatus(e)],
       e.total,
     ]);
     exportXlsx(headers, rows, `gastos-${from}-${to}${filterExpCat !== "Todos" ? `-${filterExpCat}` : ""}`);
   };
 
-  const totalExpenses   = filteredPExpenses.filter(e=>e.paymentStatus==="paid").reduce((a,b)=>a+b.total,0);
-  const pendingExpenses = filteredPExpenses.filter(e=>e.paymentStatus==="pending").reduce((a,b)=>a+b.total,0);
+  const totalExpenses   = filteredPExpenses.reduce((a,e)=>a+expPaid(e),0);
+  const pendingExpenses = filteredPExpenses.reduce((a,e)=>a+expRemaining(e),0);
   const netResult       = totalIncome - totalExpenses;
   const expByCat = {};
-  pExpenses.filter(e=>e.paymentStatus==="paid").forEach(e => {
+  pExpenses.filter(started).forEach(e => {
     expByCat[e.category||"Otros"] = (expByCat[e.category||"Otros"]||0) + e.total;
   });
   const maxExpCat = Math.max(...Object.values(expByCat), 1);
 
   // Subcategorías: mapa { categoryName: { subcatName: total } }
   const expBySubcat = {};
-  pExpenses.filter(e=>e.paymentStatus==="paid").forEach(e => {
+  pExpenses.filter(started).forEach(e => {
     const cat = e.category || "Otros";
     if (!expBySubcat[cat]) expBySubcat[cat] = {};
     if (e.category === "Ingredientes" && Array.isArray(e.ingredientLines)) {
@@ -751,11 +760,11 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
                       <td style={{ fontSize:".82em", color:"var(--t3)" }}>{expSubcatLabel(e)}</td>
                       <td style={{ fontSize:".82em", color:"var(--t3)" }}>{PAY_LABELS[e.paymentMethod] || "—"}</td>
                       <td>
-                        <span className={`badge ${e.paymentStatus === "paid" ? "badge-green" : "badge-amber"}`} style={{ fontSize:".74em" }}>
-                          {e.paymentStatus === "paid" ? "Pagado" : "Pendiente"}
+                        <span className={`badge ${expStatus(e) === "paid" ? "badge-green" : "badge-amber"}`} style={{ fontSize:".74em" }}>
+                          {{ paid:"Pagado", partial:`Parcial — debe ${$(expRemaining(e))}`, pending:"Pendiente" }[expStatus(e)]}
                         </span>
                       </td>
-                      <td style={{ textAlign:"right", fontWeight:700, color:e.paymentStatus==="paid"?"var(--red)":"var(--amber)" }}>
+                      <td style={{ textAlign:"right", fontWeight:700, color:expStatus(e)==="paid"?"var(--red)":"var(--amber)" }}>
                         {$(e.total)}
                       </td>
                     </tr>
