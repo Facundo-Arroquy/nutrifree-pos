@@ -19,6 +19,7 @@ import {
   buildPriceSheet,
   parsePriceSheet,
   diffPriceRows,
+  auditPriceSheet,
   changeToDbPatch,
   applyChangeToProduct,
 } from "../utils/priceImport.js";
@@ -182,12 +183,76 @@ function ChangesTable({ changes }) {
   );
 }
 
+// ─── AVISOS DE INTEGRIDAD ─────────────────────────────────────────────────────
+
+const Alert = ({ tone, title, children }) => {
+  const color = tone === "error" ? "var(--red, #e53935)" : "var(--amber, #b45309)";
+  const bg = tone === "error" ? "var(--red-soft, #fff1f1)" : "var(--amberl, #fff8ec)";
+  return (
+    <div style={{ padding: "11px 13px", borderRadius: 10, background: bg, border: `1px solid ${color}`, fontSize: ".8em", lineHeight: 1.55, marginBottom: 10 }}>
+      <div style={{ fontWeight: 700, color, marginBottom: 3 }}>{title}</div>
+      <div style={{ color: "var(--t2)" }}>{children}</div>
+    </div>
+  );
+};
+
+/** Lista los primeros N y resume el resto, para no tapar la pantalla. */
+const preview = (items, render, n = 6) => (
+  <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+    {items.slice(0, n).map((it, i) => <li key={i}>{render(it)}</li>)}
+    {items.length > n && <li>... y {items.length - n} más</li>}
+  </ul>
+);
+
+function SheetAudit({ audit, confirmPartial, setConfirmPartial }) {
+  const { missing, duplicates, renamed, expected } = audit;
+  if (!missing.length && !duplicates.length && !renamed.length) return null;
+
+  return (
+    <div>
+      {duplicates.length > 0 && (
+        <Alert tone="error" title={`Hay ${duplicates.length} producto${duplicates.length !== 1 ? "s" : ""} repetido${duplicates.length !== 1 ? "s" : ""} en la planilla`}>
+          El mismo <code>id</code> aparece en varias filas, así que no se puede saber qué precio vale.
+          Borrá las filas de más y volvé a subirla.
+          {preview(duplicates, d => <>“{d.name || d.id}” en las filas {d.lines.join(", ")}</>)}
+        </Alert>
+      )}
+
+      {missing.length > 0 && (
+        <Alert tone="warn" title={`Faltan ${missing.length} de ${expected} productos en la planilla`}>
+          Parece que se borraron filas. Los productos que faltan <strong>no se van a modificar</strong>:
+          van a quedar con el precio que tienen hoy. Si fue sin querer, volvé a descargar la planilla.
+          {preview(missing, m => <>{m.name || m.id}</>)}
+        </Alert>
+      )}
+
+      {renamed.length > 0 && (
+        <Alert tone="warn" title={`${renamed.length} fila${renamed.length !== 1 ? "s" : ""} con el nombre cambiado`}>
+          El nombre de la planilla no coincide con el de la base. Suele pasar cuando se pega una columna
+          de precios corrida, y en ese caso <strong>los precios se asignarían al producto equivocado</strong>.
+          Revisá que cada fila siga alineada con su <code>id</code>.
+          {preview(renamed, r => <>Fila {r.line}: dice “{r.sheetName}”, en la base es “{r.dbName}”</>)}
+        </Alert>
+      )}
+
+      {!duplicates.length && (
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: ".82em", color: "var(--t2)", cursor: "pointer", marginBottom: 4 }}>
+          <input type="checkbox" checked={confirmPartial} onChange={e => setConfirmPartial(e.target.checked)} style={{ marginTop: 2 }} />
+          <span>Revisé los avisos y quiero actualizar igual</span>
+        </label>
+      )}
+    </div>
+  );
+}
+
 // ─── PANEL ────────────────────────────────────────────────────────────────────
 
 export default function PriceUpdatePanel({ products, setProducts, showToast }) {
   const [onlyActive, setOnlyActive] = useState(true);
   const [file, setFile] = useState(null);
   const [diff, setDiff] = useState(null);       // { changes, unchanged, errors }
+  const [audit, setAudit] = useState(null);     // { missing, duplicates, renamed, expected }
+  const [confirmPartial, setConfirmPartial] = useState(false);
   const [sheetError, setSheetError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(null);
@@ -198,7 +263,10 @@ export default function PriceUpdatePanel({ products, setProducts, showToast }) {
     [products, onlyActive]
   );
 
-  const reset = () => { setFile(null); setDiff(null); setSheetError(null); setResult(null); };
+  const reset = () => {
+    setFile(null); setDiff(null); setAudit(null);
+    setConfirmPartial(false); setSheetError(null); setResult(null);
+  };
 
   const handleDownload = () => {
     if (!products?.length) { showToast("No hay productos para exportar", "error"); return; }
@@ -211,6 +279,8 @@ export default function PriceUpdatePanel({ products, setProducts, showToast }) {
     setResult(null);
     setSheetError(null);
     setDiff(null);
+    setAudit(null);
+    setConfirmPartial(false);
     try {
       const matrix = await readSheetFile(f);
       const { rows, missing } = parsePriceSheet(matrix);
@@ -225,14 +295,21 @@ export default function PriceUpdatePanel({ products, setProducts, showToast }) {
         setSheetError("La planilla no tiene filas de datos debajo del encabezado.");
         return;
       }
+      setAudit(auditPriceSheet(rows, products));
       setDiff(diffPriceRows(rows, products));
     } catch (err) {
       setSheetError(`No se pudo leer el archivo: ${err.message}`);
     }
   };
 
+  // Ids repetidos: no hay forma de saber cuál fila vale, así que no se aplica
+  // nada. Filas borradas o nombres corridos: se puede seguir, pero confirmando.
+  const blocked = Boolean(audit?.duplicates.length);
+  const needsConfirm = Boolean(audit && (audit.missing.length || audit.renamed.length));
+  const canApply = Boolean(diff?.changes.length) && !blocked && (!needsConfirm || confirmPartial);
+
   const handleApply = async () => {
-    if (!diff?.changes.length) return;
+    if (!canApply) return;
     setLoading(true);
     setResult(null);
 
@@ -252,21 +329,27 @@ export default function PriceUpdatePanel({ products, setProducts, showToast }) {
     let done = 0;
     setProgress({ current: 0, total: entries.length });
 
-    for (const { patch, ids } of entries) {
-      const { error } = await supabase.from("products").update(patch).in("id", ids);
-      if (error) errors.push(`${ids.length} producto(s): ${error.message}`);
-      else ids.forEach(id => okIds.add(id));
-      setProgress({ current: ++done, total: entries.length });
+    // Sin este try/catch, un error de red dejaba el panel en "Actualizando..."
+    // para siempre y había que recargar la página para reintentar.
+    try {
+      for (const { patch, ids } of entries) {
+        const { error } = await supabase.from("products").update(patch).in("id", ids);
+        if (error) errors.push(`${ids.length} producto(s): ${error.message}`);
+        else ids.forEach(id => okIds.add(id));
+        setProgress({ current: ++done, total: entries.length });
+      }
+    } catch (err) {
+      errors.push(`Se cortó la actualización: ${err.message}`);
+    } finally {
+      if (okIds.size) {
+        const byId = new Map(diff.changes.map(c => [c.id, c]));
+        setProducts(products.map(p => (okIds.has(p.id) ? applyChangeToProduct(p, byId.get(p.id)) : p)));
+      }
+      setResult({ updated: okIds.size, errors });
+      setLoading(false);
+      setProgress(null);
     }
 
-    if (okIds.size) {
-      const byId = new Map(diff.changes.map(c => [c.id, c]));
-      setProducts(products.map(p => (okIds.has(p.id) ? applyChangeToProduct(p, byId.get(p.id)) : p)));
-    }
-
-    setResult({ updated: okIds.size, errors });
-    setLoading(false);
-    setProgress(null);
     if (okIds.size) showToast(`${okIds.size} precio${okIds.size !== 1 ? "s" : ""} actualizado${okIds.size !== 1 ? "s" : ""}`);
     if (errors.length && !okIds.size) showToast("No se pudo actualizar ningún precio", "error");
   };
@@ -337,13 +420,19 @@ export default function PriceUpdatePanel({ products, setProducts, showToast }) {
               </ul>
             )}
 
+            {audit && (
+              <SheetAudit audit={audit} confirmPartial={confirmPartial} setConfirmPartial={setConfirmPartial} />
+            )}
+
             {diff.changes.length > 0 ? (
               <>
                 <ChangesTable changes={diff.changes} />
-                <button className="btn btn-primary" style={{ width: "100%", marginTop: 14 }} onClick={handleApply} disabled={loading}>
+                <button className="btn btn-primary" style={{ width: "100%", marginTop: 14 }} onClick={handleApply} disabled={loading || !canApply}>
                   {loading
                     ? "Actualizando..."
-                    : `Actualizar ${diff.changes.length} precio${diff.changes.length !== 1 ? "s" : ""}`}
+                    : blocked
+                      ? "Corregí los productos repetidos para continuar"
+                      : `Actualizar ${diff.changes.length} precio${diff.changes.length !== 1 ? "s" : ""}`}
                 </button>
                 {loading && progress && (
                   <div style={{ marginTop: 10, height: 6, borderRadius: 4, background: "var(--b2)", overflow: "hidden" }}>

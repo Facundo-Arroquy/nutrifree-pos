@@ -5,7 +5,9 @@
  *  1. `buildPriceSheet(products)` genera la planilla con los productos ya cargados.
  *  2. El usuario edita SOLO las columnas de precio en Excel.
  *  3. `parsePriceSheet(matrix)` normaliza lo que vuelve del archivo.
- *  4. `diffPriceRows(rows, products)` compara contra la base y devuelve únicamente
+ *  4. `auditPriceSheet(rows, products)` verifica que la planilla siga íntegra:
+ *     filas borradas, ids repetidos y nombres que no coinciden con la base.
+ *  5. `diffPriceRows(rows, products)` compara contra la base y devuelve únicamente
  *     los cambios de precio; cualquier otra columna que el usuario haya tocado se
  *     ignora, así una edición accidental de stock/categoría no puede pisar datos.
  *
@@ -127,6 +129,56 @@ export function parsePriceSheet(matrix) {
   }
 
   return { rows, missing: [] };
+}
+
+/**
+ * Revisa que la planilla siga siendo la que se descargó, antes de mirar precios.
+ *
+ * Excel no permite bloquear el borrado de filas dejando las celdas de precio
+ * editables (haría falta escribir estilos por celda, que la librería no soporta),
+ * así que el control se hace acá: si faltan productos o hay ids repetidos, se
+ * avisa y la actualización queda frenada hasta que se confirme.
+ *
+ * El alcance se infiere de la propia planilla: si no trae ningún producto
+ * inactivo, se asume que se descargó con "solo activos" y los inactivos que
+ * falten no cuentan como filas borradas.
+ *
+ * @returns {{ missing: Array<{id,name}>, duplicates: Array<{id,name,lines:number[]}>,
+ *             renamed: Array<{id,sheetName,dbName,line}>, expected: number }}
+ */
+export function auditPriceSheet(rows, products) {
+  const all = products || [];
+  const inSheet = new Set(rows.map(r => r.id).filter(Boolean));
+
+  const includesInactive = all.some(p => p.active === false && inSheet.has(p.id));
+  const expected = all.filter(p => p.active !== false || includesInactive);
+  const missing = expected
+    .filter(p => !inSheet.has(p.id))
+    .map(p => ({ id: p.id, name: p.name || "" }));
+
+  const seen = new Map();
+  for (const row of rows) {
+    if (!row.id) continue;
+    if (!seen.has(row.id)) seen.set(row.id, []);
+    seen.get(row.id).push(row.line);
+  }
+  const byId = new Map(all.map(p => [p.id, p]));
+  const duplicates = [...seen.entries()]
+    .filter(([, lines]) => lines.length > 1)
+    .map(([id, lines]) => ({ id, name: byId.get(id)?.name || "", lines }));
+
+  // Nombre distinto al de la base: suele ser una columna de precios pegada
+  // corrida, que asignaría precios al producto equivocado sin avisar.
+  const renamed = [];
+  for (const row of rows) {
+    if (!row.name) continue;
+    const product = byId.get(row.id);
+    if (product && product.name && product.name !== row.name) {
+      renamed.push({ id: row.id, sheetName: row.name, dbName: product.name, line: row.line });
+    }
+  }
+
+  return { missing, duplicates, renamed, expected: expected.length };
 }
 
 const round2 = n => Math.round(n * 100) / 100;

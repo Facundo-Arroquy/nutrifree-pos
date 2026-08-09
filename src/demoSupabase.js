@@ -3,7 +3,7 @@
  *
  * Implementa la misma interfaz que el cliente real de Supabase usando
  * localStorage como almacenamiento. Soporta: select, insert, update,
- * delete, upsert, eq (filtros) y order. Es thenable (await-able).
+ * delete, upsert, eq/in (filtros) y order. Es thenable (await-able).
  *
  * Las claves en localStorage siguen el patrón: "nutrifree_demo_<tabla>"
  */
@@ -38,11 +38,18 @@ class DemoQueryBuilder {
 
   /** Agrega un filtro de igualdad (se pueden encadenar múltiples). */
   eq(col, val)             { this._filters.push({ col, val }); return this; }
+  /** Filtro por pertenencia a un conjunto, como el .in() de Supabase. */
+  in(col, vals)            { this._filters.push({ col, vals: new Set(vals) }); return this; }
   /** Ordena el resultado por columna. Por defecto ascendente. */
   order(col, opts = {})    { this._orderCol = col; this._orderAsc = opts.ascending !== false; return this; }
 
+  /** ¿La fila pasa todos los filtros encadenados? */
+  _matches(row) {
+    return this._filters.every(f => (f.vals ? f.vals.has(row[f.col]) : row[f.col] === f.val));
+  }
+
   _applyFilters(rows) {
-    return this._filters.reduce((acc, f) => acc.filter(r => r[f.col] === f.val), rows);
+    return rows.filter(r => this._matches(r));
   }
 
   _run() {
@@ -78,17 +85,13 @@ class DemoQueryBuilder {
     }
 
     if (this._op === "update") {
-      const updated = rows.map(r =>
-        this._filters.every(f => r[f.col] === f.val) ? { ...r, ...this._data } : r
-      );
+      const updated = rows.map(r => (this._matches(r) ? { ...r, ...this._data } : r));
       setRows(this._table, updated);
       return { data: null, error: null };
     }
 
     if (this._op === "delete") {
-      const remaining = rows.filter(r =>
-        !this._filters.every(f => r[f.col] === f.val)
-      );
+      const remaining = rows.filter(r => !this._matches(r));
       setRows(this._table, remaining);
       return { data: null, error: null };
     }
