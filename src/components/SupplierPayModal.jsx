@@ -15,15 +15,13 @@
 import { useMemo, useState } from "react";
 import { Ico, Modal, $, fmtDate, todayStr, PAY_LABELS } from "../shared.jsx";
 import { allocatePayment, buildPaymentMovements, availableCredit, supplierBalance } from "../utils/supplierAccount.js";
+import { parseMoneyInput } from "../utils/money.js";
 
 /** Métodos con los que se le puede pagar a un proveedor. */
 export const SUPPLIER_PAY_OPTS = [["cash", "Efectivo"], ["transfer", "Transferencia"], ["card", "Tarjeta"], ["check", "Cheque"]];
 
 /** Etiquetas de métodos, incluidos los internos que no mueven plata real. */
 export const SUPPLIER_PAY_LABELS = { ...PAY_LABELS, check: "Cheque", balance: "Saldo a favor" };
-
-// Acepta "10.000,50" (formato argentino) y "10000.50".
-const parseAmount = (raw) => Number(String(raw).replace(/\./g, "").replace(",", ".")) || 0;
 
 export default function SupplierPayModal({ supplier, expenses, movements, onClose, onConfirm, submitting }) {
   const credit = availableCredit(movements, supplier.id);
@@ -43,7 +41,7 @@ export default function SupplierPayModal({ supplier, expenses, movements, onClos
   const [paymentMethod, setPaymentMethod] = useState("transfer");
   const [notes, setNotes] = useState("");
 
-  const parsed = parseAmount(amount);
+  const parsed = parseMoneyInput(amount);
   const preview = useMemo(
     () => allocatePayment({ expenses, movements, supplierId: supplier.id, amount: parsed, selectedIds }),
     [expenses, movements, supplier.id, parsed, selectedIds]

@@ -132,6 +132,26 @@ Los movimientos con método `balance` son saldo a favor y no mueven efectivo.
 
 Tests en `src/utils/supplierAccount.test.js` (`npm test`).
 
+## `src/utils/money.js` — lectura de montos de formulario
+
+`parseMoneyInput(raw)` convierte a número el value de un campo de importe.
+
+Los campos de monto de la app son `<input type="number">`: el navegador siempre
+entrega el valor en formato canónico (`"117705.39"`), con **punto decimal** y sin
+separador de miles. Por eso acá el punto es siempre decimal.
+
+Tratarlo como separador de miles (`replace(/\./g, "")`, pensado para el formato
+argentino `"1.234,50"`) multiplicaba por 100 todo importe con centavos: pagar
+$117.705,39 de deuda a un proveedor se registraba como $11.770.539 y dejaba
+$11.652.834 de saldo a favor. Lo usan `SupplierPayModal` y el pago de cuenta
+corriente de `CustomersPage`.
+
+Para importes que vienen de **afuera** (planillas de Excel en es-AR, donde
+`"1.234,50"` sí es formato argentino) el parser correcto es `parsePrice()` de
+`utils/priceImport.js`, que resuelve la ambigüedad mirando ambos separadores.
+
+Tests en `src/utils/money.test.js` (`npm test`).
+
 ## `src/utils/priceImport.js` — actualización masiva de precios
 
 Motor de la pestaña **Precios** de `ImportPage` (UI en `src/components/PriceUpdatePanel.jsx`).
