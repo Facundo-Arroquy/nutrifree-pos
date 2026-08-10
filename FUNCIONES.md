@@ -62,6 +62,36 @@ se pueden armar: ej. kit = 1 pan de carne (20) + 1 canastita (15) → **15**.
 
 Tests en `src/utils/stock.test.js` (`npm test`).
 
+---
+
+## `src/utils/duplicateSale.js` — ventas cargadas dos veces
+
+El POS y el **Calendario de Pedidos** son dos caminos distintos que terminan en
+la misma tabla `sales`. Cuando la misma entrega se carga por los dos, el negocio
+queda con el ingreso contado dos veces, el stock descontado dos veces y —si una
+de las dos fue a cuenta corriente— una deuda que el cliente ya pagó por el otro
+camino. Pasó en agosto de 2026 y no se detectó porque el Calendario **no
+registraba nada en `audit_log`**.
+
+| Función | Qué hace |
+|---|---|
+| `findDuplicateSales(sales, candidate, {windowDays})` | Ventas del mismo cliente, mismo total, estado vivo y dentro de la ventana. Ordenadas de la más reciente a la más vieja. |
+| `duplicateWarning(duplicates, customerName)` | Texto del `confirm()` con monto, fecha y estado del pedido anterior. `null` si no hay nada que advertir. |
+| `saleStatusLabel(status)` / `shortDate(v)` / `formatAmount(n)` | Helpers de presentación de los avisos. |
+
+**Invariantes:**
+- **Avisa, no bloquea:** la decisión final es de quien está en el mostrador.
+- Las ventas **anónimas nunca se comparan**: sin cliente identificado, dos
+  tickets del mismo monto son indistinguibles y el aviso sería ruido constante.
+- Los pedidos `cancelled` no cuentan como duplicado (`LIVE_SALE_STATUSES`).
+- Ventana por defecto: `DUPLICATE_WINDOW_DAYS` = 7 días, hacia atrás y adelante.
+
+**Auditoría del Calendario:** `OrdersKanbanPage` ahora registra `pedido`
+(alta), `venta` (cobro) y `eliminar` (cancelación) con entidad `calendario`,
+igual que el POS con entidad `pos`.
+
+Tests en `src/utils/duplicateSale.test.js` (`npm test`).
+
 ### Dónde se toca stock además de ventas y pedidos
 
 | Lugar | Operación |

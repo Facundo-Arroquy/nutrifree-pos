@@ -10,12 +10,13 @@
  * Los pedidos abiertos desde Ventas en Mostrador aparecen aquí automáticamente.
  *
  * Props: sales, setSales, products, setProducts, customers,
- *        accountPayments, setAccountPayments, showToast
+ *        accountPayments, setAccountPayments, showToast, logAction
  */
 import { useState, useMemo, useRef, useEffect } from "react";
 import { Ico, Modal, $, uid, PAY_ORDER_LABELS, todayStr } from "../shared.jsx";
 import { supabase, saleToDb, accountPaymentToDb } from "../supabase.js";
 import { restoreSaleStock, syncStockForStatusChange, applyStockResults, stockWarning } from "../utils/stock.js";
+import { findDuplicateSales, duplicateWarning, shortDate } from "../utils/duplicateSale.js";
 
 const COLUMNS = [
   { id: "open",      label: "Pendiente",          icon: "📋" },
@@ -36,7 +37,7 @@ const deliveryBadge = (dateStr) => {
 
 export default function OrdersKanbanPage({
   sales, setSales, products, setProducts, customers,
-  accountPayments, setAccountPayments, showToast,
+  accountPayments, setAccountPayments, showToast, logAction,
 }) {
   // ── Drag & drop ────────────────────────────────────────────────────────────
   const [draggingId, setDraggingId]   = useState(null);
@@ -290,6 +291,9 @@ export default function OrdersKanbanPage({
           return [...prev, ...newPayments.filter(p => !ids.has(p.id))];
         });
       }
+      const metodo = PAY_ORDER_LABELS?.[payMethod] || payMethod;
+      logAction?.("venta", "calendario",
+        `$${detail.total} — ${detail.customerName || "Sin cliente"} — ${metodo} (pedido del ${shortDate(detail.createdAt)})`);
       showToast("Pedido cobrado ✓");
       setDetail(null);
     } catch (err) {
@@ -310,6 +314,8 @@ export default function OrdersKanbanPage({
       if (error) throw error;
       setSales(prev => prev.map(s => s.id === sale.id ? { ...s, status: "cancelled" } : s));
       if (detail?.id === sale.id) setDetail(null);
+      logAction?.("eliminar", "calendario",
+        `Pedido de $${sale.total} — ${sale.customerName || "Sin cliente"} — cancelado`);
       showToast("Pedido cancelado");
     } catch (err) {
       showToast("Error: " + err.message, "error");
@@ -381,6 +387,16 @@ export default function OrdersKanbanPage({
   const saveNewOrder = async () => {
     if (newCart.length === 0) { showToast("Agregá al menos un producto", "error"); return; }
     if (!newDeliveryDate) { showToast("Seleccioná una fecha de entrega", "error"); return; }
+    // Mismo control que el POS: los dos caminos terminan en la tabla `sales`,
+    // así que la misma entrega cargada por los dos duplica ingreso y stock.
+    const createdAt = new Date().toISOString();
+    if (newCustomer) {
+      const dups = findDuplicateSales(sales, {
+        customerId: newCustomer.id, total: newTotal, createdAt,
+      });
+      const warning = duplicateWarning(dups, newCustomer.name);
+      if (warning && !confirm(warning)) return;
+    }
     setSaving(true);
     try {
       // El stock se descuenta cuando el pedido llega a "Listo para Retirar", no al crearlo.
@@ -394,7 +410,7 @@ export default function OrdersKanbanPage({
         paymentMethod: null,
         status: "open",
         notes: newNotes,
-        createdAt: new Date().toISOString(),
+        createdAt,
         discountType: "pct",
         discountValue: 0,
         discountAmount: 0,
@@ -406,6 +422,8 @@ export default function OrdersKanbanPage({
       if (error) throw error;
       setSales(prev => [sale, ...prev]);
       setShowNew(false);
+      logAction?.("pedido", "calendario",
+        `$${newTotal} — ${sale.customerName} — entrega ${newDeliveryDate}`);
       showToast("Pedido cargado ✓");
     } catch (err) {
       showToast("Error: " + err.message, "error");

@@ -18,6 +18,7 @@ import { Ico, Modal, $, PAY_ORDER_LABELS, uid, todayStr } from "../shared.jsx";
 import { supabase, saleToDb, accountPaymentToDb } from "../supabase.js";
 import { sendBillingAlert } from "../utils/emailAlerts.js";
 import { deductSaleStock, applyStockResults, stockWarning, availableStock } from "../utils/stock.js";
+import { findDuplicateSales, duplicateWarning } from "../utils/duplicateSale.js";
 
 export default function POSPage({ products, setProducts, customers, setCustomers, sales, setSales, accountPayments, setAccountPayments, showToast, logAction, frozenDiscount = 15 }) {
   const custBal = (id) =>
@@ -157,6 +158,16 @@ export default function POSPage({ products, setProducts, customers, setCustomers
       }
     }
     const now = new Date().toISOString();
+    // El Calendario de Pedidos y el POS son dos caminos al mismo resultado: si
+    // la misma entrega se carga por los dos, el ingreso y el stock se duplican
+    // y la deuda queda colgada de la venta equivocada. Avisamos, no bloqueamos.
+    if (selectedCustomer) {
+      const dups = findDuplicateSales(sales, {
+        customerId: selectedCustomer.id, total, createdAt: now,
+      });
+      const warning = duplicateWarning(dups, selectedCustomer.name);
+      if (warning && !confirm(warning)) { setSubmitting(false); return; }
+    }
     const sale = {
       id: uid(),
       customerId: selectedCustomer?.id || null,
