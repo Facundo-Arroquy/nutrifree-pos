@@ -10,6 +10,7 @@
 import { useState, useEffect } from "react";
 import { Ico, Modal, $, fmtDate, uid, PAY_LABELS, STATUS_LABELS, STATUS_COLORS, todayStr, useSortable, SortableTh } from "../shared.jsx";
 import { supabase, customerToDb, accountPaymentToDb, dbToAccountPayment } from "../supabase.js";
+import { parseMoneyInput } from "../utils/money.js";
 
 export default function CustomersPage({ customers, setCustomers, sales, accountPayments, setAccountPayments, showToast, logAction }) {
   // Sincronizar account_payments al abrir la página, para no depender sólo del realtime
@@ -201,8 +202,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
     const creditForInitial = initialDebtAlloc?.creditApplied ?? 0;
     const totalCreditUsed = creditForOrders.reduce((sum, a) => sum + a.creditApplied, 0) + creditForInitial;
 
-    // Sanear formato argentino: "10.000,50" → 10000.50
-    const cashAmount = Number(String(payForm.amount).replace(/\./g, "").replace(",", ".")) || 0;
+    const cashAmount = parseMoneyInput(payForm.amount);
     const cashSelected = allocations.filter(a => a.remaining > 0 && cashSelectedIds.has(a.sale.id));
 
     if (totalCreditUsed === 0 && cashAmount === 0) {
@@ -760,7 +760,7 @@ export default function CustomersPage({ customers, setCustomers, sales, accountP
         const ordersWithRemaining = allocations.filter(a => a.remaining > 0);
         const cashSelectedOrders = ordersWithRemaining.filter(a => cashSelectedIds.has(a.sale.id));
         const cashTotal = cashSelectedOrders.reduce((sum, a) => sum + a.remaining, 0);
-        const enteredAmount = Number(payForm.amount) || 0;
+        const enteredAmount = parseMoneyInput(payForm.amount);
         // La aplicación de crédito tiene efecto neto 0 en custBal (el ajuste de balance lo cancela),
         // así que finalBal solo cambia por el monto en efectivo/transferencia ingresado.
         const finalBal = bal + enteredAmount;
