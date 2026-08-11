@@ -17,7 +17,7 @@ import { Ico, Modal, $, uid, PAY_ORDER_LABELS, todayStr } from "../shared.jsx";
 import { supabase, saleToDb, accountPaymentToDb } from "../supabase.js";
 import { restoreSaleStock, syncStockForStatusChange, applyStockResults, stockWarning } from "../utils/stock.js";
 import { findDuplicateSales, duplicateWarning, shortDate } from "../utils/duplicateSale.js";
-import ProductionKanbanSection from "../components/ProductionKanbanSection.jsx";
+import ProductionKanbanSection, { computePendingItems } from "../components/ProductionKanbanSection.jsx";
 
 const COLUMNS = [
   { id: "open",      label: "Pendiente",          icon: "📋" },
@@ -122,6 +122,12 @@ export default function OrdersKanbanPage({
   const [filterSearch, setFilterSearch]     = useState("");
   const [filterDate, setFilterDate]         = useState("");
   const [tab, setTab]                       = useState("calendar");
+
+  // Badge del tab Producción: cuántos productos necesitan elaborarse
+  const productionPendingCount = useMemo(
+    () => computePendingItems(sales, products).length,
+    [sales, products]
+  );
 
   // ── Datos ──────────────────────────────────────────────────────────────────
   const kanbanOrders = useMemo(() =>
@@ -460,10 +466,25 @@ export default function OrdersKanbanPage({
             </button>
             <button
               className={`btn btn-sm ${tab === "production" ? "btn-primary" : "btn-ghost"}`}
-              style={{ borderRadius: 0 }}
+              style={{ borderRadius: 0, display: "flex", alignItems: "center", gap: 6 }}
               onClick={() => setTab("production")}
             >
               🍳 Producción
+              {productionPendingCount > 0 && (
+                <span style={{
+                  background:   tab === "production" ? "rgba(255,255,255,.3)" : "var(--red, #dc2626)",
+                  color:        "#fff",
+                  borderRadius: 20,
+                  padding:      "0px 6px",
+                  fontSize:     ".7em",
+                  fontWeight:   700,
+                  lineHeight:   "1.6",
+                  minWidth:     18,
+                  textAlign:    "center",
+                }}>
+                  {productionPendingCount}
+                </span>
+              )}
             </button>
           </div>
           {tab === "calendar" && (
