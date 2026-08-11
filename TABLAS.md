@@ -22,6 +22,7 @@
 | `app_settings`         | Configuración de la app | Parámetros globales de la aplicación (nombre del negocio, moneda, etc.).                                   |
 | `audit_log`            | Registro de auditoría | Log de acciones importantes: ventas, producciones, eliminaciones y accesos, con usuario, acción y detalle. Entidad `pos` = mostrador, `calendario` = Calendario de Pedidos. |
 | `customer_inactive_dismissed` | Clientes inactivos contactados | Registro de clientes inactivos cuya alerta fue descartada: cliente, última venta al descartar, quién la descartó y cuándo. La alerta reaparece automáticamente si el cliente hace una nueva compra. |
+| `production_kanban` | Tablero de producción Kanban | Tarjetas del módulo de producción para cocina. Campos: `product_id`, `product_name`, `qty_requested` (total pedido en orders activas), `qty_stock` (stock al crear/actualizar), `qty_to_produce` (calculado), `status` (`pending`/`in_progress`/`ready`), `stock_updated` (true cuando se sumó stock al pasar a ready). Al mover a `ready`: suma stock vía `adjust_product_stock`. Al volver atrás: revierte. El tablero se vacía manualmente por admin (DELETE, sin revertir stock). |
 
 ## Estados de `sales` y stock
 
