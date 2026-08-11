@@ -17,6 +17,7 @@ import { Ico, Modal, $, uid, PAY_ORDER_LABELS, todayStr } from "../shared.jsx";
 import { supabase, saleToDb, accountPaymentToDb } from "../supabase.js";
 import { restoreSaleStock, syncStockForStatusChange, applyStockResults, stockWarning } from "../utils/stock.js";
 import { findDuplicateSales, duplicateWarning, shortDate } from "../utils/duplicateSale.js";
+import ProductionKanbanSection from "../components/ProductionKanbanSection.jsx";
 
 const COLUMNS = [
   { id: "open",      label: "Pendiente",          icon: "📋" },
@@ -37,7 +38,7 @@ const deliveryBadge = (dateStr) => {
 
 export default function OrdersKanbanPage({
   sales, setSales, products, setProducts, customers,
-  accountPayments, setAccountPayments, showToast, logAction,
+  accountPayments, setAccountPayments, showToast, logAction, user,
 }) {
   // ── Drag & drop ────────────────────────────────────────────────────────────
   const [draggingId, setDraggingId]   = useState(null);
@@ -120,6 +121,7 @@ export default function OrdersKanbanPage({
   const [saving, setSaving]                 = useState(false);
   const [filterSearch, setFilterSearch]     = useState("");
   const [filterDate, setFilterDate]         = useState("");
+  const [tab, setTab]                       = useState("calendar");
 
   // ── Datos ──────────────────────────────────────────────────────────────────
   const kanbanOrders = useMemo(() =>
@@ -438,13 +440,41 @@ export default function OrdersKanbanPage({
       <div className="page-header">
         <div>
           <div className="page-title">Calendario de Pedidos</div>
-          <div className="page-sub">{kanbanOrders.length} pedidos activos</div>
+          <div className="page-sub">
+            {tab === "calendar"
+              ? `${kanbanOrders.length} pedidos activos`
+              : "Módulo de Producción Kanban"}
+          </div>
         </div>
-        <button className="btn btn-primary" onClick={openNew}>
-          <Ico n="plus" s={14}/> Nuevo Pedido
-        </button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{
+            display: "flex", border: "1px solid var(--border)",
+            borderRadius: 8, overflow: "hidden",
+          }}>
+            <button
+              className={`btn btn-sm ${tab === "calendar" ? "btn-primary" : "btn-ghost"}`}
+              style={{ borderRadius: 0 }}
+              onClick={() => setTab("calendar")}
+            >
+              📋 Calendario
+            </button>
+            <button
+              className={`btn btn-sm ${tab === "production" ? "btn-primary" : "btn-ghost"}`}
+              style={{ borderRadius: 0 }}
+              onClick={() => setTab("production")}
+            >
+              🍳 Producción
+            </button>
+          </div>
+          {tab === "calendar" && (
+            <button className="btn btn-primary" onClick={openNew}>
+              <Ico n="plus" s={14}/> Nuevo Pedido
+            </button>
+          )}
+        </div>
       </div>
 
+      {tab === "calendar" ? (<>
       {/* ─── Filtros ─────────────────────────────────────────────────────────── */}
       <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:16, alignItems:"center" }}>
         <input
@@ -858,6 +888,16 @@ export default function OrdersKanbanPage({
             </div>
           </div>
         </div>
+      )}
+      </>) : (
+        <ProductionKanbanSection
+          sales={sales}
+          products={products}
+          setProducts={setProducts}
+          user={user}
+          showToast={showToast}
+          logAction={logAction}
+        />
       )}
     </div>
   );
