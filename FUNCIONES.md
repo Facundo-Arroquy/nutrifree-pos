@@ -231,3 +231,66 @@ se asume que se descargó con "solo activos", así que los inactivos ausentes no
 cuentan como filas borradas.
 
 Tests en `src/utils/priceImport.test.js` (`npm test`).
+
+---
+
+## `src/routes/paths.js` — rutas de la aplicación
+
+Hasta ahora **todas las secciones vivían en la misma URL**: `App.jsx` guardaba un
+estado `page` y renderizaba la vista correspondiente. No había link directo a una
+sección, el botón "atrás" del navegador salía de la app y un F5 devolvía siempre
+al dashboard. Ahora cada sección tiene su propia ruta (react-router).
+
+`paths.js` es la **fuente única de verdad**: un solo catálogo (`ROUTES`) define,
+por sección, el id, la URL, el rol habilitado y los metadatos del sidebar
+(etiqueta, ícono, grupo). Antes esa información estaba duplicada en tres lugares
+de `App.jsx` (el array `nav`, el objeto `PAGE_ROLES` y la cadena de
+`{page==="…" && <Pagina/>}`), que podían desincronizarse.
+
+| Concepto | Dónde |
+|---|---|
+| Catálogo de rutas privadas y permisos | `ROUTES` en `src/routes/paths.js` |
+| Rutas públicas (menú, login, menú mayorista, retorno de pago) | `PUBLIC_PATHS` / `PAY_RESULT_PATHS` |
+| Árbol de rutas y guard por rol | `src/routes/AppRoutes.jsx` |
+| Layout (sidebar, topbar, modales) y estado global | `src/App.jsx` |
+
+### Mapa de URLs
+
+| Sección | URL | Roles |
+|---|---|---|
+| Dashboard | `/dashboard` | admin, vendor |
+| Ventas en Mostrador | `/pos` | admin, vendor |
+| Calendario de Pedidos | `/calendario-pedidos` | admin, vendor, cocina |
+| Pedidos | `/pedidos` | admin, vendor |
+| Facturación | `/facturacion` | admin, vendor |
+| Clientes | `/clientes` | admin, vendor |
+| Productos | `/productos` | admin, vendor |
+| Recetas | `/recetas` | admin, vendor, cocina |
+| Ingredientes | `/ingredientes` | admin, vendor |
+| Producción | `/produccion` | admin, vendor, cocina |
+| Reg. Producción | `/registro-produccion` | admin, vendor, cocina |
+| Banco de Horas | `/banco-horas` | admin |
+| Cierre de Caja | `/caja` | admin, vendor |
+| Gastos | `/gastos` | admin, vendor |
+| Proveedores | `/proveedores` | admin, vendor |
+| Importar datos | `/importar` | admin |
+| Reportes | `/reportes` | admin |
+| FAQ / Ayuda | `/ayuda` | admin, cocina |
+| Configuración | `/configuracion/:seccion` | admin, vendor |
+
+Públicas (sin sesión): `/` (menú), `/login`, `/menu-mayorista`, `/pago-exitoso`,
+`/pago-fallido`, `/pago-pendiente`.
+
+### Reglas de navegación
+
+- **Guard por rol en todas las rutas.** Antes alcanzaba con filtrar el sidebar,
+  porque no había forma de llegar a una sección sin pasar por él. Al ser
+  direccionables por URL, cada ruta valida el rol y muestra "Acceso denegado".
+- **Deep link con sesión cerrada.** Entrar a `/pos` sin sesión muestra el login y,
+  al entrar, cae en `/pos` (no en el dashboard).
+- **Home según rol.** `/` y `/login` con sesión activa redirigen a `/dashboard`,
+  o a `/calendario-pedidos` si el rol es `cocina`. Una URL inexistente hace lo mismo.
+- **Compatibilidad.** Las páginas siguen navegando con `setPage("clientes")`: en
+  `App.jsx` es un shim que traduce el id a su URL. No hubo que tocar las vistas.
+
+Tests en `src/routes/paths.test.js` (`npm test`).

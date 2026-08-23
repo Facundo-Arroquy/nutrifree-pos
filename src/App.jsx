@@ -5,11 +5,12 @@
  *  1. Carga inicial de todos los datos desde Supabase (14 tablas en paralelo)
  *  2. Estado global compartido con todas las páginas vía objeto `props`
  *  3. Lógica de autenticación: login, logout, modo demo
- *  4. Routing client-side mediante estado `page`
+ *  4. Layout general (sidebar + topbar) y montaje del router (`routes/`)
  *  5. Alertas de entrega al login (según ventana de horario configurable)
  *  6. Sidebar dinámico filtrado por rol del usuario
  */
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   CSS, Ico, Toast, LoginPage,
   SEED_PRODUCTS, SEED_CUSTOMERS, SEED_SALES, SEED_CATEGORIES,
@@ -35,29 +36,15 @@ import {
   dbToExpenseSubcategory,
 } from "./supabase.js";
 
-import DashboardPage from "./pages/DashboardPage.jsx";
-import POSPage from "./pages/POSPage.jsx";
-import OrdersPage from "./pages/OrdersPage.jsx";
-import BillingPage from "./pages/BillingPage.jsx";
-import CustomersPage from "./pages/CustomersPage.jsx";
-import ProductsPage from "./pages/ProductsPage.jsx";
-import ProductionPage from "./pages/ProductionPage.jsx";
-import RecipesPage from "./pages/RecipesPage.jsx";
-import IngredientsPage from "./pages/IngredientsPage.jsx";
-import ExpensesPage from "./pages/ExpensesPage.jsx";
-import SuppliersPage from "./pages/SuppliersPage.jsx";
-import ReportsPage from "./pages/ReportsPage.jsx";
-import SettingsPage from "./pages/SettingsPage.jsx";
-import CashShiftPage from "./pages/CashShiftPage.jsx";
-import ImportPage from "./pages/ImportPage.jsx";
-import HelpAdminPage from "./pages/HelpAdminPage.jsx";
-import ProductionLogPage from "./pages/ProductionLogPage.jsx";
-import HoursBankPage from "./pages/HoursBankPage.jsx";
-import OrdersKanbanPage from "./pages/OrdersKanbanPage.jsx";
 import ChatWidget from "./components/ChatWidget.jsx";
 import MenuPage from "./pages/MenuPage.jsx";
 import WholesaleMenuPage from "./pages/WholesaleMenuPage.jsx";
 import PagoResultadoPage from "./pages/PagoResultadoPage.jsx";
+import AppRoutes from "./routes/AppRoutes.jsx";
+import {
+  PUBLIC_PATHS, PAY_RESULT_PATHS, SIDEBAR_SECTIONS, DEFAULT_SETTINGS_SECTION,
+  pathForPage, pageIdForPath, homePathFor, navItemsFor, settingsSectionsFor,
+} from "./routes/paths.js";
 import { auditIsDue, runAudit, sendAuditEmail } from "./utils/auditCheck.js";
 
 // ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
@@ -108,26 +95,21 @@ const syncBusinessUser = async (session) => {
   }
 };
 
-function AccessDenied() {
-  return (
-    <div className="page">
-      <div className="empty">
-        <div className="empty-icon" style={{ opacity:1 }}>🔒</div>
-        <h3>Acceso denegado</h3>
-        <p>No tenés permiso para ver esta sección.</p>
-      </div>
-    </div>
-  );
-}
-
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [page, setPage] = useState("dashboard");
+  // La sección activa ya no es estado: la define la URL (ver routes/paths.js).
+  const location = useLocation();
+  const navigate = useNavigate();
+  const page = pageIdForPath(location.pathname);
+  /** Compat: las páginas siguen llamando setPage("clientes") para navegar. */
+  const setPage = (id) => navigate(pathForPage(id));
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(244);
-  const [settingsSection, setSettingsSection] = useState("general");
+  // Subsección de Configuración: sale de la URL /configuracion/:section.
+  const settingsSection = (location.pathname.split("/")[2] || DEFAULT_SETTINGS_SECTION);
+  const setSettingsSection = (id) => navigate(`${pathForPage("settings")}/${id}`);
   const [settingsExpanded, setSettingsExpanded] = useState(false);
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -197,7 +179,9 @@ export default function App() {
   // El rol "cocina" tiene navegación limitada: si por defecto (o al restaurar
   // sesión) cae en una página fuera de su alcance, lo mandamos al calendario.
   useEffect(() => {
-    if (user?.role === "cocina" && page === "dashboard") setPage("orders-kanban");
+    if (user?.role === "cocina" && page === "dashboard") {
+      navigate(pathForPage("orders-kanban"), { replace: true });
+    }
   }, [user, page]);
 
   useEffect(() => {
@@ -490,21 +474,6 @@ export default function App() {
     }).catch(() => {});
   }, [user]);
 
-  // ─── Route guards ──────────────────────────────────────────────────────────
-  const PAGE_ROLES = {
-    reports: ["admin"], import: ["admin"], "hours-bank": ["admin"],
-    "help-admin":     ["admin", "cocina"],
-    "orders-kanban":  ["admin", "vendor", "cocina"],
-    recipes:          ["admin", "vendor", "cocina"],
-    production:       ["admin", "vendor", "cocina"],
-    "production-log": ["admin", "vendor", "cocina"],
-  };
-  const canAccess = (pageId) => {
-    if (user?.isDemo) return true;
-    const allowed = PAGE_ROLES[pageId] || ["admin", "vendor"];
-    return allowed.includes(user?.role);
-  };
-
   // ─── Alertas de entrega para usuarios reales (luego de cargar ventas) ──────
   useEffect(() => {
     if (!user || user.isDemo || alertsChecked.current) return;
@@ -592,26 +561,26 @@ export default function App() {
     }).length;
   }, [products, recipes]);
 
-  // Menú mayorista en /menu-mayorista (público con código)
-  const currentPath = window.location.pathname;
-  if (currentPath === "/menu-mayorista") {
+  // ─── Rutas públicas: se renderizan sin el layout de la app ────────────────
+  const currentPath = location.pathname;
+  if (currentPath === PUBLIC_PATHS.wholesaleMenu) {
     return <WholesaleMenuPage />;
   }
 
   // Páginas de resultado de pago MP (públicas)
-  if (["/pago-exitoso", "/pago-fallido", "/pago-pendiente"].includes(currentPath)) {
+  if (PAY_RESULT_PATHS.includes(currentPath)) {
     return <PagoResultadoPage />;
   }
 
   // Menú público en /
-  if (currentPath === "/" && !user) {
+  if (currentPath === PUBLIC_PATHS.home && !user) {
     if (authLoading) return (
       <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#f3faf8", flexDirection:"column", gap:16 }}>
         <img src="/imagenes/logo.png" style={{ height:60, opacity:0.7 }} alt="NutriFree" />
         <div style={{ fontFamily:"Arial, sans-serif", fontSize:".9em", color:"#89b8ad" }}>Cargando…</div>
       </div>
     );
-    return <MenuPage onGoToLogin={() => { window.location.href = "/login"; }} />;
+    return <MenuPage onGoToLogin={() => navigate(PUBLIC_PATHS.login)} />;
   }
 
   if (authLoading) return (
@@ -680,48 +649,16 @@ export default function App() {
           }
         }
         setUser(u);
-        setPage(u?.role === "cocina" ? "orders-kanban" : "dashboard");
+        // Si venía de /login o /, AppRoutes lo lleva a la home de su rol;
+        // si entró por un deep link (ej. /pos), se respeta esa URL.
+        navigate(pageIdForPath(currentPath) ? currentPath : homePathFor(u), { replace: true });
       }} />
     </>
   );
 
-  const nav = [
-    { id:"dashboard",   label:"Dashboard",      icon:"dashboard",   roles:["admin","vendor"], section:"top" },
-    { id:"pos",         label:"Ventas en Mostrador", icon:"pos",      roles:["admin","vendor"], section:"ventas" },
-    { id:"menu-banner", label:"Menú del Día",    icon:"dashboard",   roles:["admin","vendor","cocina"], section:"ventas" },
-    { id:"orders-kanban", label:"Calendario de Pedidos", icon:"orders", roles:["admin","vendor","cocina"], section:"ventas" },
-  { id:"orders",      label:"Pedidos",         icon:"orders",      roles:["admin","vendor"], section:"ventas" },
-    { id:"billing",     label:"Facturación",     icon:"billing",     roles:["admin","vendor"], section:"ventas" },
-    { id:"customers",   label:"Clientes",        icon:"customers",   roles:["admin","vendor"], section:"ventas" },
-    { id:"products",    label:"Productos",       icon:"products",    roles:["admin","vendor"], section:"productos" },
-    { id:"recipes",     label:"Recetas",         icon:"recipes",     roles:["admin","vendor","cocina"], section:"productos" },
-    { id:"ingredients", label:"Ingredientes",    icon:"ingredients", roles:["admin","vendor"], section:"productos" },
-    { id:"production",      label:"Producción",        icon:"production",  roles:["admin","vendor","cocina"], section:"productos" },
-    { id:"production-log",  label:"Reg. Producción",   icon:"production",  roles:["admin","vendor","cocina"], section:"productos" },
-    { id:"cash",        label:"Cierre de Caja",  icon:"cash",        roles:["admin","vendor"], section:"finanzas" },
-    { id:"expenses",    label:"Gastos",          icon:"expenses",    roles:["admin","vendor"], section:"finanzas" },
-    { id:"suppliers",   label:"Proveedores",     icon:"suppliers",   roles:["admin","vendor"], section:"finanzas" },
-    { id:"import",      label:"Importar datos",  icon:"upload",      roles:["admin"],          section:"bottom" },
-    { id:"reports",     label:"Reportes",        icon:"reports",     roles:["admin"],          section:"bottom" },
-    { id:"help-admin",  label:"FAQ / Ayuda",     icon:"settings",    roles:["admin","cocina"], section:"bottom" },
-    { id:"settings",    label:"Configuración",   icon:"settings",    roles:["admin","vendor"], section:"bottom" },
-  ].filter(n => user.isDemo || n.roles.includes(user.role));
-  const SETTINGS_SECTIONS = [
-    { id:"general",   label:"General",         roles:["admin","vendor"] },
-    { id:"sistema",   label:"Sistema",          roles:["admin","vendor"] },
-    { id:"precios",   label:"Listas de precios", roles:["admin","vendor"] },
-    { id:"empleados", label:"Empleados",        roles:["admin"] },
-    { id:"notas",     label:"Notas internas",   roles:["admin"] },
-    { id:"backup",    label:"Backup",           roles:["admin"] },
-    { id:"cuenta",    label:"Mi cuenta",        roles:["admin","vendor"] },
-  ];
-  const sidebarSections = [
-    { label: null,        key: "top" },
-    { label: "Ventas",    key: "ventas" },
-    { label: "Productos", key: "productos" },
-    { label: "Finanzas",  key: "finanzas" },
-    { label: null,        key: "bottom" },
-  ];
+  const nav = navItemsFor(user);
+  const SETTINGS_SECTIONS = settingsSectionsFor(user);
+  const sidebarSections = SIDEBAR_SECTIONS;
 
   /** Restaura los datos demo a su estado original y recarga la aplicación. */
   const resetDemo = () => {
@@ -770,11 +707,10 @@ export default function App() {
                   {items.map(n => {
                     if (n.id === "settings") {
                       const expanded = settingsExpanded || page === "settings";
-                      const sections = SETTINGS_SECTIONS.filter(s => user.isDemo || s.roles.includes(user.role));
                       return (
                         <div key="settings">
                           <button className={`ni${page==="settings"?" active":""}`} onClick={() => {
-                            if (page !== "settings") { setPage("settings"); setSettingsSection("general"); }
+                            if (page !== "settings") setSettingsSection(DEFAULT_SETTINGS_SECTION);
                             setSettingsExpanded(v => !v);
                             setSidebarOpen(false);
                           }}>
@@ -783,10 +719,10 @@ export default function App() {
                               <Ico n="chevron" s={11}/>
                             </span>
                           </button>
-                          {expanded && sections.map(sec => (
+                          {expanded && SETTINGS_SECTIONS.map(sec => (
                             <button key={sec.id} className={`ni${page==="settings" && settingsSection===sec.id?" active":""}`}
                               style={{ paddingLeft:32, fontSize:".82em" }}
-                              onClick={() => { setPage("settings"); setSettingsSection(sec.id); setSidebarOpen(false); }}
+                              onClick={() => { setSettingsSection(sec.id); setSidebarOpen(false); }}
                             >
                               {sec.label}
                             </button>
@@ -873,25 +809,7 @@ export default function App() {
             </div>
           </div>
           <div style={{ flex:1, overflow:"hidden" }}>
-            {page==="dashboard" && <DashboardPage {...props}/>}
-            {page==="pos" && <POSPage {...props}/>}
-            {page==="orders-kanban" && <OrdersKanbanPage {...props}/>}
-            {page==="orders" && <OrdersPage {...props}/>}
-            {page==="billing" && <BillingPage {...props}/>}
-            {page==="cash" && <CashShiftPage {...props}/>}
-            {page==="customers" && <CustomersPage {...props}/>}
-            {page==="products" && <ProductsPage {...props}/>}
-            {page==="production" && <ProductionPage {...props}/>}
-            {page==="production-log" && <ProductionLogPage {...props}/>}
-            {page==="hours-bank" && (canAccess("hours-bank") ? <HoursBankPage {...props}/> : <AccessDenied/>)}
-            {page==="recipes" && <RecipesPage {...props}/>}
-            {page==="ingredients" && <IngredientsPage {...props}/>}
-            {page==="expenses" && <ExpensesPage {...props}/>}
-            {page==="suppliers" && <SuppliersPage {...props}/>}
-            {page==="import" && (canAccess("import") ? <ImportPage {...props}/> : <AccessDenied/>)}
-            {page==="reports" && (canAccess("reports") ? <ReportsPage {...props}/> : <AccessDenied/>)}
-            {page==="help-admin" && (canAccess("help-admin") ? <HelpAdminPage {...props}/> : <AccessDenied/>)}
-            {page==="settings" && <SettingsPage {...props}/>}
+            <AppRoutes user={user} pageProps={props}/>
           </div>
         </div>
       </div>
