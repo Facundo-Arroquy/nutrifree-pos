@@ -12,6 +12,7 @@ import { useState, useEffect } from "react";
 import { Ico } from "../shared.jsx";
 import { supabase, dbToExpenseSubcategory } from "../supabase.js";
 import { getLastAuditResult, auditIsDue, runAudit, sendAuditEmail } from "../utils/auditCheck.js";
+import { SETTINGS_SECTIONS } from "../routes/paths.js";
 
 export default function SettingsPage({ user, products, categories, setCategories, expenseCategories, setExpenseCategories, expenseSubcategories, setExpenseSubcategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, settingsSection = "general", setPage }) {
   const [newCat, setNewCat] = useState("");
@@ -254,14 +255,9 @@ export default function SettingsPage({ user, products, categories, setCategories
     if (win) { win.document.write(html); win.document.close(); }
   };
 
-  const SECTION_TITLES = {
-    general:   "General",
-    sistema:   "Sistema",
-    precios:   "Listas de precios",
-    empleados: "Empleados",
-    notas:     "Notas internas",
-    cuenta:    "Mi cuenta",
-  };
+  // Título de la subsección: sale del catálogo de rutas para no duplicar la
+  // lista (antes faltaba "backup" y el breadcrumb mostraba "General").
+  const sectionTitle = SETTINGS_SECTIONS.find(s => s.id === settingsSection)?.label || "General";
 
   return (
     <div className="page">
@@ -270,7 +266,7 @@ export default function SettingsPage({ user, products, categories, setCategories
           <div className="page-title">
             Configuración
             <span style={{ fontWeight:400, color:"var(--t3)", marginLeft:8, fontSize:".75em" }}>
-              / {SECTION_TITLES[settingsSection] || "General"}
+              / {sectionTitle}
             </span>
           </div>
         </div>
