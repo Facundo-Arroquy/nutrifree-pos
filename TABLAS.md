@@ -41,3 +41,14 @@ columna aparte que lo registre:
 
 La lógica que mantiene este invariante vive en `src/utils/stock.js`; ver
 `FUNCIONES.md`.
+
+### Edición de precios de un pedido
+
+Mientras el pedido está vivo (`open` / `preparing` / `ready`) el Calendario de
+Pedidos puede reescribir `items`, `total`, `discount_type`, `discount_value` y
+`discount_amount` de la fila. El `status` y el stock no se tocan en esa
+operación. La aritmética está en `src/utils/orderPricing.js`.
+
+Un pedido `closed` ya generó su cargo en `account_payments`: **no** se edita
+desde el Calendario, porque cambiar el total dejaría la cuenta corriente
+descuadrada.
