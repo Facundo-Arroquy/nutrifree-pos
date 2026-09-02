@@ -5,6 +5,8 @@
  * - Arrastrá una tarjeta para cambiar su estado.
  * - Hacé click en una tarjeta para ver detalle, avanzar estado o cobrar.
  * - Botón "Nuevo Pedido" para crear pedidos sin pasar por el POS.
+ * - En el detalle se puede corregir el precio unitario, la cantidad y el precio
+ *   final del pedido, con la misma aritmética del mostrador (ver utils/orderPricing.js).
  *
  * Comparte la tabla `sales` con OrdersPage y POSPage.
  * Los pedidos abiertos desde Ventas en Mostrador aparecen aquí automáticamente.
@@ -17,6 +19,9 @@ import { Ico, Modal, $, uid, PAY_ORDER_LABELS, todayStr } from "../shared.jsx";
 import { supabase, saleToDb, accountPaymentToDb } from "../supabase.js";
 import { restoreSaleStock, syncStockForStatusChange, applyStockResults, stockWarning } from "../utils/stock.js";
 import { findDuplicateSales, duplicateWarning, shortDate } from "../utils/duplicateSale.js";
+import {
+  setItemPrice, setItemQty, discountFromFinalTotal, priceSummary, hasPriceChanges,
+} from "../utils/orderPricing.js";
 import ProductionKanbanSection, { computePendingItems } from "../components/ProductionKanbanSection.jsx";
 
 const COLUMNS = [
@@ -106,6 +111,73 @@ export default function OrdersKanbanPage({
   const [payMethod, setPayMethod] = useState("cash");
   const [submitting, setSubmitting] = useState(false);
 
+  // ── Edición de precios del pedido abierto ──────────────────────────────────
+  // `priceDraft` es una copia de trabajo: nada se persiste hasta "Guardar precios",
+  // así un toque accidental en la tablet de cocina no cambia lo que se cobra.
+  const [priceDraft, setPriceDraft]   = useState(null);
+  const [savingPrices, setSavingPrices] = useState(false);
+  // Cocina mueve tarjetas, no toca plata.
+  const canEditPrices = user?.role !== "cocina";
+
+  const openDetail = (sale) => {
+    setDetail(sale);
+    setPayMethod(sale.paymentMethod || "cash");
+    setPriceDraft({
+      items: (sale.items || []).map(i => ({ ...i })),
+      discountType:  sale.discountType  || "pct",
+      discountValue: sale.discountValue || 0,
+    });
+  };
+
+  const closeDetail = () => { setDetail(null); setPriceDraft(null); };
+
+  const draftSummary = priceDraft
+    ? priceSummary(priceDraft)
+    : { subtotal: 0, discountAmount: 0, total: 0 };
+  const priceDirty = hasPriceChanges(detail, priceDraft);
+
+  const patchDraft = (patch) => setPriceDraft(prev => prev && { ...prev, ...patch });
+
+  /** El usuario escribe el precio final: lo convertimos en un descuento fijo. */
+  const applyFinalTotal = (raw) => {
+    const { discountType, discountValue } = discountFromFinalTotal(draftSummary.subtotal, raw);
+    patchDraft({ discountType, discountValue });
+  };
+
+  /** Persiste ítems, descuento y total del pedido. */
+  const savePrices = async () => {
+    if (!detail || !priceDraft || savingPrices) return;
+    const { subtotal, discountAmount, total } = draftSummary;
+    if (subtotal <= 0) { showToast("El pedido no puede quedar sin productos", "error"); return; }
+    setSavingPrices(true);
+    try {
+      const patch = {
+        items: priceDraft.items,
+        total,
+        discountType:  priceDraft.discountType,
+        discountValue: Number(priceDraft.discountValue) || 0,
+        discountAmount,
+      };
+      const { error } = await supabase.from("sales").update({
+        items:           patch.items,
+        total:           patch.total,
+        discount_type:   patch.discountType,
+        discount_value:  patch.discountValue,
+        discount_amount: patch.discountAmount,
+      }).eq("id", detail.id);
+      if (error) throw error;
+      setSales(prev => prev.map(s => s.id === detail.id ? { ...s, ...patch } : s));
+      setDetail(prev => prev && { ...prev, ...patch });
+      logAction?.("editar", "calendario",
+        `Precios del pedido de ${detail.customerName || "Sin cliente"}: $${detail.total} → $${total}`);
+      showToast("Precios actualizados ✓");
+    } catch (err) {
+      showToast("Error: " + err.message, "error");
+    } finally {
+      setSavingPrices(false);
+    }
+  };
+
   // ── Nuevo pedido ───────────────────────────────────────────────────────────
   const [showNew, setShowNew]               = useState(false);
   const [newCart, setNewCart]               = useState([]);
@@ -118,6 +190,8 @@ export default function OrdersKanbanPage({
   const [newNeedsBilling, setNewNeedsBilling] = useState(false);
   const [newProdSearch, setNewProdSearch]   = useState("");
   const [newFilterCat, setNewFilterCat]     = useState("Todos");
+  const [newDiscountType, setNewDiscountType]   = useState("pct");
+  const [newDiscountValue, setNewDiscountValue] = useState(0);
   const [saving, setSaving]                 = useState(false);
   const [filterSearch, setFilterSearch]     = useState("");
   const [filterDate, setFilterDate]         = useState("");
@@ -242,6 +316,10 @@ export default function OrdersKanbanPage({
   const closeOrder = async () => {
     if (!detail || submitting) return;
     if (!payMethod) { showToast("Seleccioná un método de pago", "error"); return; }
+    // Cobrar con precios editados sin guardar cobraría el importe viejo.
+    if (hasPriceChanges(detail, priceDraft)) {
+      showToast("Guardá los precios antes de cobrar", "error"); return;
+    }
     setSubmitting(true);
     try {
       // Hoy el cobro solo se ofrece en "Listo para Retirar" (ya descontado),
@@ -303,7 +381,7 @@ export default function OrdersKanbanPage({
       logAction?.("venta", "calendario",
         `$${detail.total} — ${detail.customerName || "Sin cliente"} — ${metodo} (pedido del ${shortDate(detail.createdAt)})`);
       showToast("Pedido cobrado ✓");
-      setDetail(null);
+      closeDetail();
     } catch (err) {
       showToast("Error: " + err.message, "error");
     } finally {
@@ -321,7 +399,7 @@ export default function OrdersKanbanPage({
       const { error } = await supabase.from("sales").update({ status: "cancelled" }).eq("id", sale.id);
       if (error) throw error;
       setSales(prev => prev.map(s => s.id === sale.id ? { ...s, status: "cancelled" } : s));
-      if (detail?.id === sale.id) setDetail(null);
+      if (detail?.id === sale.id) closeDetail();
       logAction?.("eliminar", "calendario",
         `Pedido de $${sale.total} — ${sale.customerName || "Sin cliente"} — cancelado`);
       showToast("Pedido cancelado");
@@ -359,23 +437,14 @@ export default function OrdersKanbanPage({
     });
   };
 
-  const updateNewQty = (productId, val) => {
-    const qty = Math.max(1, Number(val) || 1);
-    setNewCart(prev => prev.map(i =>
-      i.productId === productId ? { ...i, qty, subtotal: qty * i.price } : i
-    ));
-  };
+  const updateNewQty   = (productId, val) => setNewCart(prev => setItemQty(prev, productId, val));
+  const updateNewPrice = (productId, val) => setNewCart(prev => setItemPrice(prev, productId, val));
 
-  const updateNewPrice = (productId, val) => {
-    const price = Math.max(0, Number(val) || 0);
-    setNewCart(prev => prev.map(i =>
-      i.productId === productId ? { ...i, price, subtotal: i.qty * price } : i
-    ));
-  };
-
-  // Recalcular precios del carrito cuando cambia la lista de precios (igual que POSPage)
+  // Recalcular precios del carrito cuando cambia la lista de precios (igual que POSPage).
+  // Los precios tocados a mano se respetan: cambiar de lista no los debe pisar.
   useEffect(() => {
     setNewCart(prev => prev.map(i => {
+      if (i.priceOverridden) return i;
       const prod = products.find(p => p.id === i.productId);
       if (!prod) return i;
       const price = newPriceList === "retail" ? prod.priceRetail : prod.priceWholesale;
@@ -383,12 +452,23 @@ export default function OrdersKanbanPage({
     }));
   }, [newPriceList]);
 
-  const newTotal = newCart.reduce((a, b) => a + b.subtotal, 0);
+  const newSummary = priceSummary({
+    items: newCart, discountType: newDiscountType, discountValue: newDiscountValue,
+  });
+  const newTotal = newSummary.total;
+
+  /** Precio final tipeado a mano en el pedido nuevo → descuento fijo equivalente. */
+  const applyNewFinalTotal = (raw) => {
+    const { discountType, discountValue } = discountFromFinalTotal(newSummary.subtotal, raw);
+    setNewDiscountType(discountType);
+    setNewDiscountValue(discountValue);
+  };
 
   const openNew = () => {
     setNewCart([]); setNewCustomer(null); setNewCustSearch("");
     setNewPriceList("retail"); setNewDeliveryDate(todayStr());
     setNewNotes(""); setNewProdSearch(""); setNewFilterCat("Todos"); setNewNeedsBilling(false);
+    setNewDiscountType("pct"); setNewDiscountValue(0);
     setShowNew(true);
   };
 
@@ -419,9 +499,9 @@ export default function OrdersKanbanPage({
         status: "open",
         notes: newNotes,
         createdAt,
-        discountType: "pct",
-        discountValue: 0,
-        discountAmount: 0,
+        discountType: newDiscountType,
+        discountValue: Number(newDiscountValue) || 0,
+        discountAmount: newSummary.discountAmount,
         deliveryDate: newDeliveryDate,
         needsBilling: newNeedsBilling,
         billingStatus: newNeedsBilling ? "pending" : null,
@@ -570,7 +650,7 @@ export default function OrdersKanbanPage({
                     onDragStart={e => handleDragStart(e, sale)}
                     onDragEnd={handleDragEnd}
                     onTouchStart={e => handleTouchStart(e, sale)}
-                    onClick={() => { setDetail(sale); setPayMethod(sale.paymentMethod || "cash"); }}
+                    onClick={() => openDetail(sale)}
                     style={{
                       background: "var(--bg1)",
                       border: "1px solid var(--border)",
@@ -633,7 +713,7 @@ export default function OrdersKanbanPage({
         const isReady = detail.status === "ready";
         const nextLabel = { open: "→ En preparación", preparing: "→ Listo para Retirar" }[detail.status];
         return (
-          <Modal title={`Pedido — ${detail.customerName || "Sin cliente"}`} onClose={() => setDetail(null)} lg>
+          <Modal title={`Pedido — ${detail.customerName || "Sin cliente"}`} onClose={closeDetail} lg>
             {/* Info */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
               <div>
@@ -658,27 +738,116 @@ export default function OrdersKanbanPage({
               </div>
             )}
 
-            {/* Productos */}
-            <div className="section-title">Productos</div>
+            {/* Productos — precio unitario y cantidad editables (igual que el mostrador) */}
+            <div className="section-title">
+              Productos
+              {canEditPrices && (
+                <span style={{ fontWeight: 400, fontSize: ".78em", color: "var(--t4)", marginLeft: 8 }}>
+                  editá precio o cantidad y guardá
+                </span>
+              )}
+            </div>
             <div className="table-wrap" style={{ marginBottom: 14, maxHeight: 240, overflowY: "auto" }}>
               <table>
                 <thead><tr><th>Producto</th><th>Cant.</th><th>P. Unit.</th><th>Subtotal</th></tr></thead>
                 <tbody>
-                  {detail.items.map((i, idx) => (
-                    <tr key={idx}>
-                      <td>{i.name}</td>
-                      <td>{i.qty}</td>
-                      <td>{$(i.price)}</td>
-                      <td style={{ fontWeight: 700 }}>{$(i.subtotal)}</td>
-                    </tr>
-                  ))}
+                  {(priceDraft?.items || detail.items).map((i, idx) => {
+                    const original = detail.items[idx];
+                    const changed = canEditPrices && original &&
+                      (Number(i.price) !== Number(original.price) || Number(i.qty) !== Number(original.qty));
+                    return (
+                      <tr key={i.productId || idx}>
+                        <td>{i.name}</td>
+                        <td>
+                          {canEditPrices ? (
+                            <input
+                              type="number" min={1} value={i.qty}
+                              onChange={e => patchDraft({ items: setItemQty(priceDraft.items, i.productId, e.target.value) })}
+                              style={{ width: 66, padding: "3px 6px", fontSize: ".85em" }}
+                            />
+                          ) : i.qty}
+                        </td>
+                        <td>
+                          {canEditPrices ? (
+                            <input
+                              type="number" min={0} step="0.01" value={i.price}
+                              onChange={e => patchDraft({ items: setItemPrice(priceDraft.items, i.productId, e.target.value) })}
+                              style={{ width: 90, padding: "3px 6px", fontSize: ".85em",
+                                       color: changed ? "var(--amber)" : undefined,
+                                       fontWeight: changed ? 700 : undefined }}
+                            />
+                          ) : $(i.price)}
+                        </td>
+                        <td style={{ fontWeight: 700 }}>{$(i.subtotal)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-            <div className="tot-row total">
-              <span>TOTAL</span>
-              <span style={{ color: "var(--green)" }}>{$(detail.total)}</span>
-            </div>
+
+            {/* Descuento y precio final */}
+            {canEditPrices ? (
+              <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px" }}>
+                <div className="tot-row">
+                  <span>Subtotal</span>
+                  <span>{$(draftSummary.subtotal)}</span>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0" }}>
+                  <span style={{ fontSize: ".85em", color: "var(--t3)", flex: 1 }}>Descuento</span>
+                  <div style={{ display: "flex", border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden" }}>
+                    {[["pct", "%"], ["fixed", "$"]].map(([type, label]) => (
+                      <button key={type}
+                        style={{ padding: "2px 9px", border: "none", cursor: "pointer", fontWeight: 700, fontSize: ".78em",
+                                 background: priceDraft?.discountType === type ? "var(--green)" : "var(--s2)",
+                                 color:      priceDraft?.discountType === type ? "#fff" : "var(--t2)" }}
+                        onClick={() => patchDraft({ discountType: type })}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="number" min={0} value={priceDraft?.discountValue ?? 0}
+                    onChange={e => patchDraft({ discountValue: e.target.value })}
+                    style={{ width: 90, padding: "3px 6px", fontSize: ".85em" }}
+                  />
+                  {draftSummary.discountAmount > 0 && (
+                    <span style={{ color: "var(--red)", fontWeight: 600, minWidth: 60, textAlign: "right" }}>
+                      -{$(draftSummary.discountAmount)}
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontWeight: 700, flex: 1 }}>PRECIO FINAL</span>
+                  <input
+                    type="number" min={0} step="0.01" value={draftSummary.total}
+                    onChange={e => applyFinalTotal(e.target.value)}
+                    style={{ width: 130, padding: "5px 8px", fontWeight: 700, textAlign: "right", color: "var(--green)" }}
+                  />
+                </div>
+
+                {priceDirty && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
+                    <span style={{ fontSize: ".78em", color: "var(--amber)", flex: 1 }}>
+                      Cambios sin guardar — antes {$(detail.total)}
+                    </span>
+                    <button className="btn btn-secondary btn-sm" onClick={() => openDetail(detail)} disabled={savingPrices}>
+                      Descartar
+                    </button>
+                    <button className="btn btn-primary btn-sm" onClick={savePrices} disabled={savingPrices}>
+                      {savingPrices ? "Guardando..." : "Guardar precios"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="tot-row total">
+                <span>TOTAL</span>
+                <span style={{ color: "var(--green)" }}>{$(detail.total)}</span>
+              </div>
+            )}
 
             {/* Cobro — solo en "Listo para Retirar" */}
             {isReady && (
@@ -868,9 +1037,45 @@ export default function OrdersKanbanPage({
                   )}
 
                   {newCart.length > 0 && (
-                    <div className="tot-row total" style={{ marginTop: 10 }}>
-                      <span>TOTAL</span>
-                      <span style={{ color: "var(--green)" }}>{$(newTotal)}</span>
+                    <div style={{ marginTop: 10, border: "1px solid var(--border)", borderRadius: 10, padding: "8px 10px" }}>
+                      <div className="tot-row">
+                        <span>Subtotal</span>
+                        <span>{$(newSummary.subtotal)}</span>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "8px 0" }}>
+                        <span style={{ fontSize: ".82em", color: "var(--t3)", flex: 1 }}>Descuento</span>
+                        <div style={{ display: "flex", border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden" }}>
+                          {[["pct", "%"], ["fixed", "$"]].map(([type, label]) => (
+                            <button key={type}
+                              style={{ padding: "2px 8px", border: "none", cursor: "pointer", fontWeight: 700, fontSize: ".74em",
+                                       background: newDiscountType === type ? "var(--green)" : "var(--s2)",
+                                       color:      newDiscountType === type ? "#fff" : "var(--t2)" }}
+                              onClick={() => setNewDiscountType(type)}>
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                        <input type="number" min={0} value={newDiscountValue}
+                          onChange={e => setNewDiscountValue(e.target.value)}
+                          style={{ width: 74, padding: "3px 6px", fontSize: ".85em" }}/>
+                      </div>
+
+                      {newSummary.discountAmount > 0 && (
+                        <div className="tot-row" style={{ color: "var(--red)" }}>
+                          <span style={{ fontSize: ".85em" }}>
+                            Descuento {newDiscountType === "pct" ? `${newDiscountValue}%` : "fijo"}
+                          </span>
+                          <span style={{ fontWeight: 600 }}>-{$(newSummary.discountAmount)}</span>
+                        </div>
+                      )}
+
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
+                        <span style={{ fontWeight: 700, flex: 1, fontSize: ".9em" }}>PRECIO FINAL</span>
+                        <input type="number" min={0} step="0.01" value={newTotal}
+                          onChange={e => applyNewFinalTotal(e.target.value)}
+                          style={{ width: 110, padding: "5px 8px", fontWeight: 700, textAlign: "right", color: "var(--green)" }}/>
+                      </div>
                     </div>
                   )}
 

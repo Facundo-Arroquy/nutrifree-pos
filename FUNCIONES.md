@@ -162,6 +162,47 @@ Los movimientos con método `balance` son saldo a favor y no mueven efectivo.
 
 Tests en `src/utils/supplierAccount.test.js` (`npm test`).
 
+## `src/utils/orderPricing.js` — precios de un pedido ya cargado
+
+El **Calendario de Pedidos** ahora corrige precios sin pasar por el mostrador:
+un pedido cargado con la lista equivocada, un precio pactado por teléfono o un
+redondeo del final se arreglan en el detalle del pedido. Antes había que
+cancelar el pedido y volver a cargarlo, lo que rompía el historial y el stock.
+
+La aritmética es **la misma del POS** y vive acá para que las dos pantallas no
+se separen con el tiempo: `precio unitario × cantidad = subtotal`,
+`subtotal − descuento = total`.
+
+| Función | Qué hace |
+|---|---|
+| `itemsSubtotal(items)` | Suma los subtotales de los ítems que entran al ticket. |
+| `setItemPrice(items, productId, raw)` | Cambia el precio unitario, recalcula el subtotal y marca `priceOverridden`. |
+| `setItemQty(items, productId, raw)` | Cambia la cantidad (mínimo 1) y recalcula el subtotal. |
+| `discountAmountFor(subtotal, type, value)` | Importe del descuento, `"pct"` o `"fixed"`. |
+| `discountFromFinalTotal(subtotal, raw)` | Traduce un **precio final** tipeado a mano en el descuento fijo equivalente. |
+| `priceSummary(draft)` | `{subtotal, discountAmount, total}` del borrador. |
+| `hasPriceChanges(sale, draft)` | Si el borrador difiere de lo guardado. Evita updates vacíos. |
+
+**Invariantes:**
+- El total **nunca es negativo**: el descuento fijo se recorta al subtotal y el
+  porcentual se limita al 100 %.
+- `includeInTicket === false` saca el ítem del subtotal (envíos sin ticket),
+  igual que en el POS.
+- Un **precio final mayor al subtotal** no es un descuento: se recorta al
+  subtotal. Para cobrar más hay que subir el precio unitario.
+- Cambiar de lista de precios (minorista/mayorista) **no pisa** los precios
+  tocados a mano (`priceOverridden`).
+
+**En la UI (`OrdersKanbanPage`):**
+- El borrador es una copia de trabajo: nada se persiste hasta *"Guardar precios"*,
+  así un toque accidental en la tablet de cocina no cambia lo que se cobra.
+- **Cocina no edita precios** (`user.role !== "cocina"`); ve la fila TOTAL de siempre.
+- Cobrar con cambios sin guardar está bloqueado: se cobraría el importe viejo.
+- Cada guardado queda en `audit_log` como `editar` / `calendario`, con el total
+  anterior y el nuevo.
+
+Tests en `src/utils/orderPricing.test.js` (`npm test`).
+
 ## `src/utils/money.js` — lectura de montos de formulario
 
 `parseMoneyInput(raw)` convierte a número el value de un campo de importe.
