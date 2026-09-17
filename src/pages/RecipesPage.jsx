@@ -11,6 +11,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Ico, Modal, $, exportXlsx } from "../shared.jsx";
 import { supabase, recipeToDb, recipeIngredientToDb } from "../supabase.js";
+import { updateIngredientQty, sanitizeIngredients } from "../utils/recipeIngredients.js";
 
 export default function RecipesPage({ recipes, setRecipes, products, ingredients, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast }) {
   const [modal, setModal] = useState(null);
@@ -218,6 +219,8 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
     setForm(p=>({...p, ingredients:[...p.ingredients, { ingredientId: ing.id, name: ing.name, qty, unit: ing.unit, cost }]}));
     setNewIngr({ ingredientId:"", qty:"" });
   };
+  const updateIngrQty = (idx, raw) =>
+    setForm(p=>({ ...p, ingredients: updateIngredientQty(p.ingredients, idx, raw, ingredients) }));
   const removeIngr = i => setForm(p=>({...p,ingredients:p.ingredients.filter((_,idx)=>idx!==i)}));
   const addStep = () => { if (!newStep) return; setForm(p=>({...p,steps:[...p.steps,newStep]})); setNewStep(""); };
   const removeStep = i => setForm(p=>({...p,steps:p.steps.filter((_,idx)=>idx!==i)}));
@@ -239,8 +242,10 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
         await supabase.from("recipe_ingredients").delete().eq("recipe_id", recipeId);
       }
 
-      if (form.ingredients.length > 0) {
-        const rows = form.ingredients.map(i => recipeIngredientToDb({...i, id: i.id || crypto.randomUUID()}, recipeId));
+      const cleanIngredients = sanitizeIngredients(form.ingredients);
+
+      if (cleanIngredients.length > 0) {
+        const rows = cleanIngredients.map(i => recipeIngredientToDb({...i, id: i.id || crypto.randomUUID()}, recipeId));
         const { error: riErr } = await supabase.from("recipe_ingredients").insert(rows);
         if (riErr) { showToast("Error al guardar ingredientes: " + riErr.message, "error"); return; }
       }
@@ -578,8 +583,17 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
           {form.ingredients.map((ing,i)=>(
             <div key={i} style={{ display:"flex", gap:8, alignItems:"center", marginBottom:6 }}>
               <span style={{ flex:2, fontSize:".86em" }}>{ing.name}</span>
-              <span style={{ fontSize:".84em", color:"var(--t3)" }}>{ing.qty} {ing.unit}</span>
-              <span style={{ fontSize:".84em" }}>{$(ingredientCost(ing))}</span>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                aria-label={`Cantidad de ${ing.name}`}
+                value={ing.qty}
+                onChange={e=>updateIngrQty(i, e.target.value)}
+                style={{ width:90, padding:"5px 8px", fontSize:".84em", textAlign:"right" }}
+              />
+              <span style={{ fontSize:".84em", color:"var(--t3)", minWidth:56 }}>{ing.unit}</span>
+              <span style={{ fontSize:".84em", minWidth:70, textAlign:"right" }}>{$(ingredientCost(ing))}</span>
               <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>removeIngr(i)}><Ico n="x" s={12} c="var(--red)"/></button>
             </div>
           ))}
@@ -588,7 +602,7 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
               <option value="">-- Seleccionar ingrediente --</option>
               {[...ingredients].sort((a,b)=>a.name.localeCompare(b.name)).map(i=><option key={i.id} value={i.id}>{i.name} ({i.unit}) — ${i.unitCost}/{i.unit}</option>)}
             </select>
-            <input placeholder="Cant." type="number" value={newIngr.qty} onChange={e=>setNewIngr(p=>({...p,qty:e.target.value}))}/>
+            <input placeholder="Cant." type="number" step="any" min="0" value={newIngr.qty} onChange={e=>setNewIngr(p=>({...p,qty:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addIngr()}/>
             <button className="btn btn-primary btn-sm" onClick={addIngr}><Ico n="plus" s={12}/></button>
           </div>
 

@@ -336,6 +336,35 @@ Públicas (sin sesión): `/` (menú), `/login`, `/menu-mayorista`, `/pago-exitos
 
 Tests en `src/routes/paths.test.js` (`npm test`).
 
+---
+
+## `src/utils/recipeIngredients.js` — cantidades decimales en recetas
+
+Las líneas de ingredientes de una receta admiten **cantidades fraccionarias**
+(0.25 h de trabajo, 0.05 l de aceite, 0.2 kg de premezcla). La columna
+`recipe_ingredients.qty` es `numeric` sin escala fija, así que el límite estaba
+sólo en la UI.
+
+### Qué estaba roto
+
+- El input "Cant." era `type="number"` **sin `step`**, por lo que el navegador
+  usa `step=1`: `0.25` queda marcado como `stepMismatch` y las flechas del
+  spinner saltan de 0 a 1. Ahora usa `step="any"` y `min="0"`.
+- Las líneas ya cargadas se mostraban como **texto de sólo lectura** con un
+  botón de borrar: no había forma de corregir `0.5` → `0.25` sin eliminar el
+  ingrediente y volver a agregarlo. Ahora cada línea tiene su input de cantidad
+  y el costo se recalcula en vivo.
+
+### Funciones
+
+| Función | Qué hace |
+|---|---|
+| `lineUnitCost(line, ingredients)` | Costo unitario de la línea: lo toma del catálogo por `ingredientId` y, si el ingrediente ya no existe, lo deriva de `cost / qty`. |
+| `updateIngredientQty(lines, idx, raw, ingredients)` | Devuelve una lista nueva con la cantidad de `lines[idx]` cambiada y su `cost` recalculado. Acepta `""` mientras se tipea (no fuerza `0`). |
+| `sanitizeIngredients(lines)` | Al guardar: convierte `qty` a número y descarta líneas vacías o `<= 0`. |
+
+Tests en `src/utils/recipeIngredients.test.js` (`npm test`).
+
 ## `src/utils/dates.js` — días de negocio en hora de Argentina
 
 `created_at` llega de Supabase en UTC. Cortarlo con `.slice(0,10)` o usar
