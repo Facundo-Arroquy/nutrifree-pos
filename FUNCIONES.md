@@ -335,3 +335,22 @@ Públicas (sin sesión): `/` (menú), `/login`, `/menu-mayorista`, `/pago-exitos
   `App.jsx` es un shim que traduce el id a su URL. No hubo que tocar las vistas.
 
 Tests en `src/routes/paths.test.js` (`npm test`).
+
+## `src/utils/dates.js` — días de negocio en hora de Argentina
+
+`created_at` llega de Supabase en UTC. Cortarlo con `.slice(0,10)` o usar
+`toISOString()` para "hoy" corre el día después de las 21 hs: Reportes mostraba
+"sin movimientos" en "Hoy" porque buscaba el día siguiente, y las ventas de
+21 a 24 hs caían en el día equivocado en Reportes y Dashboard.
+
+| Función | Devuelve |
+|---|---|
+| `dayKey(valor)` | `"YYYY-MM-DD"` del instante en hora AR (`""` si es inválido) |
+| `todayKey(now?)` | Día de hoy en AR |
+| `daysAgoKey(n, now?)` | Día de hace `n` días en AR |
+| `monthStartKey(now?)` | 1° del mes actual en AR |
+
+Usar siempre `dayKey(x.createdAt)` para filtrar por fecha, nunca `createdAt.slice(0,10)`.
+Campos `date` (ya guardados como `YYYY-MM-DD`) se comparan directo.
+
+Tests en `src/utils/dates.test.js` (`npm test`).
