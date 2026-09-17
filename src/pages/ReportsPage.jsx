@@ -12,6 +12,7 @@
  * Props: sales, expenses, recipes, products, stockMovements
  */
 import { useState, useMemo, useCallback } from "react";
+import { dayKey, todayKey, daysAgoKey, monthStartKey } from "../utils/dates.js";
 import { Ico, $, fmtDate, fmtTime, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, useSortable, SortableTh, exportXlsx } from "../shared.jsx";
 import { expenseStatus, expensePaidAmount, expenseRemaining } from "../utils/supplierAccount.js";
 
@@ -78,10 +79,9 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
   // empezó a pagarse (antes eran binarios: o pagado o pendiente).
   const started      = e => expPaid(e) > 0;
   const presets = useMemo(() => {
-    const now = new Date();
-    const t = now.toISOString().slice(0,10);
-    const w = new Date(now - 6*86400000).toISOString().slice(0,10);
-    const m = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+    const t = todayKey();
+    const w = daysAgoKey(6);
+    const m = monthStartKey();
     return [
       { label:"Hoy",       from:t,            to:t },
       { label:"7 días",    from:w,            to:t },
@@ -98,7 +98,7 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
 
   // ── Sales in period ──────────────────────────────────────────────────────────
   const pSales = sales.filter(s => {
-    const d = s.createdAt?.slice(0,10);
+    const d = dayKey(s.createdAt);
     return d >= from && d <= to && s.status !== "cancelled";
   });
   const closedSales = pSales.filter(s => s.status === "closed" || s.status === "delivered");
@@ -180,7 +180,7 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
       });
     });
     // movimientos de stock
-    const pMovements = (stockMovements||[]).filter(m => m.createdAt?.slice(0,10) >= from && m.createdAt?.slice(0,10) <= to);
+    const pMovements = (stockMovements||[]).filter(m => dayKey(m.createdAt) >= from && dayKey(m.createdAt) <= to);
     pMovements.forEach(m => {
       rows.push([new Date(m.createdAt).toLocaleString("es-AR",{timeZone:"America/Argentina/Buenos_Aires"}), m.productName, "Producción", m.qty]);
     });
@@ -207,8 +207,8 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
     // Producción: agrupar por nombre de producto
     const prodMovs = (stockMovements || []).filter(m =>
       m.type === "production" &&
-      m.createdAt?.slice(0,10) >= from &&
-      m.createdAt?.slice(0,10) <= to
+      dayKey(m.createdAt) >= from &&
+      dayKey(m.createdAt) <= to
     );
     const prodTotals = {};
     for (const m of prodMovs) {
@@ -301,7 +301,7 @@ export default function ReportsPage({ sales, products, recipes, expenses, expens
   const trendPoints = useMemo(() => {
     const dayMap = {};
     closedSales.forEach(s => {
-      const d = s.createdAt?.slice(0, 10);
+      const d = dayKey(s.createdAt);
       if (!d) return;
       if (!dayMap[d]) dayMap[d] = { sales:0, expenses:0 };
       dayMap[d].sales += s.total;

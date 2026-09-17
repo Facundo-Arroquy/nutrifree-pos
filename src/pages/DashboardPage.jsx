@@ -7,7 +7,8 @@
  * Props: sales, products, cashShifts, setPage
  */
 import { useState, useMemo } from "react";
-import { $, fmtDT, fmtTime, todayStr, PAY_LABELS, Ico } from "../shared.jsx";
+import { $, fmtDT, fmtTime, PAY_LABELS, Ico } from "../shared.jsx";
+import { dayKey, todayKey } from "../utils/dates.js";
 import { supabase } from "../supabase.js";
 
 function StatCard({ label, value, sub, color = "green" }) {
@@ -24,7 +25,7 @@ function StatCard({ label, value, sub, color = "green" }) {
 }
 
 export default function DashboardPage({ sales, products, cashShifts, customers, accountPayments, alertBalanceThreshold, inactiveDayThreshold, inactiveDismissed, user, showToast, setPage }) {
-  const today = todayStr();
+  const today = todayKey();
   const [dateFrom, setDateFrom] = useState(today);
   const [dateTo,   setDateTo]   = useState(today);
   // Estado local optimista para que el botón responda de inmediato
@@ -35,7 +36,7 @@ export default function DashboardPage({ sales, products, cashShifts, customers, 
   const to   = dateTo   || "9999-12-31";
 
   const inRange = s => {
-    const d = s.createdAt?.slice(0, 10);
+    const d = dayKey(s.createdAt);
     return d >= from && d <= to;
   };
 
