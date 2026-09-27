@@ -9,7 +9,7 @@ const WA_LINK = `https://wa.me/${WA_NUMBER}?text=Hola%20NUTRIFREE!%20Quisiera%20
 
 const CAT_IMAGES = {
   "Tortas": "/imagenes/tortas.png",
-  "Postres": "/imagenes/brownie.png",
+  "Postres": "/imagenes/landing/brownie.png",
   "Pastelería": "/imagenes/pasteleria.svg",
   "Panadería": "/imagenes/panaderia.png",
   "Panadería Grandes": "/imagenes/panaderia-grandes.svg",
@@ -385,6 +385,24 @@ export default function MenuPage({ onGoToLogin }) {
     });
   }, []);
 
+  useEffect(() => {
+    const elements = document.querySelectorAll("[data-reveal]");
+    if (!("IntersectionObserver" in window)) {
+      elements.forEach(el => el.classList.add("is-visible"));
+      return undefined;
+    }
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12 });
+    elements.forEach(el => observer.observe(el));
+    return () => observer.disconnect();
+  }, [loading]);
+
   /** Catálogo para calcular stock: lo publicado + los componentes de los kits. */
   const stockCatalog = useMemo(
     () => [...products, ...kitComponents],
@@ -506,11 +524,13 @@ export default function MenuPage({ onGoToLogin }) {
   }
 
   return (
-    <>
+    <div className="storefront">
       {/* ── HEADER ── */}
-      <header>
+      <header className="storefront-header">
         <div className="header-inner">
-          <img src="/imagenes/logo.png" alt="NUTRIFREE" className="header-logo" />
+          <a href="/" className="brand-lockup" aria-label="NutriFree, volver al inicio">
+            <img src="/imagenes/logo.png" alt="NUTRIFREE" className="header-logo" />
+          </a>
           <nav>
             {showMenuDia && <a href="#menu-dia">Menú del día</a>}
             {grouped.map(({ cat }) => (
@@ -518,28 +538,12 @@ export default function MenuPage({ onGoToLogin }) {
             ))}
           </nav>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span className="badge-singluten">Sin Gluten</span>
+            <span className="badge-singluten"><i /> 100% Sin Gluten</span>
             <a
               href="/menu-mayorista"
-              style={{
-                background: "rgba(255,255,255,0.12)",
-                border: "1.5px solid rgba(255,255,255,0.3)",
-                color: "rgba(255,255,255,0.85)",
-                fontFamily: "Arial, sans-serif",
-                fontSize: 12,
-                fontWeight: "bold",
-                letterSpacing: 1,
-                textTransform: "uppercase",
-                padding: "6px 14px",
-                borderRadius: 20,
-                textDecoration: "none",
-                whiteSpace: "nowrap",
-                transition: "background 0.2s, color 0.2s",
-              }}
-              onMouseOver={e => { e.target.style.background = "rgba(255,255,255,0.22)"; e.target.style.color = "white"; }}
-              onMouseOut={e => { e.target.style.background = "rgba(255,255,255,0.12)"; e.target.style.color = "rgba(255,255,255,0.85)"; }}
+              className="header-wholesale"
             >
-              🏢 Mayoristas
+              Catálogo mayorista
             </a>
             <span
               onClick={onGoToLogin}
@@ -550,23 +554,15 @@ export default function MenuPage({ onGoToLogin }) {
         </div>
       </header>
 
-      {/* ── HERO ── */}
-      <div className="hero">
-        <p className="hero-sub">Panadería &amp; Pastelería</p>
-        <h1>NUTRIFREE</h1>
-        <p className="hero-desc">
-          Elaboramos cada producto con amor y sin gluten.<br />
-          Disfrutá de sabores increíbles, cuidando tu salud.
-        </p>
-        <a className="hero-cta" href={WA_LINK} target="_blank" rel="noopener noreferrer">
-          <WppIcon />
-          Pedir ahora
-        </a>
-      </div>
+      <section className="catalog-intro" data-reveal>
+        <p className="section-eyebrow">Catálogo minorista</p>
+        <h1>Elegí algo rico.</h1>
+        <p>Explorá nuestros productos sin gluten y armá tu pedido.</p>
+      </section>
 
       {/* ── MENÚ DEL DÍA ── */}
       {showMenuDia && (
-        <section className="menu-dia-section" id="menu-dia">
+        <section className="menu-dia-section" id="menu-dia" data-reveal>
           <div className="menu-dia-card">
             <div className="menu-dia-img">
               <img src="/imagenes/menu-del-dia.png" alt="Menú del Día" />
@@ -600,7 +596,7 @@ export default function MenuPage({ onGoToLogin }) {
       {/* ── PRODUCTOS POR CATEGORÍA ── */}
       <main className="main-content">
         {grouped.map(({ cat, prods }) => (
-          <section key={cat} className="category-section" id={toSlug(cat)}>
+          <section key={cat} className="category-section" id={toSlug(cat)} data-reveal>
             <div className="category-header">
               {CAT_IMAGES[cat] ? (
                 <img src={CAT_IMAGES[cat]} alt={cat} className="category-img-thumb" />
@@ -632,16 +628,7 @@ export default function MenuPage({ onGoToLogin }) {
                         )}
                         <span className="singluten-dot" title="Sin TACC" />
                       </div>
-                      {hasPrice && (
-                        <div className="product-card-actions">
-                          <QtyControl
-                            qty={qty}
-                            stock={stock}
-                            onAdd={() => handleAdd(prod)}
-                            onRemove={() => handleRemove(prod)}
-                          />
-                        </div>
-                      )}
+                      {hasPrice && stock > 0 && <span className="catalog-only-label">Disponible</span>}
                     </div>
                   </div>
                 );
@@ -670,45 +657,10 @@ export default function MenuPage({ onGoToLogin }) {
       </footer>
 
       {/* ── FAB carrito ── */}
-      {cartCount > 0 && (
-        <button className="cart-fab" onClick={() => setShowCart(true)}>
-          <CartIcon count={cartCount} />
-          <span>Ver pedido · {formatPrice(cartTotal)}</span>
-        </button>
-      )}
-
-      {/* ── FAB WhatsApp (solo sin carrito) ── */}
-      {cartCount === 0 && (
-        <a className="wpp-fab" href={WA_LINK} target="_blank" rel="noopener noreferrer">
-          <WppIcon />
-          Hacer pedido
-        </a>
-      )}
-
-      {/* ── Drawer del carrito ── */}
-      {showCart && (
-        <CartDrawer
-          cartItems={cartItems}
-          products={products}
-          stockOf={stockOf}
-          onClose={() => setShowCart(false)}
-          onQtyChange={handleQtyChange}
-          onCheckout={() => { setShowCart(false); setShowCheckout(true); }}
-        />
-      )}
-
-      {/* ── Modal checkout ── */}
-      {showCheckout && (
-        <CheckoutModal
-          cartItems={cartItems}
-          total={cartTotal}
-          onClose={() => setShowCheckout(false)}
-          onSuccess={(info) => {
-            setShowCheckout(false);
-            setConfirmation(info);
-          }}
-        />
-      )}
-    </>
+      <a className="wpp-fab" href={WA_LINK} target="_blank" rel="noopener noreferrer">
+        <WppIcon />
+        Consultar por WhatsApp
+      </a>
+    </div>
   );
 }

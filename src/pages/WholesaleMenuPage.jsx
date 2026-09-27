@@ -9,7 +9,7 @@ const ENVIO_GRATIS_MINIMO = 75000;
 
 const CAT_IMAGES = {
   "Tortas": "/imagenes/tortas.png",
-  "Postres": "/imagenes/brownie.png",
+  "Postres": "/imagenes/landing/brownie.png",
   "Pastelería": "/imagenes/pasteleria.svg",
   "Panadería": "/imagenes/panaderia.png",
   "Panadería Grandes": "/imagenes/panaderia-grandes.svg",

@@ -38,6 +38,7 @@ import {
 
 import ChatWidget from "./components/ChatWidget.jsx";
 import MenuPage from "./pages/MenuPage.jsx";
+import LandingPage from "./pages/LandingPage.jsx";
 import WholesaleMenuPage from "./pages/WholesaleMenuPage.jsx";
 import PagoResultadoPage from "./pages/PagoResultadoPage.jsx";
 import AppRoutes from "./routes/AppRoutes.jsx";
@@ -567,12 +568,16 @@ export default function App() {
     return <WholesaleMenuPage />;
   }
 
+  if (currentPath === PUBLIC_PATHS.menu) {
+    return <MenuPage onGoToLogin={() => navigate(PUBLIC_PATHS.login)} />;
+  }
+
   // Páginas de resultado de pago MP (públicas)
   if (PAY_RESULT_PATHS.includes(currentPath)) {
     return <PagoResultadoPage />;
   }
 
-  // Menú público en /
+  // Landing institucional pública en /
   if (currentPath === PUBLIC_PATHS.home && !user) {
     if (authLoading) return (
       <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#f3faf8", flexDirection:"column", gap:16 }}>
@@ -580,7 +585,7 @@ export default function App() {
         <div style={{ fontFamily:"Arial, sans-serif", fontSize:".9em", color:"#89b8ad" }}>Cargando…</div>
       </div>
     );
-    return <MenuPage onGoToLogin={() => navigate(PUBLIC_PATHS.login)} />;
+    return <LandingPage onGoToLogin={() => navigate(PUBLIC_PATHS.login)} />;
   }
 
   if (authLoading) return (

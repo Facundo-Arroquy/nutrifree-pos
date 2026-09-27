@@ -63,6 +63,7 @@ describe("pathForPage / pageIdForPath", () => {
 
   it("devuelve null para URLs que no son de la app", () => {
     expect(pageIdForPath("/menu-mayorista")).toBeNull();
+    expect(pageIdForPath("/menu")).toBeNull();
     expect(pageIdForPath("/")).toBeNull();
     expect(pageIdForPath("/cualquier-cosa")).toBeNull();
   });
