@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase, dbToProduct, saleToDb } from "../supabase.js";
-import { uid, todayStr } from "../shared.jsx";
+import { uid } from "../shared.jsx";
 import { availableStock } from "../utils/stock.js";
+import { cartRequiresPreparation, minimumDeliveryDate, webOrderNotes } from "../utils/webOrder.js";
 import "../menu.css";
 
 const WA_NUMBER = "5492281588834";
@@ -28,16 +29,6 @@ function toSlug(name) {
 
 function formatPrice(price) {
   return "$ " + price.toLocaleString("es-AR", { maximumFractionDigits: 0 });
-}
-
-// Devuelve el próximo día hábil (lun-sab) a partir de mañana
-function nextBusinessDay() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  while (d.getDay() === 0) { // 0 = domingo
-    d.setDate(d.getDate() + 1);
-  }
-  return d.toISOString().slice(0, 10);
 }
 
 function isBusinessDay(dateStr) {
@@ -67,13 +58,10 @@ function CartIcon({ count }) {
 
 // ── Selector de cantidad en tarjeta ──────────────────────────────────────────
 function QtyControl({ qty, stock, onAdd, onRemove }) {
-  if (stock <= 0) {
-    return <span className="sin-stock-badge">Sin Stock</span>;
-  }
   if (qty === 0) {
     return (
       <button className="btn-add-cart" onClick={onAdd} title="Agregar al carrito">
-        + Agregar
+        {stock <= 0 ? "+ Pedir" : "+ Agregar"}
       </button>
     );
   }
@@ -81,7 +69,7 @@ function QtyControl({ qty, stock, onAdd, onRemove }) {
     <div className="qty-control">
       <button onClick={onRemove}>−</button>
       <span>{qty}</span>
-      <button onClick={onAdd} disabled={qty >= stock}>+</button>
+      <button onClick={onAdd} disabled={stock > 0 && qty >= stock}>+</button>
     </div>
   );
 }
@@ -89,6 +77,7 @@ function QtyControl({ qty, stock, onAdd, onRemove }) {
 // ── Drawer del carrito ───────────────────────────────────────────────────────
 function CartDrawer({ cartItems, products, stockOf, onClose, onQtyChange, onCheckout }) {
   const total = cartItems.reduce((s, i) => s + i.subtotal, 0);
+  const requiresPreparation = cartRequiresPreparation(cartItems, products, stockOf);
 
   return (
     <>
@@ -121,7 +110,7 @@ function CartDrawer({ cartItems, products, stockOf, onClose, onQtyChange, onChec
                         <span>{item.qty}</span>
                         <button
                           onClick={() => onQtyChange(item.productId, 1)}
-                          disabled={item.qty >= (prod ? stockOf(prod) : 0)}
+                          disabled={prod ? stockOf(prod) > 0 && item.qty >= stockOf(prod) : true}
                         >+</button>
                       </div>
                       <span className="cart-item-subtotal">{formatPrice(item.subtotal)}</span>
@@ -132,6 +121,11 @@ function CartDrawer({ cartItems, products, stockOf, onClose, onQtyChange, onChec
             </div>
 
             <div className="cart-drawer-footer">
+              {requiresPreparation && (
+                <p className="cart-preparation-notice">
+                  Este pedido incluye productos a elaborar. La entrega requiere al menos 48 horas de anticipación.
+                </p>
+              )}
               <div className="cart-total-row">
                 <span>Total</span>
                 <strong>{formatPrice(total)}</strong>
@@ -148,14 +142,14 @@ function CartDrawer({ cartItems, products, stockOf, onClose, onQtyChange, onChec
 }
 
 // ── Modal de checkout ────────────────────────────────────────────────────────
-function CheckoutModal({ cartItems, total, onClose, onSuccess }) {
+function CheckoutModal({ cartItems, total, requiresPreparation, onClose, onSuccess }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [date, setDate] = useState(nextBusinessDay());
+  const minDate = minimumDeliveryDate(requiresPreparation);
+  const [date, setDate] = useState(minDate);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const minDate = nextBusinessDay();
   const maxDate = (() => {
     const d = new Date();
     d.setDate(d.getDate() + 60);
@@ -172,14 +166,19 @@ function CheckoutModal({ cartItems, total, onClose, onSuccess }) {
     }
     if (!date) { setError("Seleccioná una fecha de entrega."); return; }
     if (!isBusinessDay(date)) { setError("El domingo no es día hábil. Elegí otro día."); return; }
-    if (date < minDate) { setError("La fecha mínima es mañana."); return; }
+    if (date < minDate) {
+      setError(requiresPreparation
+        ? "Los productos sin stock requieren al menos 48 horas de anticipación."
+        : "La fecha mínima es mañana.");
+      return;
+    }
 
     setSubmitting(true);
     try {
       const now = new Date().toISOString();
       const saleId = uid();
 
-      // 1. Crear la venta en Supabase con status "pending" (esperando pago)
+      // El estado "open" es la columna Pendiente del Calendario de Pedidos.
       const sale = {
         id: saleId,
         customerId: null,
@@ -188,8 +187,8 @@ function CheckoutModal({ cartItems, total, onClose, onSuccess }) {
         total,
         priceList: "retail",
         paymentMethod: "mercadopago",
-        status: "pending",
-        notes: `Pedido web | Tel: ${phone.trim()}`,
+        status: "open",
+        notes: webOrderNotes(phone),
         createdAt: now,
         paidAt: null,
         discountType: "pct",
@@ -277,6 +276,12 @@ function CheckoutModal({ cartItems, total, onClose, onSuccess }) {
               onChange={e => setDate(e.target.value)}
             />
           </label>
+
+          {requiresPreparation && (
+            <p className="checkout-preparation-notice">
+              Como tu pedido incluye productos sin stock, la primera fecha disponible contempla 48 horas de elaboración.
+            </p>
+          )}
 
           <div className="checkout-summary">
             <span>{cartItems.length} {cartItems.length === 1 ? "producto" : "productos"}</span>
@@ -413,10 +418,9 @@ export default function MenuPage({ onGoToLogin }) {
   // ── Helpers del carrito ──────────────────────────────────────────────────
   const handleAdd = (prod) => {
     const stock = stockOf(prod);
-    if (stock <= 0) return;
     setCart(prev => {
       const current = prev[prod.id] ?? 0;
-      if (current >= stock) return prev;
+      if (stock > 0 && current >= stock) return prev;
       return { ...prev, [prod.id]: current + 1 };
     });
   };
@@ -469,6 +473,7 @@ export default function MenuPage({ onGoToLogin }) {
 
   const cartCount = cartItems.reduce((s, i) => s + i.qty, 0);
   const cartTotal = cartItems.reduce((s, i) => s + i.subtotal, 0);
+  const requiresPreparation = cartRequiresPreparation(cartItems, products, stockOf);
 
   const clearCart = () => setCart({});
 
@@ -628,7 +633,17 @@ export default function MenuPage({ onGoToLogin }) {
                         )}
                         <span className="singluten-dot" title="Sin TACC" />
                       </div>
-                      {hasPrice && stock > 0 && <span className="catalog-only-label">Disponible</span>}
+                      {hasPrice && (
+                        <div className="product-card-actions">
+                          {stock <= 0 && <span className="sin-stock-badge">A elaborar · 48 h</span>}
+                          <QtyControl
+                            qty={qty}
+                            stock={stock}
+                            onAdd={() => handleAdd(prod)}
+                            onRemove={() => handleRemove(prod)}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -657,10 +672,41 @@ export default function MenuPage({ onGoToLogin }) {
       </footer>
 
       {/* ── FAB carrito ── */}
-      <a className="wpp-fab" href={WA_LINK} target="_blank" rel="noopener noreferrer">
-        <WppIcon />
-        Consultar por WhatsApp
-      </a>
+      {cartCount > 0 ? (
+        <button className="cart-fab" onClick={() => setShowCart(true)}>
+          <CartIcon count={cartCount} />
+          <span>Ver pedido · {formatPrice(cartTotal)}</span>
+        </button>
+      ) : (
+        <a className="wpp-fab" href={WA_LINK} target="_blank" rel="noopener noreferrer">
+          <WppIcon />
+          Consultar por WhatsApp
+        </a>
+      )}
+
+      {showCart && (
+        <CartDrawer
+          cartItems={cartItems}
+          products={products}
+          stockOf={stockOf}
+          onClose={() => setShowCart(false)}
+          onQtyChange={handleQtyChange}
+          onCheckout={() => { setShowCart(false); setShowCheckout(true); }}
+        />
+      )}
+
+      {showCheckout && (
+        <CheckoutModal
+          cartItems={cartItems}
+          total={cartTotal}
+          requiresPreparation={requiresPreparation}
+          onClose={() => setShowCheckout(false)}
+          onSuccess={(info) => {
+            setShowCheckout(false);
+            setConfirmation(info);
+          }}
+        />
+      )}
     </div>
   );
 }

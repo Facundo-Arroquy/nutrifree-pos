@@ -495,6 +495,18 @@ footer .footer-singluten {
   border: 1px solid #e0e0e0;
 }
 
+.cart-preparation-notice,
+.checkout-preparation-notice {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 9px;
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: .82rem;
+  line-height: 1.4;
+}
+
 .product-card--sin-stock {
   opacity: 0.65;
 }

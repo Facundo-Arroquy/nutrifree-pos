@@ -46,10 +46,10 @@ serve(async (req) => {
     }
 
     if (payment.status === "approved") {
-      // Obtener la venta para leer sus items
+      // Obtener la venta y preservar los datos cargados desde la web.
       const { data: sale, error: saleErr } = await supabase
         .from("sales")
-        .select("id, status, items")
+        .select("id, status, paid_at, notes")
         .eq("id", saleId)
         .single();
 
@@ -59,53 +59,22 @@ serve(async (req) => {
       }
 
       // Idempotencia: si ya está pagada no repetir
-      if (sale.status === "paid" || sale.status === "preparing" || sale.status === "ready") {
+      if (sale.paid_at) {
         console.log("[mp-webhook] Pago ya procesado para sale:", saleId);
         return new Response("ok", { headers: CORS });
       }
 
-      // Descontar stock atómicamente con RPC.
-      // Los kits se resuelven a sus componentes: descontar el kit en sí no
-      // reflejaría el consumo real (un kit no tiene stock propio).
-      const items = sale.items as Array<{
-        productId: string; qty: number; name: string;
-        kitItems?: Array<{ productId: string; qty: number; name?: string }>;
-      }>;
-      const stockItems: Array<{ id: string; qty: number; name: string }> = [];
-      for (const item of items) {
-        if (item.kitItems?.length) {
-          for (const comp of item.kitItems) {
-            stockItems.push({
-              id: comp.productId,
-              qty: comp.qty * item.qty,
-              name: comp.name || item.name,
-            });
-          }
-        } else {
-          stockItems.push({ id: item.productId, qty: item.qty, name: item.name });
-        }
-      }
-      const { error: stockErr } = await supabase.rpc("descontar_stock_pedido", {
-        p_items: stockItems,
-      });
-
-      if (stockErr) {
-        console.error("[mp-webhook] Error al descontar stock:", stockErr.message);
-        // Reembolsar automáticamente
-        await reembolsarPago(accessToken, body.data.id, payment.transaction_amount);
-        // Cancelar la venta
-        await supabase.from("sales").update({ status: "cancelled", notes: `Cancelado: sin stock al pagar (MP ${body.data.id})` }).eq("id", saleId);
-        return new Response("sin stock, pago reembolsado", { status: 409, headers: CORS });
-      }
-
-      // Marcar venta como pagada y lista para retirar
+      // El pago no implica que el pedido esté listo. Permanece en la columna
+      // Pendiente y el stock se descuenta al moverlo a "Listo para Retirar",
+      // igual que los pedidos creados dentro del sistema. Esto permite vender
+      // productos que deben elaborarse sin cancelar ni reembolsar la compra.
       await supabase
         .from("sales")
         .update({
-          status: "ready",
+          status: "open",
           payment_method: "mercadopago",
           paid_at: new Date().toISOString(),
-          notes: `Pago MP aprobado | ID: ${body.data.id}`,
+          notes: `${sale.notes || "[WEB]"} | Pago MP aprobado | ID: ${body.data.id}`,
         })
         .eq("id", saleId);
 
@@ -126,21 +95,3 @@ serve(async (req) => {
     return new Response("error interno", { status: 500, headers: CORS });
   }
 });
-
-async function reembolsarPago(accessToken: string, paymentId: string, amount: number) {
-  try {
-    const res = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}/refunds`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-        "X-Idempotency-Key": `refund-${paymentId}`,
-      },
-      body: JSON.stringify({ amount }),
-    });
-    const data = await res.json();
-    console.log("[mp-webhook] Reembolso:", res.ok ? "OK" : "FALLÓ", JSON.stringify(data));
-  } catch (e) {
-    console.error("[mp-webhook] Error al reembolsar:", e);
-  }
-}
