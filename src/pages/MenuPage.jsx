@@ -186,7 +186,7 @@ function CheckoutModal({ cartItems, total, requiresPreparation, onClose, onSucce
         items: cartItems,
         total,
         priceList: "retail",
-        paymentMethod: "mercadopago",
+        paymentMethod: null,
         status: "open",
         notes: webOrderNotes(phone),
         createdAt: now,
@@ -202,34 +202,10 @@ function CheckoutModal({ cartItems, total, requiresPreparation, onClose, onSucce
       const { error: dbErr } = await supabase.from("sales").insert(saleToDb(sale));
       if (dbErr) throw dbErr;
 
-      // 2. Pedir la preferencia de pago a la Edge Function
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const fnUrl = `${supabaseUrl}/functions/v1/create-preference`;
-      const anonKey = import.meta.env.VITE_SUPABASE;
-
-      const res = await fetch(fnUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${anonKey}`,
-        },
-        body: JSON.stringify({
-          saleId,
-          items: cartItems.map(i => ({ name: i.name, qty: i.qty, price: i.price })),
-          customerName: name.trim(),
-          customerPhone: phone.trim(),
-          deliveryDate: date,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.init_point) throw new Error(data.error || "Error al generar el pago");
-
-      // 3. Redirigir a MercadoPago
-      window.location.href = data.init_point;
+      onSuccess({ saleId, name: name.trim(), phone: phone.trim(), date, total });
     } catch (err) {
       console.error("[Checkout] Error:", err);
-      setError("Hubo un error al procesar el pago. Por favor intentá de nuevo.");
+      setError("No pudimos registrar el pedido. Por favor intentá de nuevo.");
     } finally {
       setSubmitting(false);
     }
@@ -302,7 +278,7 @@ function CheckoutModal({ cartItems, total, requiresPreparation, onClose, onSucce
 // ── Pantalla de confirmación ─────────────────────────────────────────────────
 function ConfirmationScreen({ info, onBack }) {
   const waMsgText = encodeURIComponent(
-    `Hola NUTRIFREE! Acabo de hacer un pedido web 🍞\n` +
+    `Hola NUTRIFREE! Quiero cancelar mi pedido web.\n` +
     `Nombre: ${info.name}\n` +
     `Fecha de entrega: ${info.date}\n` +
     `Total: ${formatPrice(info.total)}\n` +
@@ -313,11 +289,11 @@ function ConfirmationScreen({ info, onBack }) {
   return (
     <div className="confirmation-screen">
       <div className="confirmation-card">
-        <div className="confirmation-icon">🎉</div>
-        <h2>¡Pedido registrado!</h2>
+        <div className="confirmation-icon">✓</div>
+        <h2>Envío solicitado</h2>
         <p className="confirmation-sub">
-          Tu pedido fue recibido correctamente.<br />
-          Nos comunicaremos para coordinar el pago.
+          Tu pedido ingresó al Calendario de Pedidos.<br />
+          Para cancelarlo, comunicate con nosotros por WhatsApp.
         </p>
 
         <div className="confirmation-details">
@@ -341,7 +317,7 @@ function ConfirmationScreen({ info, onBack }) {
 
         <a className="btn-wpp-confirm" href={waLink} target="_blank" rel="noopener noreferrer">
           <WppIcon />
-          Avisarnos por WhatsApp
+          Cancelar por WhatsApp
         </a>
 
         <button className="btn-back-menu" onClick={onBack}>
