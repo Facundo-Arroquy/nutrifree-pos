@@ -12,7 +12,8 @@
 
 // ─── RUTAS PÚBLICAS (no requieren sesión) ─────────────────────────────────────
 export const PUBLIC_PATHS = {
-  home:          "/",                 // Menú público (visitantes sin sesión)
+  home:          "/",                 // Landing pública institucional
+  menu:          "/menu",             // Catálogo minorista
   login:         "/login",
   wholesaleMenu: "/menu-mayorista",   // Menú mayorista (público con código)
   paySuccess:    "/pago-exitoso",
@@ -65,6 +66,7 @@ export const ROUTES = [
   { id:"suppliers",      path:"/proveedores",        label:"Proveedores",           icon:"suppliers",   roles:["admin","vendor"],          section:"finanzas" },
   { id:"import",         path:"/importar",           label:"Importar datos",        icon:"upload",      roles:["admin"],                   section:"bottom" },
   { id:"reports",        path:"/reportes",           label:"Reportes",              icon:"reports",     roles:["admin"],                   section:"bottom" },
+  { id:"weekly-report",  path:"/reporte-semanal",    label:"Reporte Semanal",       icon:"reports",     roles:["admin"],                   section:"bottom" },
   { id:"help-admin",     path:"/ayuda",              label:"FAQ / Ayuda",           icon:"settings",    roles:["admin","cocina"],          section:"bottom" },
   { id:"settings",       path:"/configuracion",      label:"Configuración",         icon:"settings",    roles:["admin","vendor"],          section:"bottom" },
   // Sin entrada en el sidebar: se accede desde Reg. Producción.

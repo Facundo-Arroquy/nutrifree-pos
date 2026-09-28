@@ -27,6 +27,7 @@ import ExpensesPage from "../pages/ExpensesPage.jsx";
 import SuppliersPage from "../pages/SuppliersPage.jsx";
 import ImportPage from "../pages/ImportPage.jsx";
 import ReportsPage from "../pages/ReportsPage.jsx";
+import WeeklyReportPage from "../pages/WeeklyReportPage.jsx";
 import HelpAdminPage from "../pages/HelpAdminPage.jsx";
 import SettingsPage from "../pages/SettingsPage.jsx";
 
@@ -49,6 +50,7 @@ const PAGE_COMPONENTS = {
   "suppliers":      SuppliersPage,
   "import":         ImportPage,
   "reports":        ReportsPage,
+  "weekly-report":  WeeklyReportPage,
   "help-admin":     HelpAdminPage,
   "settings":       SettingsPage,
 };
