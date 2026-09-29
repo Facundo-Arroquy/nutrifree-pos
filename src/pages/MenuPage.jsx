@@ -3,6 +3,7 @@ import { supabase, dbToProduct, saleToDb } from "../supabase.js";
 import { uid } from "../shared.jsx";
 import { availableStock } from "../utils/stock.js";
 import { cartRequiresPreparation, minimumDeliveryDate, webOrderNotes } from "../utils/webOrder.js";
+import ProductImage from "../components/ProductImage.jsx";
 import "../menu.css";
 
 const WA_NUMBER = "5492281588834";
@@ -598,6 +599,7 @@ export default function MenuPage({ onGoToLogin }) {
                 const stock = stockOf(prod);
                 return (
                   <div key={prod.id} className={`product-card${stock <= 0 ? " product-card--sin-stock" : ""}`}>
+                    <ProductImage product={prod} />
                     <div className="product-card-accent" />
                     <div className="product-card-body">
                       <p className="product-name">{prod.name}</p>

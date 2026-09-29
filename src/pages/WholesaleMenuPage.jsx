@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase, dbToProduct } from "../supabase.js";
+import ProductImage from "../components/ProductImage.jsx";
 import "../menu.css";
 
 const WA_NUMBER = "5492281588834";
@@ -174,6 +175,7 @@ function WholesaleMenu() {
             <div className="product-grid">
               {prods.map(prod => (
                 <div key={prod.id} className="product-card">
+                  <ProductImage product={prod} />
                   <div className="product-card-accent" style={{ background: "linear-gradient(90deg, #2d5f8a, #7aadcf)" }} />
                   <div className="product-card-body">
                     <p className="product-name">{prod.name}</p>
