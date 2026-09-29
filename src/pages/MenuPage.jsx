@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase, dbToProduct, saleToDb } from "../supabase.js";
-import { uid, todayStr } from "../shared.jsx";
+import { uid } from "../shared.jsx";
 import { availableStock } from "../utils/stock.js";
+import { cartRequiresPreparation, minimumDeliveryDate, webOrderNotes } from "../utils/webOrder.js";
 import "../menu.css";
 
 const WA_NUMBER = "5492281588834";
@@ -9,7 +10,7 @@ const WA_LINK = `https://wa.me/${WA_NUMBER}?text=Hola%20NUTRIFREE!%20Quisiera%20
 
 const CAT_IMAGES = {
   "Tortas": "/imagenes/tortas.png",
-  "Postres": "/imagenes/brownie.png",
+  "Postres": "/imagenes/landing/brownie.png",
   "Pastelería": "/imagenes/pasteleria.svg",
   "Panadería": "/imagenes/panaderia.png",
   "Panadería Grandes": "/imagenes/panaderia-grandes.svg",
@@ -28,16 +29,6 @@ function toSlug(name) {
 
 function formatPrice(price) {
   return "$ " + price.toLocaleString("es-AR", { maximumFractionDigits: 0 });
-}
-
-// Devuelve el próximo día hábil (lun-sab) a partir de mañana
-function nextBusinessDay() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  while (d.getDay() === 0) { // 0 = domingo
-    d.setDate(d.getDate() + 1);
-  }
-  return d.toISOString().slice(0, 10);
 }
 
 function isBusinessDay(dateStr) {
@@ -67,13 +58,10 @@ function CartIcon({ count }) {
 
 // ── Selector de cantidad en tarjeta ──────────────────────────────────────────
 function QtyControl({ qty, stock, onAdd, onRemove }) {
-  if (stock <= 0) {
-    return <span className="sin-stock-badge">Sin Stock</span>;
-  }
   if (qty === 0) {
     return (
       <button className="btn-add-cart" onClick={onAdd} title="Agregar al carrito">
-        + Agregar
+        {stock <= 0 ? "+ Pedir" : "+ Agregar"}
       </button>
     );
   }
@@ -81,7 +69,7 @@ function QtyControl({ qty, stock, onAdd, onRemove }) {
     <div className="qty-control">
       <button onClick={onRemove}>−</button>
       <span>{qty}</span>
-      <button onClick={onAdd} disabled={qty >= stock}>+</button>
+      <button onClick={onAdd} disabled={stock > 0 && qty >= stock}>+</button>
     </div>
   );
 }
@@ -89,6 +77,7 @@ function QtyControl({ qty, stock, onAdd, onRemove }) {
 // ── Drawer del carrito ───────────────────────────────────────────────────────
 function CartDrawer({ cartItems, products, stockOf, onClose, onQtyChange, onCheckout }) {
   const total = cartItems.reduce((s, i) => s + i.subtotal, 0);
+  const requiresPreparation = cartRequiresPreparation(cartItems, products, stockOf);
 
   return (
     <>
@@ -121,7 +110,7 @@ function CartDrawer({ cartItems, products, stockOf, onClose, onQtyChange, onChec
                         <span>{item.qty}</span>
                         <button
                           onClick={() => onQtyChange(item.productId, 1)}
-                          disabled={item.qty >= (prod ? stockOf(prod) : 0)}
+                          disabled={prod ? stockOf(prod) > 0 && item.qty >= stockOf(prod) : true}
                         >+</button>
                       </div>
                       <span className="cart-item-subtotal">{formatPrice(item.subtotal)}</span>
@@ -132,6 +121,11 @@ function CartDrawer({ cartItems, products, stockOf, onClose, onQtyChange, onChec
             </div>
 
             <div className="cart-drawer-footer">
+              {requiresPreparation && (
+                <p className="cart-preparation-notice">
+                  Este pedido incluye productos a elaborar. La entrega requiere al menos 48 horas de anticipación.
+                </p>
+              )}
               <div className="cart-total-row">
                 <span>Total</span>
                 <strong>{formatPrice(total)}</strong>
@@ -148,14 +142,14 @@ function CartDrawer({ cartItems, products, stockOf, onClose, onQtyChange, onChec
 }
 
 // ── Modal de checkout ────────────────────────────────────────────────────────
-function CheckoutModal({ cartItems, total, onClose, onSuccess }) {
+function CheckoutModal({ cartItems, total, requiresPreparation, onClose, onSuccess }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [date, setDate] = useState(nextBusinessDay());
+  const minDate = minimumDeliveryDate(requiresPreparation);
+  const [date, setDate] = useState(minDate);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const minDate = nextBusinessDay();
   const maxDate = (() => {
     const d = new Date();
     d.setDate(d.getDate() + 60);
@@ -172,14 +166,19 @@ function CheckoutModal({ cartItems, total, onClose, onSuccess }) {
     }
     if (!date) { setError("Seleccioná una fecha de entrega."); return; }
     if (!isBusinessDay(date)) { setError("El domingo no es día hábil. Elegí otro día."); return; }
-    if (date < minDate) { setError("La fecha mínima es mañana."); return; }
+    if (date < minDate) {
+      setError(requiresPreparation
+        ? "Los productos sin stock requieren al menos 48 horas de anticipación."
+        : "La fecha mínima es mañana.");
+      return;
+    }
 
     setSubmitting(true);
     try {
       const now = new Date().toISOString();
       const saleId = uid();
 
-      // 1. Crear la venta en Supabase con status "pending" (esperando pago)
+      // El estado "open" es la columna Pendiente del Calendario de Pedidos.
       const sale = {
         id: saleId,
         customerId: null,
@@ -187,9 +186,9 @@ function CheckoutModal({ cartItems, total, onClose, onSuccess }) {
         items: cartItems,
         total,
         priceList: "retail",
-        paymentMethod: "mercadopago",
-        status: "pending",
-        notes: `Pedido web | Tel: ${phone.trim()}`,
+        paymentMethod: null,
+        status: "open",
+        notes: webOrderNotes(phone),
         createdAt: now,
         paidAt: null,
         discountType: "pct",
@@ -203,34 +202,10 @@ function CheckoutModal({ cartItems, total, onClose, onSuccess }) {
       const { error: dbErr } = await supabase.from("sales").insert(saleToDb(sale));
       if (dbErr) throw dbErr;
 
-      // 2. Pedir la preferencia de pago a la Edge Function
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const fnUrl = `${supabaseUrl}/functions/v1/create-preference`;
-      const anonKey = import.meta.env.VITE_SUPABASE;
-
-      const res = await fetch(fnUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${anonKey}`,
-        },
-        body: JSON.stringify({
-          saleId,
-          items: cartItems.map(i => ({ name: i.name, qty: i.qty, price: i.price })),
-          customerName: name.trim(),
-          customerPhone: phone.trim(),
-          deliveryDate: date,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.init_point) throw new Error(data.error || "Error al generar el pago");
-
-      // 3. Redirigir a MercadoPago
-      window.location.href = data.init_point;
+      onSuccess({ saleId, name: name.trim(), phone: phone.trim(), date, total });
     } catch (err) {
       console.error("[Checkout] Error:", err);
-      setError("Hubo un error al procesar el pago. Por favor intentá de nuevo.");
+      setError("No pudimos registrar el pedido. Por favor intentá de nuevo.");
     } finally {
       setSubmitting(false);
     }
@@ -278,6 +253,12 @@ function CheckoutModal({ cartItems, total, onClose, onSuccess }) {
             />
           </label>
 
+          {requiresPreparation && (
+            <p className="checkout-preparation-notice">
+              Como tu pedido incluye productos sin stock, la primera fecha disponible contempla 48 horas de elaboración.
+            </p>
+          )}
+
           <div className="checkout-summary">
             <span>{cartItems.length} {cartItems.length === 1 ? "producto" : "productos"}</span>
             <strong>{formatPrice(total)}</strong>
@@ -297,7 +278,7 @@ function CheckoutModal({ cartItems, total, onClose, onSuccess }) {
 // ── Pantalla de confirmación ─────────────────────────────────────────────────
 function ConfirmationScreen({ info, onBack }) {
   const waMsgText = encodeURIComponent(
-    `Hola NUTRIFREE! Acabo de hacer un pedido web 🍞\n` +
+    `Hola NUTRIFREE! Quiero cancelar mi pedido web.\n` +
     `Nombre: ${info.name}\n` +
     `Fecha de entrega: ${info.date}\n` +
     `Total: ${formatPrice(info.total)}\n` +
@@ -308,11 +289,11 @@ function ConfirmationScreen({ info, onBack }) {
   return (
     <div className="confirmation-screen">
       <div className="confirmation-card">
-        <div className="confirmation-icon">🎉</div>
-        <h2>¡Pedido registrado!</h2>
+        <div className="confirmation-icon">✓</div>
+        <h2>Envío solicitado</h2>
         <p className="confirmation-sub">
-          Tu pedido fue recibido correctamente.<br />
-          Nos comunicaremos para coordinar el pago.
+          Tu pedido ingresó al Calendario de Pedidos.<br />
+          Para cancelarlo, comunicate con nosotros por WhatsApp.
         </p>
 
         <div className="confirmation-details">
@@ -336,7 +317,7 @@ function ConfirmationScreen({ info, onBack }) {
 
         <a className="btn-wpp-confirm" href={waLink} target="_blank" rel="noopener noreferrer">
           <WppIcon />
-          Avisarnos por WhatsApp
+          Cancelar por WhatsApp
         </a>
 
         <button className="btn-back-menu" onClick={onBack}>
@@ -385,6 +366,24 @@ export default function MenuPage({ onGoToLogin }) {
     });
   }, []);
 
+  useEffect(() => {
+    const elements = document.querySelectorAll("[data-reveal]");
+    if (!("IntersectionObserver" in window)) {
+      elements.forEach(el => el.classList.add("is-visible"));
+      return undefined;
+    }
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12 });
+    elements.forEach(el => observer.observe(el));
+    return () => observer.disconnect();
+  }, [loading]);
+
   /** Catálogo para calcular stock: lo publicado + los componentes de los kits. */
   const stockCatalog = useMemo(
     () => [...products, ...kitComponents],
@@ -395,10 +394,9 @@ export default function MenuPage({ onGoToLogin }) {
   // ── Helpers del carrito ──────────────────────────────────────────────────
   const handleAdd = (prod) => {
     const stock = stockOf(prod);
-    if (stock <= 0) return;
     setCart(prev => {
       const current = prev[prod.id] ?? 0;
-      if (current >= stock) return prev;
+      if (stock > 0 && current >= stock) return prev;
       return { ...prev, [prod.id]: current + 1 };
     });
   };
@@ -451,6 +449,7 @@ export default function MenuPage({ onGoToLogin }) {
 
   const cartCount = cartItems.reduce((s, i) => s + i.qty, 0);
   const cartTotal = cartItems.reduce((s, i) => s + i.subtotal, 0);
+  const requiresPreparation = cartRequiresPreparation(cartItems, products, stockOf);
 
   const clearCart = () => setCart({});
 
@@ -506,11 +505,13 @@ export default function MenuPage({ onGoToLogin }) {
   }
 
   return (
-    <>
+    <div className="storefront">
       {/* ── HEADER ── */}
-      <header>
+      <header className="storefront-header">
         <div className="header-inner">
-          <img src="/imagenes/logo.png" alt="NUTRIFREE" className="header-logo" />
+          <a href="/" className="brand-lockup" aria-label="NutriFree, volver al inicio">
+            <img src="/imagenes/logo.png" alt="NUTRIFREE" className="header-logo" />
+          </a>
           <nav>
             {showMenuDia && <a href="#menu-dia">Menú del día</a>}
             {grouped.map(({ cat }) => (
@@ -518,28 +519,12 @@ export default function MenuPage({ onGoToLogin }) {
             ))}
           </nav>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span className="badge-singluten">Sin Gluten</span>
+            <span className="badge-singluten"><i /> 100% Sin Gluten</span>
             <a
               href="/menu-mayorista"
-              style={{
-                background: "rgba(255,255,255,0.12)",
-                border: "1.5px solid rgba(255,255,255,0.3)",
-                color: "rgba(255,255,255,0.85)",
-                fontFamily: "Arial, sans-serif",
-                fontSize: 12,
-                fontWeight: "bold",
-                letterSpacing: 1,
-                textTransform: "uppercase",
-                padding: "6px 14px",
-                borderRadius: 20,
-                textDecoration: "none",
-                whiteSpace: "nowrap",
-                transition: "background 0.2s, color 0.2s",
-              }}
-              onMouseOver={e => { e.target.style.background = "rgba(255,255,255,0.22)"; e.target.style.color = "white"; }}
-              onMouseOut={e => { e.target.style.background = "rgba(255,255,255,0.12)"; e.target.style.color = "rgba(255,255,255,0.85)"; }}
+              className="header-wholesale"
             >
-              🏢 Mayoristas
+              Catálogo mayorista
             </a>
             <span
               onClick={onGoToLogin}
@@ -550,23 +535,15 @@ export default function MenuPage({ onGoToLogin }) {
         </div>
       </header>
 
-      {/* ── HERO ── */}
-      <div className="hero">
-        <p className="hero-sub">Panadería &amp; Pastelería</p>
-        <h1>NUTRIFREE</h1>
-        <p className="hero-desc">
-          Elaboramos cada producto con amor y sin gluten.<br />
-          Disfrutá de sabores increíbles, cuidando tu salud.
-        </p>
-        <a className="hero-cta" href={WA_LINK} target="_blank" rel="noopener noreferrer">
-          <WppIcon />
-          Pedir ahora
-        </a>
-      </div>
+      <section className="catalog-intro" data-reveal>
+        <p className="section-eyebrow">Catálogo minorista</p>
+        <h1>Elegí algo rico.</h1>
+        <p>Explorá nuestros productos sin gluten y armá tu pedido.</p>
+      </section>
 
       {/* ── MENÚ DEL DÍA ── */}
       {showMenuDia && (
-        <section className="menu-dia-section" id="menu-dia">
+        <section className="menu-dia-section" id="menu-dia" data-reveal>
           <div className="menu-dia-card">
             <div className="menu-dia-img">
               <img src="/imagenes/menu-del-dia.png" alt="Menú del Día" />
@@ -600,7 +577,7 @@ export default function MenuPage({ onGoToLogin }) {
       {/* ── PRODUCTOS POR CATEGORÍA ── */}
       <main className="main-content">
         {grouped.map(({ cat, prods }) => (
-          <section key={cat} className="category-section" id={toSlug(cat)}>
+          <section key={cat} className="category-section" id={toSlug(cat)} data-reveal>
             <div className="category-header">
               {CAT_IMAGES[cat] ? (
                 <img src={CAT_IMAGES[cat]} alt={cat} className="category-img-thumb" />
@@ -634,6 +611,7 @@ export default function MenuPage({ onGoToLogin }) {
                       </div>
                       {hasPrice && (
                         <div className="product-card-actions">
+                          {stock <= 0 && <span className="sin-stock-badge">A elaborar · 48 h</span>}
                           <QtyControl
                             qty={qty}
                             stock={stock}
@@ -670,22 +648,18 @@ export default function MenuPage({ onGoToLogin }) {
       </footer>
 
       {/* ── FAB carrito ── */}
-      {cartCount > 0 && (
+      {cartCount > 0 ? (
         <button className="cart-fab" onClick={() => setShowCart(true)}>
           <CartIcon count={cartCount} />
           <span>Ver pedido · {formatPrice(cartTotal)}</span>
         </button>
-      )}
-
-      {/* ── FAB WhatsApp (solo sin carrito) ── */}
-      {cartCount === 0 && (
+      ) : (
         <a className="wpp-fab" href={WA_LINK} target="_blank" rel="noopener noreferrer">
           <WppIcon />
-          Hacer pedido
+          Consultar por WhatsApp
         </a>
       )}
 
-      {/* ── Drawer del carrito ── */}
       {showCart && (
         <CartDrawer
           cartItems={cartItems}
@@ -697,11 +671,11 @@ export default function MenuPage({ onGoToLogin }) {
         />
       )}
 
-      {/* ── Modal checkout ── */}
       {showCheckout && (
         <CheckoutModal
           cartItems={cartItems}
           total={cartTotal}
+          requiresPreparation={requiresPreparation}
           onClose={() => setShowCheckout(false)}
           onSuccess={(info) => {
             setShowCheckout(false);
@@ -709,6 +683,6 @@ export default function MenuPage({ onGoToLogin }) {
           }}
         />
       )}
-    </>
+    </div>
   );
 }

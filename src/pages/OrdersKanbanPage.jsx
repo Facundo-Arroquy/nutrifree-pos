@@ -23,6 +23,7 @@ import {
   setItemPrice, setItemQty, discountFromFinalTotal, priceSummary, hasPriceChanges,
 } from "../utils/orderPricing.js";
 import ProductionKanbanSection, { computePendingItems } from "../components/ProductionKanbanSection.jsx";
+import { isWebOrder, webOrderPhone } from "../utils/webOrder.js";
 
 const COLUMNS = [
   { id: "open",      label: "Pendiente",          icon: "📋" },
@@ -667,6 +668,9 @@ export default function OrdersKanbanPage({
                   >
                     <div style={{ fontWeight: 700, fontSize: ".92em", marginBottom: 3 }}>
                       {sale.customerName || "Sin cliente"}
+                      {isWebOrder(sale) && (
+                        <span className="badge badge-blue" style={{ marginLeft: 7, fontSize: ".7em" }}>WEB</span>
+                      )}
                     </div>
                     <div style={{ fontSize: ".77em", color: "var(--t3)", marginBottom: 8, lineHeight: 1.4 }}>
                       {sale.items.map(i => `${i.name} ×${i.qty}`).join(", ")}
@@ -714,11 +718,24 @@ export default function OrdersKanbanPage({
         const nextLabel = { open: "→ En preparación", preparing: "→ Listo para Retirar" }[detail.status];
         return (
           <Modal title={`Pedido — ${detail.customerName || "Sin cliente"}`} onClose={closeDetail} lg>
+            {isWebOrder(detail) && (
+              <div style={{ marginBottom: 14 }}>
+                <span className="badge badge-blue" style={{ fontWeight: 800 }}>WEB</span>
+              </div>
+            )}
             {/* Info */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
               <div>
                 <label className="lbl">Cliente</label>
                 <div style={{ marginTop: 4, fontWeight: 600 }}>{detail.customerName || "Sin cliente"}</div>
+                {isWebOrder(detail) && (
+                  <div style={{ marginTop: 5, fontSize: ".84em" }}>
+                    <span style={{ color: "var(--t3)" }}>WhatsApp: </span>
+                    <a href={`https://wa.me/${webOrderPhone(detail).replace(/\D/g, "")}`} style={{ color: "var(--blue)" }}>
+                      {webOrderPhone(detail)}
+                    </a>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="lbl">Entrega</label>
