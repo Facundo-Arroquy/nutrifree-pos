@@ -12,7 +12,7 @@
 
 // ─── RUTAS PÚBLICAS (no requieren sesión) ─────────────────────────────────────
 export const PUBLIC_PATHS = {
-  home:          "/",                 // Landing pública institucional
+  home:          "/",                 // Redirige al catálogo minorista
   menu:          "/menu",             // Catálogo minorista
   login:         "/login",
   wholesaleMenu: "/menu-mayorista",   // Menú mayorista (público con código)

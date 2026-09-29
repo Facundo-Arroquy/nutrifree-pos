@@ -10,7 +10,7 @@
  *  6. Sidebar dinámico filtrado por rol del usuario
  */
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import {
   CSS, Ico, Toast, LoginPage,
   SEED_PRODUCTS, SEED_CUSTOMERS, SEED_SALES, SEED_CATEGORIES,
@@ -38,7 +38,6 @@ import {
 
 import ChatWidget from "./components/ChatWidget.jsx";
 import MenuPage from "./pages/MenuPage.jsx";
-import LandingPage from "./pages/LandingPage.jsx";
 import WholesaleMenuPage from "./pages/WholesaleMenuPage.jsx";
 import PagoResultadoPage from "./pages/PagoResultadoPage.jsx";
 import AppRoutes from "./routes/AppRoutes.jsx";
@@ -568,6 +567,10 @@ export default function App() {
     return <WholesaleMenuPage />;
   }
 
+  if (currentPath === PUBLIC_PATHS.home) {
+    return <Navigate to={PUBLIC_PATHS.menu} replace />;
+  }
+
   if (currentPath === PUBLIC_PATHS.menu) {
     return <MenuPage onGoToLogin={() => navigate(PUBLIC_PATHS.login)} />;
   }
@@ -575,17 +578,6 @@ export default function App() {
   // Páginas de resultado de pago MP (públicas)
   if (PAY_RESULT_PATHS.includes(currentPath)) {
     return <PagoResultadoPage />;
-  }
-
-  // Landing institucional pública en /
-  if (currentPath === PUBLIC_PATHS.home && !user) {
-    if (authLoading) return (
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#f3faf8", flexDirection:"column", gap:16 }}>
-        <img src="/imagenes/logo.png" style={{ height:60, opacity:0.7 }} alt="NutriFree" />
-        <div style={{ fontFamily:"Arial, sans-serif", fontSize:".9em", color:"#89b8ad" }}>Cargando…</div>
-      </div>
-    );
-    return <LandingPage onGoToLogin={() => navigate(PUBLIC_PATHS.login)} />;
   }
 
   if (authLoading) return (

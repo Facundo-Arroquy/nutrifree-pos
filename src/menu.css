@@ -656,7 +656,7 @@ footer .footer-singluten {
 }
 
 .storefront-header {
-  background: rgba(248, 246, 238, .9);
+  background: #89b8ad;
   color: var(--ink);
   box-shadow: none;
   border-bottom: 1px solid rgba(23, 53, 47, .1);
