@@ -3,7 +3,7 @@ const PHOTO_ROOT = "/imagenes/Fotos%20Foto%20Producto%20Con%20Ia";
 const PRODUCT_PHOTOS = [
   { matches: ["6 mini alfajores", "mini alfajor"], file: "AlfMini.jpeg" },
   { matches: ["alfajor maicena"], file: "AlfMaicena.jpeg" },
-  { matches: ["brownie"], file: "Brownie.jpg" },
+  { matches: ["cuadrado de brownie"], file: "Brownie.jpg" },
   { matches: ["budin x 300", "budin banana y choco 300"], file: "Budin%20300grs.JPG" },
   { matches: ["cheesecake"], file: "Chessecake.jpg" },
   { matches: ["cookies", "cookie"], file: "Cookies.jpeg" },
@@ -13,7 +13,7 @@ const PRODUCT_PHOTOS = [
   { matches: ["pack viandas x 3", "pack x 3 viandas"], file: "Pack%20Viandasx3.JPG" },
   { matches: ["pan x 1 kg", "pan integral 1 kg"], file: "Pan%201kg.JPG" },
   { matches: ["pastafrola"], file: "Pastafrola.jpg" },
-  { matches: ["pizza muzzarela individual", "pizza individual"], file: "Pizza%20Individual.JPG" },
+  { matches: ["pizza muzzarela individual"], file: "Pizza%20Individual.JPG" },
   { matches: ["tarta porcion", "porcion de tarta"], file: "Porcion%20de%20tarta.JPG" },
   { matches: ["scons"], file: "Scons.png" },
   { matches: ["chipa"], file: "chipaNuevo.JPG" },
