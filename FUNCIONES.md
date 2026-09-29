@@ -383,3 +383,27 @@ Usar siempre `dayKey(x.createdAt)` para filtrar por fecha, nunca `createdAt.slic
 Campos `date` (ya guardados como `YYYY-MM-DD`) se comparan directo.
 
 Tests en `src/utils/dates.test.js` (`npm test`).
+
+## Scripts de backup (`scripts/backup/`)
+
+Sin dependencias externas: usan `fetch` contra PostgREST. Necesitan
+`SUPABASE_URL` y `SUPABASE_KEY` (service role, porque tienen que saltear RLS).
+
+| Función | Definida en | Qué hace |
+|---|---|---|
+| `TABLES` | `tables.js` | Inventario de las 29 tablas en orden de restauración: los maestros antes que sus movimientos, para no romper foreign keys. |
+| `SENSITIVE_TABLES` | `tables.js` | Las tablas con datos personales. El manifiesto nunca incluye muestras de estas. |
+| `makeClient` | `rest.js` | Cliente PostgREST mínimo: `fetchAll` pagina de a 1000 filas, `insertAll` inserta por lotes de 500 con `ignore-duplicates`. |
+| `dumpAll` / `buildBackup` | `dump.mjs` | Descargan todas las tablas y arman el JSON `nutrifree-backup/1`. |
+| `leerBackup` / `restaurar` | `restore.mjs` | Restauran desde el JSON. Por defecto hacen dry run; escriben sólo con `--confirmar`. |
+| `contarFilas` | `manifest.js` | Filas por tabla, siempre en el orden de `TABLES` (0 para las ausentes). |
+| `totalesDeControl` | `manifest.js` | Totales de dinero y stock: saldo deudor y a favor por separado, ventas con y sin canceladas, cargos vs pagos a proveedores, stock de productos e ingredientes. |
+| `construirManifiesto` | `manifest.js` | Arma el manifiesto público: sólo agregados, sin ninguna fila individual. |
+| `compararManifiestos` | `manifest.js` | Devuelve las diferencias entre dos manifiestos. Es la forma de detectar que alguien tocó stock o saldos. |
+
+### Por qué el manifiesto separa deudor de saldo a favor
+
+`saldo_clientes_total` sola esconde los errores: si un cliente pasa a deber
+$1000 y otro queda $1000 a favor, el total no se mueve. Por eso
+`totalesDeControl` guarda las dos puntas más el conteo de clientes con saldo
+distinto de cero.

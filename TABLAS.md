@@ -52,3 +52,20 @@ operación. La aritmética está en `src/utils/orderPricing.js`.
 Un pedido `closed` ya generó su cargo en `account_payments`: **no** se edita
 desde el Calendario, porque cambiar el total dejaría la cuenta corriente
 descuadrada.
+
+## Copias de seguridad
+
+Los snapshots viven en schemas aparte, con el formato `backup_AAAAMMDD`, y
+contienen una copia de las 29 tablas de `public` tal como estaban ese día.
+PostgREST sólo expone `public`, así que la app no los ve; además se les
+revocan los permisos de `anon` y `authenticated`.
+
+| Schema | Fecha | Filas | Motivo |
+|---|---|---|---|
+| `backup_20260918` | 2026-09-18 | 18.987 | Vacaciones de la administradora, con stock y saldos verificados. |
+
+El SQL que los crea está en `supabase/migrations/20260918_snapshot_backup.sql`.
+El procedimiento de restauración y verificación está en `backups/README.md`.
+
+> Los backups viejos no deberían quedar como tablas sueltas dentro de `public`:
+> conviene moverlos a su propio schema `backup_AAAAMMDD` o borrarlos.
