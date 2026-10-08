@@ -6,8 +6,33 @@
  * proveedor" en vez de saldar la cuenta.
  */
 import { describe, it, expect } from "vitest";
-import { parseMoneyInput } from "./money.js";
+import { parseMoneyInput, round3 } from "./money.js";
 import { allocatePayment } from "./supplierAccount.js";
+
+describe("round3", () => {
+  it("redondea a 3 decimales", () => {
+    expect(round3(4078.25781)).toBe(4078.258);
+    expect(round3(11.048195399999999)).toBe(11.048);
+    expect(round3(3694.2751999999996)).toBe(3694.275);
+  });
+  it("redondea divisiones con muchos decimales", () => {
+    expect(round3(10 / 3)).toBe(3.333);
+    expect(round3(100 / 7)).toBe(14.286);
+  });
+  it("maneja cero, vacío y NaN", () => {
+    expect(round3(0)).toBe(0);
+    expect(round3(null)).toBe(0);
+    expect(round3(undefined)).toBe(0);
+    expect(round3(NaN)).toBe(0);
+    expect(round3("abc")).toBe(0);
+  });
+  it("no modifica números con ≤3 decimales", () => {
+    expect(round3(5.5)).toBe(5.5);
+    expect(round3(12.85)).toBe(12.85);
+    expect(round3(100.123)).toBe(100.123);
+    expect(round3(7600)).toBe(7600);
+  });
+});
 
 describe("parseMoneyInput", () => {
   it("lee el punto como separador decimal (formato de input type=number)", () => {

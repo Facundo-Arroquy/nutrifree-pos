@@ -18,6 +18,9 @@ describe("lineUnitCost", () => {
   it("lo deriva de la línea si el ingrediente no está en el catálogo", () => {
     expect(lineUnitCost({ ingredientId: "x", qty: 2, cost: 800 }, ingredients)).toBe(400);
   });
+  it("redondea a 3 decimales al derivar el costo", () => {
+    expect(lineUnitCost({ ingredientId: "x", qty: 3, cost: 10 }, ingredients)).toBe(3.333);
+  });
   it("devuelve 0 si no hay catálogo ni cantidad", () => {
     expect(lineUnitCost({ ingredientId: "x", qty: 0, cost: 800 }, ingredients)).toBe(0);
   });
@@ -30,10 +33,18 @@ describe("updateIngredientQty", () => {
     expect(out[1].cost).toBe(2500);
   });
 
-  it("acepta decimales chicos", () => {
+  it("acepta decimales chicos y redondea costo a 3 decimales", () => {
     const out = updateIngredientQty(lines, 0, "0.05", ingredients);
     expect(out[0].qty).toBe(0.05);
-    expect(out[0].cost).toBeCloseTo(231.25, 5);
+    expect(out[0].cost).toBe(231.25);
+  });
+
+  it("redondea el costo a 3 decimales máximo", () => {
+    const ingrs = [{ id: "t", unitCost: 3333.333 }];
+    const testLines = [{ ingredientId: "t", qty: 0.3, cost: 0 }];
+    const out = updateIngredientQty(testLines, 0, "0.3", ingrs);
+    // 0.3 * 3333.333 = 999.9999 → round3 → 1000
+    expect(out[0].cost).toBe(1000);
   });
 
   it("permite el input vacío mientras se tipea", () => {

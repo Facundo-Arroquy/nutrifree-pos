@@ -4,13 +4,14 @@
  * Las cantidades admiten decimales (ej. 0.25 h de trabajo, 0.05 l de aceite),
  * por eso `qty` se guarda como número y nunca se redondea a enteros.
  */
+import { round3 } from "./money.js";
 
 /** Costo unitario efectivo de una línea (usa el catálogo; si no está, lo deriva). */
 export const lineUnitCost = (line, ingredients = []) => {
   const ing = ingredients.find(x => x.id === line.ingredientId);
   if (ing) return Number(ing.unitCost) || 0;
   const qty = Number(line.qty);
-  return qty ? (Number(line.cost) || 0) / qty : 0;
+  return qty ? round3((Number(line.cost) || 0) / qty) : 0;
 };
 
 /**
@@ -21,7 +22,7 @@ export const updateIngredientQty = (lines, idx, raw, ingredients = []) =>
   lines.map((line, i) => {
     if (i !== idx) return line;
     const qty = raw === "" ? "" : Number(raw);
-    return { ...line, qty, cost: (Number(qty) || 0) * lineUnitCost(line, ingredients) };
+    return { ...line, qty, cost: round3((Number(qty) || 0) * lineUnitCost(line, ingredients)) };
   });
 
 /** Normaliza cantidades a número y descarta líneas vacías o no positivas. */

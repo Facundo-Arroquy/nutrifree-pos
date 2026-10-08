@@ -12,6 +12,7 @@ import { useState, useEffect, useRef } from "react";
 import { Ico, Modal, $, exportXlsx } from "../shared.jsx";
 import { supabase, recipeToDb, recipeIngredientToDb } from "../supabase.js";
 import { updateIngredientQty, sanitizeIngredients } from "../utils/recipeIngredients.js";
+import { round3 } from "../utils/money.js";
 
 export default function RecipesPage({ recipes, setRecipes, products, ingredients, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast }) {
   const [modal, setModal] = useState(null);
@@ -87,10 +88,10 @@ export default function RecipesPage({ recipes, setRecipes, products, ingredients
     const ing = i.ingredientId
       ? ingredients.find(x => x.id === i.ingredientId)
       : ingredients.find(x => x.name?.toLowerCase() === i.name?.toLowerCase());
-    return ing ? i.qty * ing.unitCost : Number(i.cost) || 0;
+    return ing ? round3(i.qty * ing.unitCost) : Number(i.cost) || 0;
   };
-  const totalCost = (ingrs) => ingrs.reduce((a, b) => a + ingredientCost(b), 0);
-  const costPerUnit = (r) => r.yield>0 ? totalCost(r.ingredients)/r.yield : 0;
+  const totalCost = (ingrs) => round3(ingrs.reduce((a, b) => a + ingredientCost(b), 0));
+  const costPerUnit = (r) => r.yield>0 ? round3(totalCost(r.ingredients)/r.yield) : 0;
 
   const exportRecipePDF = (r) => {
     const prod = products.find(p=>p.id===r.productId);
@@ -149,7 +150,7 @@ ${r.notes?`<div class="notes">📝 ${r.notes}</div>`:""}
       const marginR = prod?.priceRetail > 0 ? ((prod.priceRetail - cpu) / prod.priceRetail * 100).toFixed(1) : "";
       const marginW = prod?.priceWholesale > 0 ? ((prod.priceWholesale - cpu) / prod.priceWholesale * 100).toFixed(1) : "";
       const ingList = r.ingredients.map(i => `${i.name} ${i.qty}${i.unit}`).join(" | ");
-      return [prod?.name||"Producto eliminado", r.prepTime, r.cookTime, r.yield, cost.toFixed(2), cpu.toFixed(2), marginR, marginW, r.notes||"", ingList];
+      return [prod?.name||"Producto eliminado", r.prepTime, r.cookTime, r.yield, cost.toFixed(3), cpu.toFixed(3), marginR, marginW, r.notes||"", ingList];
     });
     exportXlsx(headers, rows, "recetas");
   };

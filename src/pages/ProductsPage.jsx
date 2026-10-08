@@ -66,7 +66,7 @@ export default function ProductsPage({ products, setProducts, categories, recipe
       const marginWholesale = cost !== "" && p.priceWholesale > 0
         ? (((p.priceWholesale - cost) / p.priceWholesale) * 100).toFixed(1)
         : "";
-      return [p.name, p.category, p.priceRetail, p.priceWholesale, cost !== "" ? Number(cost.toFixed(2)) : "", marginRetail, marginWholesale, p.unit, availableStock(p, products), p.active?"Sí":"No", p.description||""];
+      return [p.name, p.category, p.priceRetail, p.priceWholesale, cost !== "" ? Number(cost.toFixed(3)) : "", marginRetail, marginWholesale, p.unit, availableStock(p, products), p.active?"Sí":"No", p.description||""];
     });
     exportXlsx(headers, rows, "productos");
   };

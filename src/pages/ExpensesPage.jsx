@@ -22,14 +22,15 @@ import { supabase, expenseToDb, supplierPaymentToDb } from "../supabase.js";
 import {
   planExpenseLedger, expenseStatus, expenseRemaining, expensePaidAmount, expensePaid, expenseChargeAmount,
 } from "../utils/supplierAccount.js";
+import { round3 } from "../utils/money.js";
 
 const EXPENSE_UNITS = ["unidades", "kg", "g", "litros", "porciones"];
 
 // Factor máximo de desvío tolerado entre el costo unitario resultante de la línea
-// y el costo actual del ingrediente. Si el nuevo costo es >5× o <1/5 del actual,
+// y el costo actual del ingrediente. Si el nuevo costo es >2× o <1/2 del actual,
 // probablemente hay un error de carga (típicamente la cantidad tipeada en otra
 // unidad, p.ej. gramos en un ingrediente medido en kg → costo ÷1000).
-const COST_ANOMALY_FACTOR = 5;
+const COST_ANOMALY_FACTOR = 2;
 
 // Devuelve datos de anomalía para una línea, o null si no aplica / no es anómala.
 function lineCostAnomaly(line, ingredient, withVat, vatRate) {
@@ -39,7 +40,7 @@ function lineCostAnomaly(line, ingredient, withVat, vatRate) {
   const oldCost = Number(ingredient.unitCost || 0);
   if (oldCost <= 0) return null; // sin costo previo no hay con qué comparar
   const effTotal = withVat ? totalPaid * (1 + vatRate / 100) : totalPaid;
-  const newCost = effTotal / qty;
+  const newCost = round3(effTotal / qty);
   const ratio = newCost / oldCost;
   if (ratio >= COST_ANOMALY_FACTOR || ratio <= 1 / COST_ANOMALY_FACTOR) {
     return { newCost, oldCost, ratio, unit: ingredient.unit || "" };
@@ -54,6 +55,7 @@ function IngredientLinesTable({ lines, ingredients, withVat, vatRate, lineSubcat
         <thead>
           <tr>
             <th>Ingrediente</th><th>Cantidad</th><th>Unidad</th><th>Total pagado</th>
+            <th>Costo/unid.</th>
             <th>Subtotal{withVat ? ` (+${vatRate}% IVA)` : ""}</th>
             {lineSubcats.length > 0 && <th>Subcategoría</th>}
             <th></th>
@@ -62,8 +64,13 @@ function IngredientLinesTable({ lines, ingredients, withVat, vatRate, lineSubcat
         <tbody>
           {lines.map((line, idx) => {
             const effTotal = withVat ? (Number(line.totalPaid)||0) * (1 + vatRate / 100) : (Number(line.totalPaid)||0);
+            const qty = Number(line.qty || 0);
             const ing = ingredients.find(i => i.id === line.ingredientId);
             const anomaly = lineCostAnomaly(line, ing, withVat, vatRate);
+            const newUnitCost = qty > 0 && effTotal > 0 ? round3(effTotal / qty) : null;
+            const oldUnitCost = ing ? Number(ing.unitCost || 0) : 0;
+            const costUp = newUnitCost !== null && oldUnitCost > 0 && newUnitCost > oldUnitCost;
+            const costDown = newUnitCost !== null && oldUnitCost > 0 && newUnitCost < oldUnitCost;
             return (
               <tr key={idx} style={anomaly ? { background:"var(--amberl, rgba(245,158,11,.08))" } : undefined}>
                 <td>
@@ -74,20 +81,36 @@ function IngredientLinesTable({ lines, ingredients, withVat, vatRate, lineSubcat
                 </td>
                 <td><input type="number" min="0" step="0.01" value={line.qty} onChange={e=>updateLine(idx,"qty",e.target.value)} style={{ width:75 }}/></td>
                 <td>
-                  {/* Unidad fija = la del ingrediente. El stock y el costo se calculan en esta unidad,
-                      por eso no es editable: cargar otra unidad descuadraría stock/costo. */}
                   <span style={{ display:"inline-block", minWidth:60, color: line.unit ? "var(--t2)" : "var(--t4)", fontSize:".9em" }}>
                     {line.unit || "—"}
                   </span>
                 </td>
                 <td><input type="number" min="0" step="0.01" value={line.totalPaid ?? ""} onChange={e=>updateLine(idx,"totalPaid",e.target.value)} style={{ width:100 }}/></td>
-                <td style={{ fontWeight:700, color:"var(--red)" }}>
-                  {$(effTotal)}
+                <td style={{ fontSize:".85em", minWidth:120 }}>
+                  {newUnitCost !== null ? (
+                    <div>
+                      <span style={{ fontWeight:700, color: costUp ? "var(--red, #dc2626)" : costDown ? "var(--green, #16a34a)" : "var(--t2)" }}>
+                        ${newUnitCost.toFixed(3)}/{ing?.unit || "u"}
+                      </span>
+                      {oldUnitCost > 0 && (
+                        <div style={{ fontSize:".8em", color:"var(--t4)" }}>
+                          actual: ${oldUnitCost.toFixed(3)}
+                        </div>
+                      )}
+                      <label style={{ display:"flex", alignItems:"center", gap:4, fontSize:".78em", color:"var(--t3)", marginTop:2, cursor:"pointer" }}>
+                        <input type="checkbox" checked={line.updateCost !== false} onChange={e=>updateLine(idx,"updateCost",e.target.checked)}/>
+                        Actualizar costo
+                      </label>
+                    </div>
+                  ) : "—"}
                   {anomaly && (
                     <div style={{ fontWeight:600, fontSize:".72em", color:"var(--amber, #b45309)", marginTop:2, whiteSpace:"normal", maxWidth:170 }}>
-                      <Ico n="alert" s={11}/> Costo ${anomaly.newCost.toFixed(2)}/{anomaly.unit} vs. actual ${anomaly.oldCost.toFixed(2)}. ¿Cantidad en {anomaly.unit}?
+                      <Ico n="alert" s={11}/> Desvío ×{anomaly.ratio.toFixed(1)}. ¿Cantidad en {anomaly.unit}?
                     </div>
                   )}
+                </td>
+                <td style={{ fontWeight:700, color:"var(--red)" }}>
+                  {$(effTotal)}
                 </td>
                 {lineSubcats.length > 0 && (
                   <td>
@@ -151,7 +174,7 @@ function CloseExpenseModal({ expense, remaining, onClose, onConfirm }) {
 }
 
 export default function ExpensesPage({ expenses, setExpenses, expenseCategories, expenseSubcategories = [], ingredients, setIngredients, recipes, setRecipes, suppliers, supplierPayments, setSupplierPayments, showToast, logAction, vatRate = 21 }) {
-  const emptyLine = (subcategory = "") => ({ ingredientId: "", qty: 1, unit: "", totalPaid: "", subcategory });
+  const emptyLine = (subcategory = "") => ({ ingredientId: "", qty: 1, unit: "", totalPaid: "", subcategory, updateCost: true });
   const emptyForm = { date:todayStr(), supplier:"", supplierId:null, concept:"", quantity:1, unit:"unidades", unitPrice:0, total:0, paymentMethod:"", paymentStatus:"pending", category:"Ingredientes", subcategory:"", notes:"", ingredientLines:[emptyLine()], withVat:false };
   const [modal, setModal] = useState(null);
   const [payModal, setPayModal] = useState(null);
@@ -252,7 +275,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
   const openNew  = () => { setForm(emptyForm); setModal("new"); };
   const openEdit = e  => {
     const lines = e.ingredientLines?.length
-      ? e.ingredientLines.map(l => ({ ...l, totalPaid: l.totalPaid ?? (Number(l.unitPrice||0) * Number(l.qty||0)), subcategory: l.subcategory || "" }))
+      ? e.ingredientLines.map(l => ({ ...l, totalPaid: l.totalPaid ?? (Number(l.unitPrice||0) * Number(l.qty||0)), subcategory: l.subcategory || "", updateCost: true }))
       : [emptyLine(e.subcategory || "")];
     setForm({...e, ingredientLines: lines, withVat: e.withVat || false, subcategory: e.subcategory || ""});
     setModal(e);
@@ -324,7 +347,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       const validLines = rawLines.map(l => {
         const effTotal = form.withVat ? (Number(l.totalPaid)||0) * (1 + vatRate / 100) : (Number(l.totalPaid)||0);
         const qty = Number(l.qty || 0);
-        return { ...l, unitPrice: qty > 0 ? effTotal / qty : 0, subtotal: effTotal };
+        return { ...l, unitPrice: qty > 0 ? round3(effTotal / qty) : 0, subtotal: effTotal };
       });
       // Guardrail: si el costo unitario de alguna línea se desvía mucho del actual
       // (típico error de cargar la cantidad en otra unidad), pedir confirmación.
@@ -337,7 +360,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
         .filter(Boolean);
       if (anomalies.length > 0) {
         const detalle = anomalies
-          .map(a => `• ${a.name}: nuevo costo $${a.newCost.toFixed(2)}/${a.unit} vs. actual $${a.oldCost.toFixed(2)}/${a.unit}`)
+          .map(a => `• ${a.name}: nuevo costo $${a.newCost.toFixed(3)}/${a.unit} vs. actual $${a.oldCost.toFixed(3)}/${a.unit}`)
           .join("\n");
         const ok = confirm(
           `El costo de estos ingredientes cambia mucho respecto al actual:\n\n${detalle}\n\n` +
@@ -357,6 +380,7 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
       for (const line of validLines) {
         const price    = Number(line.unitPrice);
         const qty      = Number(line.qty || 0);
+        const wantUpdate = line.updateCost !== false;
         const prevLine = prevLines.find(l => l.ingredientId === line.ingredientId);
         const prevQty  = prevLine ? Number(prevLine.qty || 0) : 0;
         const delta    = isNew ? qty : qty - prevQty;
@@ -367,14 +391,23 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
         const { data: newStock, error: stockErr } = await supabase.rpc("adjust_ingredient_stock", {
           p_id:        line.ingredientId,
           p_delta:     delta,
-          p_unit_cost: price || null,
+          p_unit_cost: (price && wantUpdate) ? price : null,
         });
         if (stockErr) showToast("Error al actualizar stock: " + stockErr.message, "error");
         setIngredients(prev => prev.map(i => i.id === line.ingredientId
-          ? { ...i, unitCost: price || i.unitCost, stock: newStock ?? (i.stock + delta) }
+          ? { ...i, unitCost: (price && wantUpdate) ? price : i.unitCost, stock: newStock ?? (i.stock + delta) }
           : i
         ));
-        if (price) await supabase.from("recipe_ingredients").update({ cost: price }).eq("ingredient_id", line.ingredientId);
+        // Actualizar recipe_ingredients.cost = ri.qty × nuevo unitCost
+        if (price && wantUpdate) {
+          const { data: ris } = await supabase.from("recipe_ingredients")
+            .select("id, qty").eq("ingredient_id", line.ingredientId);
+          for (const ri of (ris || [])) {
+            await supabase.from("recipe_ingredients")
+              .update({ cost: round3(Number(ri.qty) * price) })
+              .eq("id", ri.id);
+          }
+        }
       }
 
       // Revertir stock de ingredientes que fueron eliminados de las líneas (solo al editar)
@@ -394,17 +427,18 @@ export default function ExpensesPage({ expenses, setExpenses, expenseCategories,
         }
       }
       // Actualizar estado local de recetas (batch)
+      const costUpdatedLines = validLines.filter(l => Number(l.unitPrice) && l.updateCost !== false);
       setRecipes(prev => prev.map(r => {
         let changed = false;
         const newIngrs = r.ingredients.map(ri => {
-          const line = validLines.find(l => l.ingredientId===ri.ingredientId && Number(l.unitPrice));
+          const line = costUpdatedLines.find(l => l.ingredientId===ri.ingredientId);
           if (!line) return ri;
           changed = true;
-          return { ...ri, cost: Number(line.unitPrice) };
+          return { ...ri, cost: round3(ri.qty * Number(line.unitPrice)) };
         });
         return changed ? {...r, ingredients:newIngrs} : r;
       }));
-      const updatedCount = recipes.filter(r => r.ingredients.some(ri => validLines.find(l => l.ingredientId===ri.ingredientId && Number(l.unitPrice)))).length;
+      const updatedCount = recipes.filter(r => r.ingredients.some(ri => costUpdatedLines.find(l => l.ingredientId===ri.ingredientId))).length;
       logAction?.(modal==="new" ? "crear" : "editar", "gasto", `Ingredientes: "${concept}" — $${total}`);
       showToast(updatedCount>0 ? `Gasto guardado · Costo actualizado en ${updatedCount} receta${updatedCount!==1?"s":""}` : "Gasto guardado");
       setModal(null);

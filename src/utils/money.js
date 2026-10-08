@@ -22,6 +22,9 @@
  * @param {string|number|null|undefined} raw
  * @returns {number} el importe, o 0 si está vacío o no es un número válido
  */
+/** Redondea a 3 decimales para costos unitarios de ingredientes y recetas. */
+export const round3 = (n) => Math.round((Number(n) || 0) * 1000) / 1000;
+
 export function parseMoneyInput(raw) {
   if (typeof raw === "number") return Number.isFinite(raw) ? raw : 0;
   const s = String(raw ?? "").trim().replace(",", ".");

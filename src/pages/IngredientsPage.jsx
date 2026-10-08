@@ -10,6 +10,7 @@
 import { useState } from "react";
 import { Ico, Modal, $, SortableTh, exportXlsx } from "../shared.jsx";
 import { supabase, ingredientToDb, recipeToDb } from "../supabase.js";
+import { round3 } from "../utils/money.js";
 
 const INGR_CATS = ["Harinas","Lácteos","Grasas/Aceites","Endulzantes","Frutas/Verduras","Especias","Proteínas","Otros"];
 const INGR_UNITS = ["g","kg","ml","l","unidad","unidades","cdas","ctas"];
@@ -59,7 +60,7 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
     );
     for (const recipe of affected) {
       for (const ri of recipe.ingredients.filter(ri => ri.ingredientId === ingredientId)) {
-        const newCost = ri.qty * newUnitCost;
+        const newCost = round3(ri.qty * newUnitCost);
         const { error } = await supabase.from("recipe_ingredients")
           .update({ cost: newCost })
           .eq("id", ri.id);
@@ -70,7 +71,7 @@ export default function IngredientsPage({ ingredients, setIngredients, recipes, 
       setRecipes(prev => prev.map(r => ({
         ...r,
         ingredients: r.ingredients.map(ri =>
-          ri.ingredientId === ingredientId ? { ...ri, cost: ri.qty * newUnitCost } : ri
+          ri.ingredientId === ingredientId ? { ...ri, cost: round3(ri.qty * newUnitCost) } : ri
         ),
       })));
     }
