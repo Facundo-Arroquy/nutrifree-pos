@@ -527,11 +527,6 @@ export default function MenuPage({ onGoToLogin }) {
             >
               Catálogo mayorista
             </a>
-            <span
-              onClick={onGoToLogin}
-              title=""
-              style={{ cursor: "pointer", fontSize: "18px", opacity: 0.4, userSelect: "none" }}
-            >🤍</span>
           </div>
         </div>
       </header>
@@ -635,7 +630,16 @@ export default function MenuPage({ onGoToLogin }) {
       <footer>
         <strong>NUTRIFREE</strong>
         Panadería &amp; Pastelería Sin TACC<br />
-        Hecho con amor, libre de gluten
+        Hecho con amor
+        <button
+          type="button"
+          className="footer-login-trigger"
+          onClick={onGoToLogin}
+          aria-label="Acceso interno"
+        >
+          🤍
+        </button>
+        , libre de gluten
         <div>
           <a
             href={WA_LINK}
