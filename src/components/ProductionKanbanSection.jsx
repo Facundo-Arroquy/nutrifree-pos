@@ -14,6 +14,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Ico, Modal } from "../shared.jsx";
 import { supabase } from "../supabase.js";
+import { fetchAllPages } from "../utils/supabasePagination.js";
 
 const PROD_COLUMNS = [
   { id: "pending",     label: "Pendientes",     icon: "⏳" },
@@ -79,12 +80,13 @@ export default function ProductionKanbanSection({
   const loadCards = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const data = await fetchAllPages((from, to) => supabase
         .from("production_kanban")
         .select("*")
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      setDbCards(data || []);
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to));
+      setDbCards(data);
     } catch (err) {
       showToast("Error al cargar tablero: " + err.message, "error");
     } finally {

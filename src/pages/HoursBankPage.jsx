@@ -10,6 +10,7 @@
 import { useState, useEffect } from "react";
 import { Ico } from "../shared.jsx";
 import { supabase } from "../supabase.js";
+import { fetchAllPages } from "../utils/supabasePagination.js";
 
 export default function HoursBankPage({ user, recipes, products, showToast }) {
   const [hoursData, setHoursData] = useState([]);
@@ -41,19 +42,21 @@ export default function HoursBankPage({ user, recipes, products, showToast }) {
 
   const openDetail = async (row) => {
     setDetail({ employee: row.business_users, rows: [], loading: true });
-    const { data, error } = await supabase
-      .from("production_employees")
-      .select("id, role, hours, employee_id, productions(id, created_at, recipe_id)")
-      .eq("employee_id", row.employee_id);
-    if (error) {
+    try {
+      const data = await fetchAllPages((from, to) => supabase
+        .from("production_employees")
+        .select("id, role, hours, employee_id, productions(id, created_at, recipe_id)")
+        .eq("employee_id", row.employee_id)
+        .order("id")
+        .range(from, to));
+      const sorted = data.sort(
+        (a, b) => new Date(b.productions?.created_at) - new Date(a.productions?.created_at)
+      );
+      setDetail({ employee: row.business_users, rows: sorted, loading: false });
+    } catch (error) {
       showToast("Error: " + error.message, "error");
       setDetail(null);
-      return;
     }
-    const sorted = (data || []).sort(
-      (a, b) => new Date(b.productions?.created_at) - new Date(a.productions?.created_at)
-    );
-    setDetail({ employee: row.business_users, rows: sorted, loading: false });
   };
 
   const subtractHours = async (pe) => {

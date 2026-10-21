@@ -11,23 +11,22 @@ import { useState, useEffect } from "react";
 import { Ico, Modal, $, fmtDate, uid, PAY_LABELS, STATUS_LABELS, STATUS_COLORS, todayStr, useSortable, SortableTh } from "../shared.jsx";
 import { supabase, customerToDb, accountPaymentToDb, dbToAccountPayment } from "../supabase.js";
 import { parseMoneyInput } from "../utils/money.js";
+import { fetchAllPages } from "../utils/supabasePagination.js";
 
 export default function CustomersPage({ customers, setCustomers, sales, accountPayments, setAccountPayments, showToast, logAction }) {
   // Sincronizar account_payments al abrir la página, para no depender sólo del realtime
   useEffect(() => {
     const fetchAll = async () => {
-      let all = [];
-      let from = 0;
-      while (true) {
-        const { data, error } = await supabase.from("account_payments")
-          .select("*").order("created_at", { ascending: false })
-          .range(from, from + 999);
-        if (error || !data || data.length === 0) break;
-        all = [...all, ...data];
-        if (data.length < 1000) break;
-        from += 1000;
+      try {
+        const all = await fetchAllPages((from, to) => supabase.from("account_payments")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(from, to));
+        setAccountPayments(all.map(dbToAccountPayment));
+      } catch (error) {
+        console.error("[account_payments] Error:", error);
       }
-      if (all.length > 0) setAccountPayments(all.map(dbToAccountPayment));
     };
     fetchAll();
   }, []);

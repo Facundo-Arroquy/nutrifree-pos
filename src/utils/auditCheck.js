@@ -9,6 +9,7 @@
 
 import emailjs from "@emailjs/browser";
 import { supabase } from "../supabase.js";
+import { fetchAllPages } from "./supabasePagination.js";
 
 const SERVICE_ID  = import.meta.env.VITE_EMAILJS_SERVICE_ID;
 const PUBLIC_KEY  = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
@@ -44,23 +45,29 @@ export function getLastAuditResult() {
  */
 export async function runAudit() {
   // Q1 — Créditos sin cargo de consumo
-  const { data: q1 } = await supabase
+  const q1 = await fetchAllPages((from, to) => supabase
     .from("account_payments")
     .select("customer_id, sale_id, amount, date")
     .eq("type", "payment")
     .eq("payment_method", "balance")
-    .not("sale_id", "is", null);
+    .not("sale_id", "is", null)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(from, to));
 
   // Filtrar los que NO tienen consumo correspondiente (client-side join)
-  const { data: allCharges } = await supabase
+  const allCharges = await fetchAllPages((from, to) => supabase
     .from("account_payments")
     .select("customer_id, amount, date, payment_method, type, sale_id")
     .eq("type", "charge")
     .eq("payment_method", "balance")
-    .is("sale_id", null);
+    .is("sale_id", null)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(from, to));
 
-  const orphaned = (q1 || []).filter(p =>
-    !(allCharges || []).some(
+  const orphaned = q1.filter(p =>
+    !allCharges.some(
       c => c.customer_id === p.customer_id &&
            c.amount      === p.amount       &&
            c.date        === p.date
@@ -68,20 +75,26 @@ export async function runAudit() {
   );
 
   // Q3 — Ventas en cuenta sin cargo en account_payments
-  const { data: salesInAccount } = await supabase
+  const salesInAccount = await fetchAllPages((from, to) => supabase
     .from("sales")
     .select("id, customer_id, customer_name, total, created_at")
     .eq("payment_method", "account")
-    .eq("status", "closed");
+    .eq("status", "closed")
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(from, to));
 
-  const { data: allSaleCharges } = await supabase
+  const allSaleCharges = await fetchAllPages((from, to) => supabase
     .from("account_payments")
     .select("sale_id")
     .eq("type", "charge")
-    .not("sale_id", "is", null);
+    .not("sale_id", "is", null)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(from, to));
 
-  const chargedSaleIds = new Set((allSaleCharges || []).map(c => c.sale_id));
-  const uncoveredSales = (salesInAccount || []).filter(s => !chargedSaleIds.has(s.id));
+  const chargedSaleIds = new Set(allSaleCharges.map(c => c.sale_id));
+  const uncoveredSales = salesInAccount.filter(s => !chargedSaleIds.has(s.id));
 
   const date = new Date().toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" });
   const result = {
