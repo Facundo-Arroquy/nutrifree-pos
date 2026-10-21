@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  cartRequiresPreparation, isWebOrder, minimumDeliveryDate, webOrderNotes, webOrderPhone,
+  cartRequiresPreparation, decreaseOrderQuantity, initialOrderQuantity, isPublishedMenuProduct, isWebOrder,
+  minimumDeliveryDate, webOrderNotes, webOrderPhone,
 } from "./webOrder.js";
 
 describe("minimumDeliveryDate", () => {
@@ -29,6 +30,10 @@ describe("cartRequiresPreparation", () => {
     const items = [{ productId: "available" }, { productId: "to-make" }];
     expect(cartRequiresPreparation(items, products, stockOf)).toBe(true);
   });
+
+  it("requiere elaboración cuando la cantidad pedida supera el stock", () => {
+    expect(cartRequiresPreparation([{ productId: "available", qty: 4 }], products, stockOf)).toBe(true);
+  });
 });
 
 describe("datos del pedido web", () => {
@@ -36,5 +41,27 @@ describe("datos del pedido web", () => {
     const sale = { notes: `${webOrderNotes("2281 555555")} | Pago MP aprobado` };
     expect(isWebOrder(sale)).toBe(true);
     expect(webOrderPhone(sale)).toBe("2281 555555");
+  });
+});
+
+describe("cantidades mínimas del carrito", () => {
+  it("agrega de a una unidad en minorista", () => {
+    expect(initialOrderQuantity(0)).toBe(1);
+    expect(initialOrderQuantity(1)).toBe(2);
+  });
+
+  it("inicia en cuatro unidades y elimina al bajar del mínimo mayorista", () => {
+    expect(initialOrderQuantity(0, 4)).toBe(4);
+    expect(initialOrderQuantity(4, 4)).toBe(5);
+    expect(decreaseOrderQuantity(5, 4)).toBe(4);
+    expect(decreaseOrderQuantity(4, 4)).toBe(0);
+  });
+});
+
+describe("publicación en los menús", () => {
+  it("solo publica productos activos con el tag de menú encendido", () => {
+    expect(isPublishedMenuProduct({ active: true, showInMenu: true })).toBe(true);
+    expect(isPublishedMenuProduct({ active: true, showInMenu: false })).toBe(false);
+    expect(isPublishedMenuProduct({ active: false, showInMenu: true })).toBe(false);
   });
 });

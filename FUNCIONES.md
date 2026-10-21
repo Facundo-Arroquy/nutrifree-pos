@@ -275,6 +275,23 @@ Tests en `src/utils/priceImport.test.js` (`npm test`).
 
 ---
 
+## Pedidos desde los menús públicos
+
+Tanto `/menu` como `/menu-mayorista` muestran únicamente productos activos con
+`show_in_menu = true`. Ambos permiten armar un carrito, completar nombre,
+WhatsApp y fecha de entrega, y registrar el pedido en `sales` con estado `open`
+para que aparezca en el Calendario de Pedidos. El menú mayorista usa
+`price_list = wholesale`, los precios mayoristas y un mínimo de 4 unidades por
+producto. Si la cantidad supera el stock disponible, la fecha mínima contempla
+48 horas de elaboración. Desde el encabezado y el pie del catálogo mayorista se
+puede volver directamente a `/menu`.
+
+Los helpers de cantidades mínimas y plazo de elaboración viven en
+`src/utils/webOrder.js`; los componentes visuales compartidos del carrito y
+checkout se exportan desde `src/pages/MenuPage.jsx`.
+
+---
+
 ## `src/routes/paths.js` — rutas de la aplicación
 
 Hasta ahora **todas las secciones vivían en la misma URL**: `App.jsx` guardaba un
