@@ -46,6 +46,7 @@ import {
   pathForPage, pageIdForPath, homePathFor, navItemsFor, settingsSectionsFor,
 } from "./routes/paths.js";
 import { auditIsDue, runAudit, sendAuditEmail } from "./utils/auditCheck.js";
+import { fetchAllPages } from "./utils/supabasePagination.js";
 
 // ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
 const sessionToUser = (session) => {
@@ -191,44 +192,35 @@ export default function App() {
       // techo se paginan. Los saldos de cuenta corriente (clientes y
       // proveedores) se calculan sumando TODOS sus movimientos, así que una
       // respuesta truncada daría saldos mal.
-      const fetchAllRows = async (table) => {
-        let all = [];
-        let from = 0;
-        while (true) {
-          const { data, error } = await supabase.from(table)
-            .select("*").order("created_at", { ascending: false })
-            .range(from, from + 999);
-          if (error) { console.error(`[${table}] Error:`, error); break; }
-          if (!data || data.length === 0) break;
-          all = [...all, ...data];
-          if (data.length < 1000) break;
-          from += 1000;
-        }
-        return all;
-      };
+      const fetchAllRows = (table, orderBy, ascending = true, secondaryOrder = null) =>
+        fetchAllPages((from, to) => {
+          let query = supabase.from(table).select("*").order(orderBy, { ascending });
+          if (secondaryOrder) query = query.order(secondaryOrder, { ascending });
+          return query.range(from, to);
+        });
 
-      const [[{ data: cats }, { data: expCats }, { data: prods }, { data: custs }, { data: sls }, { data: recs }, { data: ingrs }, { data: stockMovs }, { data: recIngrs }, { data: supps }, { data: shifts }, { data: faqs }, { data: faqsMissed }, { data: settings }, { data: inactiveDis }, { data: expSubcats }], accPays, exps, suppPays] = await Promise.all([
-        Promise.all([
-          supabase.from("categories").select("*"),
-          supabase.from("expense_categories").select("*").order("name"),
-          supabase.from("products").select("*"),
-          supabase.from("customers").select("*"),
-          supabase.from("sales").select("*").order("created_at", { ascending: false }),
-          supabase.from("recipes").select("*"),
-          supabase.from("ingredients").select("*").order("name"),
-          supabase.from("stock_movements").select("*").order("created_at", { ascending: false }),
-          supabase.from("recipe_ingredients").select("*"),
-          supabase.from("suppliers").select("*").order("name"),
-          supabase.from("cash_shifts").select("*").order("created_at", { ascending: false }),
-          supabase.from("faq_entries").select("*").order("created_at", { ascending: false }),
-          supabase.from("faq_missed").select("*").order("created_at", { ascending: false }),
-          supabase.from("app_settings").select("*"),
-          supabase.from("customer_inactive_dismissed").select("*"),
-          supabase.from("expense_subcategories").select("*").order("name"),
-        ]),
-        fetchAllRows("account_payments"),
-        fetchAllRows("expenses"),
-        fetchAllRows("supplier_payments"),
+      const [cats, expCats, prods, custs, sls, recs, ingrs, stockMovs, recIngrs,
+        supps, shifts, faqs, faqsMissed, settings, inactiveDis, expSubcats,
+        accPays, exps, suppPays] = await Promise.all([
+        fetchAllRows("categories", "name"),
+        fetchAllRows("expense_categories", "name"),
+        fetchAllRows("products", "id"),
+        fetchAllRows("customers", "id"),
+        fetchAllRows("sales", "created_at", false, "id"),
+        fetchAllRows("recipes", "id"),
+        fetchAllRows("ingredients", "name"),
+        fetchAllRows("stock_movements", "created_at", false, "id"),
+        fetchAllRows("recipe_ingredients", "id"),
+        fetchAllRows("suppliers", "name"),
+        fetchAllRows("cash_shifts", "created_at", false, "id"),
+        fetchAllRows("faq_entries", "created_at", false, "id"),
+        fetchAllRows("faq_missed", "created_at", false, "id"),
+        fetchAllRows("app_settings", "key"),
+        fetchAllRows("customer_inactive_dismissed", "customer_id"),
+        fetchAllRows("expense_subcategories", "name"),
+        fetchAllRows("account_payments", "created_at", false, "id"),
+        fetchAllRows("expenses", "created_at", false, "id"),
+        fetchAllRows("supplier_payments", "created_at", false, "id"),
       ]);
       if (cats) setCategories(cats.map(c => c.name));
       if (expCats && expCats.length > 0) setExpenseCategories(expCats.map(c => c.name));
@@ -271,8 +263,12 @@ export default function App() {
         dismissedBy: r.dismissed_by,
       })));
     };
-    loadDataRef.current = load;
-    load();
+    const runLoad = () => load().catch(error => {
+      console.error("[loadData] Error:", error);
+      setToast({ msg: "Error al cargar todos los datos: " + error.message, type: "error" });
+    });
+    loadDataRef.current = runLoad;
+    runLoad();
   }, [user?.email]);
 
   // ─── Re-fetch al volver a la tab (visibilitychange) ────────────────────────

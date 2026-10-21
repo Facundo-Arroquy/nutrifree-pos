@@ -13,6 +13,7 @@ import { Ico } from "../shared.jsx";
 import { supabase, dbToExpenseSubcategory } from "../supabase.js";
 import { getLastAuditResult, auditIsDue, runAudit, sendAuditEmail } from "../utils/auditCheck.js";
 import { SETTINGS_SECTIONS } from "../routes/paths.js";
+import { fetchAllPages } from "../utils/supabasePagination.js";
 
 export default function SettingsPage({ user, products, categories, setCategories, expenseCategories, setExpenseCategories, expenseSubcategories, setExpenseSubcategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, settingsSection = "general", setPage }) {
   const [newCat, setNewCat] = useState("");
@@ -154,13 +155,19 @@ export default function SettingsPage({ user, products, categories, setCategories
     if (settingsSection !== "notas") return;
     if (user?.role !== "admin" || user?.isDemo) return;
     setLoadingNotes(true);
-    supabase
+    fetchAllPages((from, to) => supabase
       .from("internal_notes")
       .select("*")
       .order("created_at", { ascending: false })
-      .then(({ data, error }) => {
+      .order("id", { ascending: false })
+      .range(from, to))
+      .then(data => {
         setLoadingNotes(false);
-        if (!error && data) setNotes(data);
+        setNotes(data);
+      })
+      .catch(error => {
+        setLoadingNotes(false);
+        showToast("Error al cargar notas: " + error.message, "error");
       });
   }, [user, settingsSection]);
 
@@ -801,6 +808,12 @@ const BACKUP_TABLES = [
   "expense_categories", "app_settings",
 ];
 
+const BACKUP_ORDER_BY = {
+  categories: "name",
+  expense_categories: "name",
+  app_settings: "key",
+};
+
 function BackupSection({ user, showToast }) {
   const [loading, setLoading] = useState(false);
   const [lastBackup, setLastBackup] = useState(
@@ -835,9 +848,15 @@ function BackupSection({ user, showToast }) {
       const backup = { exported_at: new Date().toISOString(), tables: {} };
 
       for (const table of BACKUP_TABLES) {
-        const { data, error } = await supabase.from(table).select("*");
-        if (error) throw new Error(`Error en tabla ${table}: ${error.message}`);
-        backup.tables[table] = data ?? [];
+        try {
+          backup.tables[table] = await fetchAllPages((from, to) => supabase
+            .from(table)
+            .select("*")
+            .order(BACKUP_ORDER_BY[table] || "id")
+            .range(from, to));
+        } catch (error) {
+          throw new Error(`Error en tabla ${table}: ${error.message}`);
+        }
       }
 
       const json = JSON.stringify(backup, null, 2);
