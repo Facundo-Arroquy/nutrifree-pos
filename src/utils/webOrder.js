@@ -17,8 +17,20 @@ export function minimumDeliveryDate(requiresPreparation, now = new Date()) {
 export const cartRequiresPreparation = (items, products, stockOf) =>
   items.some(item => {
     const product = products.find(candidate => candidate.id === item.productId);
-    return product ? stockOf(product) <= 0 : false;
+    return product ? stockOf(product) < (item.qty || 1) : false;
   });
+
+/** Cantidad que se agrega al seleccionar por primera vez un producto. */
+export const initialOrderQuantity = (currentQuantity, minimumQuantity = 1) =>
+  currentQuantity > 0 ? currentQuantity + 1 : minimumQuantity;
+
+/** Al bajar del mínimo, elimina el producto del carrito. */
+export const decreaseOrderQuantity = (currentQuantity, minimumQuantity = 1) =>
+  currentQuantity <= minimumQuantity ? 0 : currentQuantity - 1;
+
+/** Un producto público debe estar activo y marcado explícitamente para el menú. */
+export const isPublishedMenuProduct = product =>
+  product?.active === true && product?.showInMenu === true;
 
 export const isWebOrder = sale =>
   typeof sale?.notes === "string" && sale.notes.includes(WEB_ORDER_MARKER);

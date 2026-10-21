@@ -1,12 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase, dbToProduct } from "../supabase.js";
+import { availableStock } from "../utils/stock.js";
+import {
+  cartRequiresPreparation, decreaseOrderQuantity, initialOrderQuantity, isPublishedMenuProduct,
+} from "../utils/webOrder.js";
 import ProductImage from "../components/ProductImage.jsx";
+import {
+  CartDrawer, CartIcon, CheckoutModal, ConfirmationScreen, QtyControl, WppIcon,
+  formatPrice,
+} from "./MenuPage.jsx";
 import "../menu.css";
 
 const WA_NUMBER = "5492281588834";
 const WA_LINK = `https://wa.me/${WA_NUMBER}?text=Hola%20NUTRIFREE!%20Quisiera%20hacer%20un%20pedido%20mayorista%20%F0%9F%8D%9E`;
 
 const ENVIO_GRATIS_MINIMO = 75000;
+const MIN_WHOLESALE_QTY = 4;
 
 const CAT_IMAGES = {
   "Tortas": "/imagenes/tortas.png",
@@ -27,32 +36,35 @@ function toSlug(name) {
     .replace(/[^a-z0-9-]/g, "");
 }
 
-function formatPrice(price) {
-  return "$ " + price.toLocaleString("es-AR", { maximumFractionDigits: 0 });
-}
-
-function WppIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-    </svg>
-  );
-}
-
 // ── Menú mayorista ─────────────────────────────────────────────────────────────
 function WholesaleMenu() {
   const [products, setProducts] = useState([]);
+  const [kitComponents, setKitComponents] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [cart, setCart] = useState({});
+  const [showCart, setShowCart] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [confirmation, setConfirmation] = useState(null);
 
   useEffect(() => {
     Promise.all([
       supabase.from("categories").select("*").order("name"),
-      supabase.from("products").select("*").eq("active", true).order("name"),
-    ]).then(([{ data: cats }, { data: prods }]) => {
-      const mapped = (prods ?? []).map(dbToProduct).filter(p => p.priceWholesale > 0);
+      supabase.from("products").select("*").eq("active", true).eq("show_in_menu", true).order("name"),
+    ]).then(async ([{ data: cats }, { data: prods }]) => {
+      const mapped = (prods ?? [])
+        .map(dbToProduct)
+        .filter(product => isPublishedMenuProduct(product) && product.priceWholesale > 0);
       setCategories(cats?.map(c => c.name) ?? []);
       setProducts(mapped);
+
+      const componentIds = [...new Set(
+        mapped.flatMap(product => (product.kitItems || []).map(item => item.productId))
+      )].filter(id => id && !mapped.some(product => product.id === id));
+      if (componentIds.length) {
+        const { data: components } = await supabase.from("products").select("*").in("id", componentIds);
+        setKitComponents(components?.map(dbToProduct) ?? []);
+      }
       setLoading(false);
     }).catch(err => {
       console.error("[WholesaleMenuPage] Error al cargar datos:", err);
@@ -60,12 +72,78 @@ function WholesaleMenu() {
     });
   }, []);
 
+  const stockCatalog = useMemo(() => [...products, ...kitComponents], [products, kitComponents]);
+  const stockOf = product => availableStock(product, stockCatalog);
+
+  const handleAdd = product => {
+    const stock = stockOf(product);
+    setCart(previous => {
+      const current = previous[product.id] ?? 0;
+      const nextQuantity = initialOrderQuantity(current, MIN_WHOLESALE_QTY);
+      if (current > 0 && stock > 0 && nextQuantity > stock) return previous;
+      return { ...previous, [product.id]: nextQuantity };
+    });
+  };
+
+  const handleRemove = product => {
+    setCart(previous => {
+      const nextQuantity = decreaseOrderQuantity(previous[product.id] ?? 0, MIN_WHOLESALE_QTY);
+      const next = { ...previous };
+      if (nextQuantity === 0) delete next[product.id];
+      else next[product.id] = nextQuantity;
+      return next;
+    });
+  };
+
+  const handleQtyChange = (productId, delta) => {
+    const product = products.find(candidate => candidate.id === productId);
+    if (!product) return;
+    if (delta > 0) handleAdd(product);
+    else handleRemove(product);
+  };
+
+  const cartItems = useMemo(() => Object.entries(cart).map(([productId, qty]) => {
+    const product = products.find(candidate => candidate.id === productId);
+    if (!product || qty < MIN_WHOLESALE_QTY) return null;
+    const price = product.priceWholesale;
+    return {
+      productId,
+      name: product.name,
+      qty,
+      price,
+      originalPrice: price,
+      priceOverridden: false,
+      subtotal: price * qty,
+      isKit: (product.kitItems?.length ?? 0) > 0,
+      kitItems: product.kitItems || [],
+      includeInTicket: true,
+      category: product.category,
+      frozen: false,
+    };
+  }).filter(Boolean), [cart, products]);
+
+  const cartCount = cartItems.reduce((sum, item) => sum + item.qty, 0);
+  const cartTotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
+  const requiresPreparation = cartRequiresPreparation(cartItems, products, stockOf);
+
   const grouped = categories
     .map(cat => ({
       cat,
       prods: products.filter(p => p.category === cat),
     }))
     .filter(g => g.prods.length > 0);
+
+  if (confirmation) {
+    return (
+      <ConfirmationScreen
+        info={confirmation}
+        onBack={() => {
+          setConfirmation(null);
+          setCart({});
+        }}
+      />
+    );
+  }
 
   if (loading) {
     return (
@@ -95,6 +173,7 @@ function WholesaleMenu() {
             ))}
           </nav>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <a className="wholesale-back-link" href="/menu">← Menú minorista</a>
             <span style={{
               background: "#2d5f8a",
               color: "white",
@@ -122,10 +201,11 @@ function WholesaleMenu() {
           Precios especiales para revendedores y distribuidores.<br />
           Pedido mínimo: <strong>4 unidades por producto</strong>.
         </p>
-        <a className="hero-cta" href={WA_LINK} target="_blank" rel="noopener noreferrer">
-          <WppIcon />
-          Consultar pedido
-        </a>
+        <button className="hero-cta wholesale-order-cta" type="button" onClick={() => {
+          document.querySelector(".main-content")?.scrollIntoView({ behavior: "smooth" });
+        }}>
+          Armar pedido
+        </button>
       </div>
 
       {/* ── BANNER ENVÍOS ── */}
@@ -173,8 +253,11 @@ function WholesaleMenu() {
               </div>
             </div>
             <div className="product-grid">
-              {prods.map(prod => (
-                <div key={prod.id} className="product-card">
+              {prods.map(prod => {
+                const qty = cart[prod.id] ?? 0;
+                const stock = stockOf(prod);
+                return (
+                <div key={prod.id} className={`product-card${stock <= 0 ? " product-card--sin-stock" : ""}`}>
                   <ProductImage product={prod} />
                   <div className="product-card-accent" style={{ background: "linear-gradient(90deg, #2d5f8a, #7aadcf)" }} />
                   <div className="product-card-body">
@@ -198,9 +281,20 @@ function WholesaleMenu() {
                         mín. 4 u.
                       </span>
                     </div>
+                    <div className="product-card-actions">
+                      {stock < MIN_WHOLESALE_QTY && <span className="sin-stock-badge">A elaborar · 48 h</span>}
+                      <QtyControl
+                        qty={qty}
+                        stock={stock}
+                        addLabel="+ Agregar 4"
+                        onAdd={() => handleAdd(prod)}
+                        onRemove={() => handleRemove(prod)}
+                      />
+                    </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         ))}
@@ -223,17 +317,49 @@ function WholesaleMenu() {
         </div>
         <span className="footer-singluten" style={{ background: "#2d5f8a", marginTop: 12 }}>100% Sin Gluten</span>
         <div style={{ marginTop: 14 }}>
-          <a href="/" style={{ color: "rgba(168,200,232,0.55)", fontFamily: "Arial, sans-serif", fontSize: 11, textDecoration: "none" }}>
+          <a href="/menu" style={{ color: "rgba(168,200,232,0.75)", fontFamily: "Arial, sans-serif", fontSize: 12, textDecoration: "none" }}>
             ← Ver menú minorista
           </a>
         </div>
       </footer>
 
-      {/* ── FAB WhatsApp ── */}
-      <a className="wpp-fab" href={WA_LINK} target="_blank" rel="noopener noreferrer">
-        <WppIcon />
-        Consultar pedido
-      </a>
+      {cartCount > 0 ? (
+        <button className="cart-fab wholesale-cart-fab" onClick={() => setShowCart(true)}>
+          <CartIcon count={cartCount} />
+          <span>Ver pedido · {formatPrice(cartTotal)}</span>
+        </button>
+      ) : (
+        <a className="wpp-fab" href={WA_LINK} target="_blank" rel="noopener noreferrer">
+          <WppIcon />
+          Consultar por WhatsApp
+        </a>
+      )}
+
+      {showCart && (
+        <CartDrawer
+          cartItems={cartItems}
+          products={products}
+          stockOf={stockOf}
+          onClose={() => setShowCart(false)}
+          onQtyChange={handleQtyChange}
+          onCheckout={() => { setShowCart(false); setShowCheckout(true); }}
+        />
+      )}
+
+      {showCheckout && (
+        <CheckoutModal
+          cartItems={cartItems}
+          total={cartTotal}
+          requiresPreparation={requiresPreparation}
+          priceList="wholesale"
+          orderLabel="Pedido mayorista"
+          onClose={() => setShowCheckout(false)}
+          onSuccess={info => {
+            setShowCheckout(false);
+            setConfirmation(info);
+          }}
+        />
+      )}
     </div>
   );
 }
