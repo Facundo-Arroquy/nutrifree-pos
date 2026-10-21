@@ -34,6 +34,10 @@ export const normalizeWeekDays = value => {
   return result;
 };
 
+export const weeklyMenuProducts = (products = []) => products
+  .filter(product => product.active && /vianda/i.test(product.category || ""))
+  .sort((a, b) => a.name.localeCompare(b.name, "es"));
+
 export const weekLabel = weekStart => {
   const start = new Date(`${weekStart}T12:00:00`);
   const end = new Date(start);

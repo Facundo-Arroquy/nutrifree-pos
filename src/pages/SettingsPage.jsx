@@ -14,8 +14,9 @@ import { supabase, dbToExpenseSubcategory } from "../supabase.js";
 import { getLastAuditResult, auditIsDue, runAudit, sendAuditEmail } from "../utils/auditCheck.js";
 import { SETTINGS_SECTIONS } from "../routes/paths.js";
 import { fetchAllPages } from "../utils/supabasePagination.js";
+import { invalidEmailRecipients, normalizeEmailRecipients } from "../utils/emailRecipients.js";
 
-export default function SettingsPage({ user, products, categories, setCategories, expenseCategories, setExpenseCategories, expenseSubcategories, setExpenseSubcategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, settingsSection = "general", setPage }) {
+export default function SettingsPage({ user, products, categories, setCategories, expenseCategories, setExpenseCategories, expenseSubcategories, setExpenseSubcategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, weeklyMenuEmails, setWeeklyMenuEmails, settingsSection = "general", setPage }) {
   const [newCat, setNewCat] = useState("");
   const [newExpCat, setNewExpCat] = useState("");
   const [newSubcatName, setNewSubcatName] = useState("");
@@ -30,6 +31,9 @@ export default function SettingsPage({ user, products, categories, setCategories
   const [inactiveDaysInput, setInactiveDaysInput] = useState(String(inactiveDayThreshold ?? 0));
   const [frozenInput, setFrozenInput] = useState(String(frozenDiscount));
   const [vatInput, setVatInput] = useState(String(vatRate));
+  const [weeklyMenuEmailsInput, setWeeklyMenuEmailsInput] = useState(weeklyMenuEmails || "");
+
+  useEffect(() => setWeeklyMenuEmailsInput(weeklyMenuEmails || ""), [weeklyMenuEmails]);
 
   // ─── Empleados ────────────────────────────────────────────────────────────
   const [employees, setEmployees] = useState([]);
@@ -484,6 +488,39 @@ export default function SettingsPage({ user, products, categories, setCategories
               ? <p style={{ fontSize:".76em", color:"var(--t4)", marginTop:8 }}>Activa: alerta cuando el cliente no compre en más de <strong>{inactiveDayThreshold} días</strong></p>
               : <p style={{ fontSize:".76em", color:"var(--t4)", marginTop:8 }}>Desactivada (días en 0)</p>
             }
+          </div>
+
+          <div className="card" style={{ maxWidth:420, marginBottom:16 }}>
+            <div className="section-title">Envío del menú semanal</div>
+            <div style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
+              Estos destinatarios aparecerán automáticamente al preparar el menú semanal. Podés ingresar más de uno separados por coma, punto y coma o salto de línea.
+            </div>
+            <div className="form-group" style={{ marginBottom:10 }}>
+              <label className="lbl">Correos predeterminados</label>
+              <textarea
+                rows={3}
+                value={weeklyMenuEmailsInput}
+                onChange={e => setWeeklyMenuEmailsInput(e.target.value)}
+                placeholder="pedidos@ejemplo.com, administracion@ejemplo.com"
+                style={{ resize:"vertical" }}
+              />
+            </div>
+            <button className="btn btn-primary btn-sm" onClick={async () => {
+              const invalid = invalidEmailRecipients(weeklyMenuEmailsInput);
+              if (invalid.length) {
+                showToast(`Correo inválido: ${invalid.join(", ")}`, "error");
+                return;
+              }
+              const normalized = normalizeEmailRecipients(weeklyMenuEmailsInput);
+              const { error } = await supabase.from("app_settings")
+                .upsert({ key: "weekly_menu_emails", value: normalized }, { onConflict: "key" });
+              if (error) { showToast("Error al guardar: " + error.message, "error"); return; }
+              setWeeklyMenuEmails(normalized);
+              setWeeklyMenuEmailsInput(normalized);
+              showToast(normalized ? "Destinatarios del menú guardados ✓" : "Destinatarios del menú eliminados");
+            }}>
+              <Ico n="check" s={13}/> Guardar
+            </button>
           </div>
 
           <div className="card" style={{ maxWidth:420, marginBottom:16 }}>
