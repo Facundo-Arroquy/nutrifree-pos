@@ -3,6 +3,7 @@ import emailjs from "@emailjs/browser";
 const SERVICE_ID           = import.meta.env.VITE_EMAILJS_SERVICE_ID;
 const TEMPLATE_ID          = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
 const INVOICE_TEMPLATE_ID  = import.meta.env.VITE_EMAILJS_INVOICE_TEMPLATE_ID;
+const WEEKLY_MENU_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_WEEKLY_MENU_TEMPLATE_ID || INVOICE_TEMPLATE_ID;
 const PUBLIC_KEY           = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
 
 /**
@@ -56,4 +57,18 @@ export async function sendInvoiceEmail(customer, files) {
   };
 
   await emailjs.send(SERVICE_ID, INVOICE_TEMPLATE_ID, params, PUBLIC_KEY);
+}
+
+export async function sendWeeklyMenuEmail(email, week, imageUrl) {
+  if (!SERVICE_ID || !WEEKLY_MENU_TEMPLATE_ID || !PUBLIC_KEY) {
+    throw new Error("EmailJS no está configurado para enviar el menú");
+  }
+  await emailjs.send(SERVICE_ID, WEEKLY_MENU_TEMPLATE_ID, {
+    to_email: email,
+    customer_name: "Nutrifree",
+    subject: `Menú semanal ${week}`,
+    file_links: `• Menú semanal ${week}\n  ${imageUrl}`,
+    file_count: "1",
+    date: new Date().toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" }),
+  }, PUBLIC_KEY);
 }

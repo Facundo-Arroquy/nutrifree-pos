@@ -9,10 +9,16 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { demoClient } from "./demoSupabase.js";
+import { assertSafeSupabaseEnvironment } from "./utils/supabaseEnvironment.js";
 
 // ─── Credenciales desde variables de entorno (.env) ─────────────────────────
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE;
+assertSafeSupabaseEnvironment({
+  url: SUPABASE_URL,
+  isDevelopment: import.meta.env.DEV,
+  hasWindow: typeof window !== "undefined",
+});
 // ────────────────────────────────────────────────────────────────────────────
 
 const _prod = createClient(SUPABASE_URL, SUPABASE_KEY);

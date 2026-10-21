@@ -30,11 +30,13 @@ import ReportsPage from "../pages/ReportsPage.jsx";
 import WeeklyReportPage from "../pages/WeeklyReportPage.jsx";
 import HelpAdminPage from "../pages/HelpAdminPage.jsx";
 import SettingsPage from "../pages/SettingsPage.jsx";
+import WeeklyMenuPage from "../pages/WeeklyMenuPage.jsx";
 
 /** id de página → componente. Las rutas sin componente se ignoran (acciones). */
 const PAGE_COMPONENTS = {
   "dashboard":      DashboardPage,
   "pos":            POSPage,
+  "weekly-menu":    WeeklyMenuPage,
   "orders-kanban":  OrdersKanbanPage,
   "orders":         OrdersPage,
   "billing":        BillingPage,
