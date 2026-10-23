@@ -11,6 +11,8 @@ import { useState } from "react";
 import { Ico, Modal, $, uid, useSortable, SortableTh, exportXlsx } from "../shared.jsx";
 import { supabase, productToDb } from "../supabase.js";
 import { availableStock, isKitProduct } from "../utils/stock.js";
+import { COST_TIERS } from "../utils/costTier.js";
+import CostTierBadge from "../components/CostTierBadge.jsx";
 
 export default function ProductsPage({ products, setProducts, categories, recipes, ingredients, showToast, logAction }) {
   const [modal, setModal] = useState(null);
@@ -169,6 +171,7 @@ export default function ProductsPage({ products, setProducts, categories, recipe
                   <div style={{ fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
                     {p.name}
                     {p.kitItems?.length > 0 && <span className="badge badge-blue" style={{ fontSize:".7em" }}>Kit</span>}
+                    <CostTierBadge tier={p.costTier}/>
                   </div>
                   {p.description&&<div style={{ fontSize:".74em", color:"var(--t3)" }}>{p.description}</div>}
                 </td>
@@ -238,6 +241,12 @@ export default function ProductsPage({ products, setProducts, categories, recipe
               <select value={form.active?"true":"false"} onChange={e=>set("active",e.target.value==="true")}>
                 <option value="true">Sí</option>
                 <option value="false">No</option>
+              </select>
+            </div>
+            <div className="form-group"><label className="lbl">Nivel de costo (menú semanal)</label>
+              <select value={form.costTier || ""} onChange={e=>set("costTier",e.target.value)}>
+                <option value="">Sin clasificar</option>
+                {COST_TIERS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
             <div className="form-group full"><label className="lbl">Descripción</label><textarea value={form.description} onChange={e=>set("description",e.target.value)}/></div>

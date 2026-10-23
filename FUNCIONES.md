@@ -400,3 +400,119 @@ Usar siempre `dayKey(x.createdAt)` para filtrar por fecha, nunca `createdAt.slic
 Campos `date` (ya guardados como `YYYY-MM-DD`) se comparan directo.
 
 Tests en `src/utils/dates.test.js` (`npm test`).
+
+---
+
+## `src/utils/weeklyMenuRules.js` — regla de costos del menú semanal
+
+El menú semanal tiene 10 comidas (lunes a viernes, almuerzo y cena). Para cuidar el
+margen, la mezcla de **nivel de costo** (`products.cost_tier`: `bajo`/`medio`/`alto`)
+debe respetar `WEEKLY_COST_RULE`:
+
+| Regla | Valor |
+|---|---|
+| Costo bajo | 3 a 4 por semana |
+| Costo medio | 3 a 4 por semana |
+| Costo alto | exactamente 3 (tope) |
+| Costo alto por día | máximo 1 (no almuerzo y cena altos el mismo día) |
+
+Con 10 comidas y un mínimo de 3 por nivel, el máximo posible de un nivel es 4. Con costo
+alto topado en 3, las únicas mezclas válidas (bajo/medio/alto) son 4/3/3 y 3/4/3.
+
+**Niveles** (sobre el precio estándar de $11.000): bajo < $3.300 (<30%), medio $3.300–$4.400,
+alto > $4.400 (>40%). Costo por porción = cantidad × costo actual del ingrediente ÷
+rendimiento de la receta (el mismo cálculo de Recetas). Los que no tienen receta completa
+se clasificaron por la mediana de su familia (pollo, pasta, verdura/huevo, vacuno, cerdo,
+pescado, ensalada…); se corrigen a mano en **Productos → Nivel de costo**.
+
+| Función | Qué hace |
+|---|---|
+| `tiersByMealName(products)` | Mapa nombre normalizado (sin acentos ni mayúsculas) → nivel. Ignora productos sin nivel válido. |
+| `evaluateWeeklyCostRule(days, products, rule?)` | Evalúa la semana. Devuelve `counts`, `tiers` (con `status` `ok`/`pending`/`error`), `issues` (`error`/`warning`), `filled`, `complete` y `ok`. |
+
+Una semana a medio armar no marca error por los mínimos pendientes (`pending`), salvo que
+los lugares libres ya no alcancen para cumplirlos (`unreachable`). Los platos sin nivel
+ocupan lugar pero no cuentan para ningún nivel (advertencia `unclassified`).
+
+`src/utils/costTier.js` define `COST_TIERS`, `costTierLabel` y `normalizeCostTier`.
+La UI vive en `WeeklyCostRulePanel` (panel en Menú semanal) y `CostTierBadge`.
+
+### Migraciones
+
+- `20261022130000_products_cost_tier.sql` — agrega `products.cost_tier` con CHECK (`bajo`/`medio`/`alto`), nullable.
+- `20261022130100_seed_products_cost_tier.sql` — clasificación inicial por nombre del estudio de costos
+  (200 viandas). Solo completa viandas sin nivel; no pisa ediciones manuales; es idempotente.
+
+`productToDb` solo envía `cost_tier` si el producto trae el campo, así que la app sigue
+funcionando contra una base a la que todavía no se le aplicó la migración.
+
+Tests en `src/utils/weeklyMenuRules.test.js`, `src/utils/costTier.test.js` y
+`src/supabase.costTier.test.js` (`npm test`).
+
+---
+
+## `src/utils/weeklyMenuImage.js` — imagen del menú semanal para Instagram
+
+Dibuja en un `<canvas>` la imagen 1080×1350 (4:5) del menú de la semana. Estética:
+fondo crema con grano, espigas de trigo (el motivo del logo), cabecera y pie de ondas
+color salvia, una tarjeta por día con su fecha y los platos de almuerzo y cena.
+Tipografías de la marca (Playfair Display + DM Sans).
+
+| Función | Qué hace |
+|---|---|
+| `drawWeeklyMenu(canvas, weekStart, days, assets?)` | Dibuja la imagen completa. Sin `assets` usa texto en lugar de los logos. |
+| `loadWeeklyMenuAssets()` | Carga una sola vez el wordmark (`/imagenes/logo.png`), el isotipo (`/logo.jpg`) y las tipografías. Nunca falla: lo que no cargue queda en `null`, y si no cargó ningún logo se reintenta en la próxima llamada. |
+| `layoutDishText(texto, medir, ancho)` | Parte el nombre del plato: 27 px en 2 líneas; si no entra, 24 px en 3; si aun así no entra, corta con "…". |
+| `canvasToPng(canvas)` | Convierte el canvas a PNG (para descargar o enviar por email). |
+| `mulberry32(seed)` | Generador pseudoaleatorio determinístico (grano y espigas no cambian entre dibujos). |
+
+Antes de descargar o enviar, `WeeklyMenuPage` espera `loadWeeklyMenuAssets()` para que el
+PNG siempre lleve logos y tipografías. `dayOfMonth(weekStart, i)` (en `weeklyMenu.js`)
+da el número de día que se muestra en cada tarjeta.
+
+Tests en `src/utils/weeklyMenuImage.test.js` (usa un contexto 2D falso) y `weeklyMenu.test.js`.
+
+### Menú keto (un plato por día)
+
+La misma pantalla y la misma imagen sirven para el **menú keto**: en Menú semanal cada día
+tiene tres columnas (**Almuerzo**, **Cena** y **Keto**) y los platos se guardan juntos en
+`weekly_menus.days` (`{ monday: { lunch, dinner, keto }, … }`; no requiere migración y los
+menús viejos sin `keto` se leen igual). La regla de costos solo mira almuerzo y cena.
+
+- `MENU_TYPES` (en `weeklyMenu.js`) define las plantillas: `classic` (`lunch`, `dinner`) y `keto` (`keto`).
+  `MEAL_COLUMNS` arma las columnas de carga y `hasMenuDishes(days, tipo)` dice si hay platos cargados.
+- `drawWeeklyMenu(canvas, weekStart, days, assets, "keto")` dibuja la plantilla keto: misma cabecera,
+  tarjetas y pie, con un plato por día (letra más grande y más ancho).
+- Se generan **dos imágenes** (`menu-semanal-AAAA-MM-DD.png` y `menu-keto-AAAA-MM-DD.png`), cada una con su
+  botón de descarga. El email envía el menú semanal y, si el keto tiene algún plato, también el keto
+  (dos enlaces en el mismo mail; `weeklyMenuEmailParams` en `emailAlerts.js`).
+
+---
+
+## `src/utils/weeklyProduction.js` — ingredientes de la semana
+
+En Menú semanal, debajo de cada plato (almuerzo, cena y keto de cada día) se carga la
+cantidad de **unidades a producir**. Se guarda en `weekly_menus.days[día].qty[comida]`
+(entero positivo; vacío = sin cargar) junto con los platos; no requiere migración y la
+imagen de Instagram no las usa. Con eso, la sección **Ingredientes de la semana**
+muestra cuánto de cada ingrediente hace falta, por día y en total.
+
+**Cálculo:** cantidad en la receta × unidades ÷ rendimiento de la receta. Sirve igual para
+recetas por porción (rinde 1) que por tanda (rinde 28). Incluye mano de obra, tapas,
+descartables y etiquetas, agrupados por la categoría del ingrediente. No descuenta stock
+(solo el total necesario).
+
+| Función | Qué hace |
+|---|---|
+| `computeWeeklyProduction({ days, products, recipes, ingredients })` | Devuelve `rows` (un renglón por ingrediente con `perDay` y `total`), `groups` (por categoría), `entries`, `issues` y `units` (por día, por comida y total). |
+| `pickRecipe(recipes, productId)` | Si el producto tiene varias recetas, usa la que tiene más ingredientes con cantidad. |
+| `formatQuantity(n)` | Cantidad en es-AR (`1.234,5`, hasta 3 decimales). |
+
+El plato se vincula con su producto por nombre (sin acentos ni mayúsculas) y con su receta
+por `productId`. Un plato **no suma** (y aparece en el aviso del panel) si:
+`no-recipe` (sin receta o con todas las cantidades en 0), `no-product` (el nombre ya no
+existe), `no-qty` (sin unidades). Con `incomplete` (algunas líneas en 0) suma solo las
+líneas con cantidad y lo avisa. Las unidades de esos platos igual cuentan en el total a producir.
+
+La UI es `WeeklyIngredientsPanel`. Tests en `src/utils/weeklyProduction.test.js`,
+`src/components/WeeklyIngredientsPanel.test.jsx` y `src/utils/weeklyMenu.test.js`.

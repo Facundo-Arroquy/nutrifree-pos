@@ -28,6 +28,8 @@ class DemoQueryBuilder {
     this._filters = [];        // [{ col, val }]
     this._orderCol = null;
     this._orderAsc = true;
+    this._rangeFrom = null;
+    this._rangeTo = null;
   }
 
   select()        { this._op = "select"; return this; }
@@ -42,6 +44,8 @@ class DemoQueryBuilder {
   in(col, vals)            { this._filters.push({ col, vals: new Set(vals) }); return this; }
   /** Ordena el resultado por columna. Por defecto ascendente. */
   order(col, opts = {})    { this._orderCol = col; this._orderAsc = opts.ascending !== false; return this; }
+  /** Aplica el rango inclusivo usado por PostgREST para paginar resultados. */
+  range(from, to)          { this._rangeFrom = from; this._rangeTo = to; return this; }
 
   /** ¿La fila pasa todos los filtros encadenados? */
   _matches(row) {
@@ -65,6 +69,7 @@ class DemoQueryBuilder {
           return 0;
         });
       }
+      if (this._rangeFrom != null) out = out.slice(this._rangeFrom, this._rangeTo + 1);
       return { data: out, error: null };
     }
 
