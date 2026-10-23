@@ -7,7 +7,7 @@
  * posible de un nivel es 4; por eso "alto" se topa en 3.
  */
 import { COST_TIERS, normalizeCostTier } from "./costTier.js";
-import { MENU_TYPES, WEEK_DAYS } from "./weeklyMenu.js";
+import { MENU_TYPES, WEEK_DAYS, mealKey } from "./weeklyMenu.js";
 
 const MEALS = MENU_TYPES.classic.slots.map(slot => slot.key);
 
@@ -18,7 +18,6 @@ export const WEEKLY_COST_RULE = {
   maxAltoPerDay: 1,
 };
 
-const mealKey = name => String(name || "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 /** Mapa nombre normalizado → nivel de costo (solo productos clasificados). */

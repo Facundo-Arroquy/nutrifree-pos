@@ -11,6 +11,8 @@ export const WEEK_DAYS = [
  * en `weekly_menus.days` (un objeto por día con una clave por comida):
  * - classic: almuerzo y cena (`lunch`, `dinner`).
  * - keto: un solo plato por día (`keto`).
+ * Además, cada día guarda en `qty` las unidades a producir de cada comida
+ * (`{ lunch: 30, dinner: 20, keto: 10 }`); la imagen de Instagram no las usa.
  */
 export const MENU_TYPES = {
   classic: {
@@ -35,9 +37,21 @@ export const MEAL_COLUMNS = Object.values(MENU_TYPES).flatMap(type => type.slots
 
 export const normalizeMenuType = value => Object.hasOwn(MENU_TYPES, value) ? value : DEFAULT_MENU_TYPE;
 
-export const emptyWeekDays = () => Object.fromEntries(
-  WEEK_DAYS.map(({ key }) => [key, Object.fromEntries(ALL_SLOT_KEYS.map(slot => [slot, ""]))])
-);
+/** Unidades a producir: entero positivo, o "" si está vacío o no es válido. */
+export const normalizeQty = value => {
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) && n > 0 ? n : "";
+};
+
+/** Nombre de plato normalizado (sin acentos, mayúsculas ni espacios sobrantes) para compararlo con un producto. */
+export const mealKey = name => String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+
+const emptyDay = () => ({
+  ...Object.fromEntries(ALL_SLOT_KEYS.map(slot => [slot, ""])),
+  qty: Object.fromEntries(ALL_SLOT_KEYS.map(slot => [slot, ""])),
+});
+
+export const emptyWeekDays = () => Object.fromEntries(WEEK_DAYS.map(({ key }) => [key, emptyDay()]));
 
 /** ¿La semana tiene al menos un plato cargado para esa plantilla? */
 export const hasMenuDishes = (days, type) => WEEK_DAYS.some(({ key }) =>
@@ -57,10 +71,13 @@ export const shiftWeek = (weekStart, amount) => {
   return mondayOf(date);
 };
 
-/** Completa los días que falten y descarta claves desconocidas (los menús viejos no traen `keto`). */
+/** Completa los días que falten y descarta claves desconocidas (los menús viejos no traen `keto` ni `qty`). */
 export const normalizeWeekDays = value => {
   const result = emptyWeekDays();
-  WEEK_DAYS.forEach(({ key }) => ALL_SLOT_KEYS.forEach(slot => { result[key][slot] = value?.[key]?.[slot] || ""; }));
+  WEEK_DAYS.forEach(({ key }) => ALL_SLOT_KEYS.forEach(slot => {
+    result[key][slot] = value?.[key]?.[slot] || "";
+    result[key].qty[slot] = normalizeQty(value?.[key]?.qty?.[slot]);
+  }));
   return result;
 };
 

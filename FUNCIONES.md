@@ -486,3 +486,33 @@ menús viejos sin `keto` se leen igual). La regla de costos solo mira almuerzo y
 - Se generan **dos imágenes** (`menu-semanal-AAAA-MM-DD.png` y `menu-keto-AAAA-MM-DD.png`), cada una con su
   botón de descarga. El email envía el menú semanal y, si el keto tiene algún plato, también el keto
   (dos enlaces en el mismo mail; `weeklyMenuEmailParams` en `emailAlerts.js`).
+
+---
+
+## `src/utils/weeklyProduction.js` — ingredientes de la semana
+
+En Menú semanal, debajo de cada plato (almuerzo, cena y keto de cada día) se carga la
+cantidad de **unidades a producir**. Se guarda en `weekly_menus.days[día].qty[comida]`
+(entero positivo; vacío = sin cargar) junto con los platos; no requiere migración y la
+imagen de Instagram no las usa. Con eso, la sección **Ingredientes de la semana**
+muestra cuánto de cada ingrediente hace falta, por día y en total.
+
+**Cálculo:** cantidad en la receta × unidades ÷ rendimiento de la receta. Sirve igual para
+recetas por porción (rinde 1) que por tanda (rinde 28). Incluye mano de obra, tapas,
+descartables y etiquetas, agrupados por la categoría del ingrediente. No descuenta stock
+(solo el total necesario).
+
+| Función | Qué hace |
+|---|---|
+| `computeWeeklyProduction({ days, products, recipes, ingredients })` | Devuelve `rows` (un renglón por ingrediente con `perDay` y `total`), `groups` (por categoría), `entries`, `issues` y `units` (por día, por comida y total). |
+| `pickRecipe(recipes, productId)` | Si el producto tiene varias recetas, usa la que tiene más ingredientes con cantidad. |
+| `formatQuantity(n)` | Cantidad en es-AR (`1.234,5`, hasta 3 decimales). |
+
+El plato se vincula con su producto por nombre (sin acentos ni mayúsculas) y con su receta
+por `productId`. Un plato **no suma** (y aparece en el aviso del panel) si:
+`no-recipe` (sin receta o con todas las cantidades en 0), `no-product` (el nombre ya no
+existe), `no-qty` (sin unidades). Con `incomplete` (algunas líneas en 0) suma solo las
+líneas con cantidad y lo avisa. Las unidades de esos platos igual cuentan en el total a producir.
+
+La UI es `WeeklyIngredientsPanel`. Tests en `src/utils/weeklyProduction.test.js`,
+`src/components/WeeklyIngredientsPanel.test.jsx` y `src/utils/weeklyMenu.test.js`.

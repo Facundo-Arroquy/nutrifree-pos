@@ -3,11 +3,13 @@ import { Ico } from "../shared.jsx";
 import { supabase } from "../supabase.js";
 import { sendWeeklyMenuEmail } from "../utils/emailAlerts.js";
 import { invalidEmailRecipients, normalizeEmailRecipients } from "../utils/emailRecipients.js";
-import { MEAL_COLUMNS, MENU_TYPES, WEEK_DAYS, emptyWeekDays, hasMenuDishes, mondayOf, normalizeWeekDays, shiftWeek, weekLabel, weeklyMenuProducts } from "../utils/weeklyMenu.js";
+import { MEAL_COLUMNS, MENU_TYPES, WEEK_DAYS, emptyWeekDays, hasMenuDishes, mondayOf, normalizeQty, normalizeWeekDays, shiftWeek, weekLabel, weeklyMenuProducts } from "../utils/weeklyMenu.js";
 import { canvasToPng, drawWeeklyMenu, loadWeeklyMenuAssets } from "../utils/weeklyMenuImage.js";
 import { evaluateWeeklyCostRule } from "../utils/weeklyMenuRules.js";
+import { computeWeeklyProduction } from "../utils/weeklyProduction.js";
 import CostTierBadge from "../components/CostTierBadge.jsx";
 import WeeklyCostRulePanel from "../components/WeeklyCostRulePanel.jsx";
+import WeeklyIngredientsPanel from "../components/WeeklyIngredientsPanel.jsx";
 
 const normalizeSearch = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
@@ -67,7 +69,7 @@ function MealPicker({ value, options, placeholder, onChange }) {
   </div>;
 }
 
-export default function WeeklyMenuPage({ user, products = [], showToast, weeklyMenuEmails }) {
+export default function WeeklyMenuPage({ user, products = [], recipes = [], ingredients = [], showToast, weeklyMenuEmails }) {
   const [weekStart, setWeekStart] = useState(mondayOf());
   const [recordId, setRecordId] = useState("");
   const [days, setDays] = useState(emptyWeekDays);
@@ -81,6 +83,7 @@ export default function WeeklyMenuPage({ user, products = [], showToast, weeklyM
   const canvasRefs = { classic: classicCanvas, keto: ketoCanvas };
   const mealOptions = weeklyMenuProducts(products);
   const costRule = evaluateWeeklyCostRule(days, products);
+  const production = computeWeeklyProduction({ days, products, recipes, ingredients });
 
   useEffect(() => {
     setEmail(weeklyMenuEmails || user?.email || "");
@@ -108,7 +111,15 @@ export default function WeeklyMenuPage({ user, products = [], showToast, weeklyM
     });
   }, [weekStart, days, loading, assets]);
 
-  const setMeal = (day, meal, value) => setDays(prev => ({ ...prev, [day]: { ...prev[day], [meal]: value } }));
+  // Al quitar un plato se borran también sus unidades a producir.
+  const setMeal = (day, meal, value) => setDays(prev => ({
+    ...prev,
+    [day]: { ...prev[day], [meal]: value, qty: { ...prev[day].qty, ...(value ? {} : { [meal]: "" }) } },
+  }));
+  const setQty = (day, meal, value) => setDays(prev => ({
+    ...prev,
+    [day]: { ...prev[day], qty: { ...prev[day].qty, [meal]: normalizeQty(value) } },
+  }));
 
   const save = async () => {
     setSaving(true);
@@ -166,6 +177,7 @@ export default function WeeklyMenuPage({ user, products = [], showToast, weeklyM
     <style>{`
       .weekly-menu-grid-row{display:grid;grid-template-columns:90px repeat(${MEAL_COLUMNS.length},minmax(150px,1fr));gap:12px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border)}
       .weekly-menu-grid-row:last-child{border-bottom:0}
+      .weekly-menu-qty{width:110px;margin-top:6px;padding:6px 10px;font-size:.84em}
       @media(max-width:1100px){.weekly-menu-layout{grid-template-columns:1fr!important}}
       @media(max-width:680px){.weekly-menu-grid-row{grid-template-columns:1fr;padding:14px}.weekly-menu-grid-head{display:none}.weekly-menu-mobile-label{display:block!important;font-size:.7em;font-weight:700;color:var(--t4);text-transform:uppercase;margin-bottom:4px}}
     `}</style>
@@ -192,6 +204,15 @@ export default function WeeklyMenuPage({ user, products = [], showToast, weeklyM
             {MEAL_COLUMNS.map(col => <div key={col.key}>
               <span className="weekly-menu-mobile-label" style={{ display:"none" }}>{col.label}</span>
               <MealPicker value={days[day.key][col.key]} options={mealOptions} onChange={value => setMeal(day.key, col.key, value)} placeholder="Buscar vianda…" />
+              <input
+                className="weekly-menu-qty"
+                type="number" min="0" step="1" inputMode="numeric"
+                placeholder="Unidades"
+                aria-label={`Unidades a producir: ${day.label}, ${col.label}`}
+                value={days[day.key].qty[col.key]}
+                disabled={!days[day.key][col.key]}
+                onChange={event => setQty(day.key, col.key, event.target.value)}
+              />
             </div>)}
           </div>)}
         </div>}
@@ -215,5 +236,6 @@ export default function WeeklyMenuPage({ user, products = [], showToast, weeklyM
         </div>
       </section>
     </div>
+    {!loading && <WeeklyIngredientsPanel production={production} weekStart={weekStart} />}
   </main>;
 }
