@@ -3,7 +3,7 @@ import { Ico } from "../shared.jsx";
 import { supabase } from "../supabase.js";
 import { sendWeeklyMenuEmail } from "../utils/emailAlerts.js";
 import { invalidEmailRecipients, normalizeEmailRecipients } from "../utils/emailRecipients.js";
-import { MEAL_COLUMNS, MENU_TYPES, WEEK_DAYS, emptyWeekDays, hasMenuDishes, mondayOf, normalizeQty, normalizeWeekDays, shiftWeek, weekLabel, weeklyMenuProducts } from "../utils/weeklyMenu.js";
+import { MEAL_COLUMNS, MENU_TYPES, WEEK_DAYS, emptyWeekDays, mondayOf, normalizeQty, normalizeWeekDays, shiftWeek, weekLabel, weeklyMenuProducts } from "../utils/weeklyMenu.js";
 import { canvasToPng, drawWeeklyMenu, loadWeeklyMenuAssets } from "../utils/weeklyMenuImage.js";
 import { evaluateWeeklyCostRule } from "../utils/weeklyMenuRules.js";
 import { computeWeeklyProduction } from "../utils/weeklyProduction.js";
@@ -149,13 +149,13 @@ export default function WeeklyMenuPage({ user, products = [], recipes = [], ingr
     URL.revokeObjectURL(url);
   };
 
-  // El menú semanal siempre se envía; el keto solo si tiene algún plato cargado.
+  // El correo incluye siempre las imágenes del menú semanal y del menú keto.
   const sendEmail = async () => {
     if (!email.trim()) return showToast("Ingresá un email", "error");
     const invalid = invalidEmailRecipients(email);
     if (invalid.length) return showToast(`Correo inválido: ${invalid.join(", ")}`, "error");
     const recipients = normalizeEmailRecipients(email);
-    const types = IMAGE_TYPES.filter(type => type === "classic" || hasMenuDishes(days, type));
+    const types = IMAGE_TYPES;
     setSending(true);
     try {
       const images = [];
@@ -231,7 +231,7 @@ export default function WeeklyMenuPage({ user, products = [], recipes = [], ingr
         <div style={{ borderTop:"1px solid var(--border)", marginTop:16, paddingTop:16 }}>
           <label className="lbl">Enviar imágenes por email</label>
           <textarea rows={2} value={email} onChange={e => setEmail(e.target.value)} placeholder="correo@ejemplo.com, otro@ejemplo.com" style={{ resize:"vertical" }} />
-          <p style={{ color:"var(--t4)", fontSize:".76em", margin:"6px 0 0" }}>Se envía el menú semanal y, si tiene platos cargados, también el keto.</p>
+          <p style={{ color:"var(--t4)", fontSize:".76em", margin:"6px 0 0" }}>Se envían el menú semanal y el menú keto.</p>
           <button className="btn btn-primary" style={{ width:"100%", justifyContent:"center", marginTop:10 }} disabled={sending} onClick={sendEmail}><Ico n="mail" s={14}/> {sending ? "Enviando…" : "Enviar menú"}</button>
         </div>
       </section>
