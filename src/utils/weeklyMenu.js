@@ -6,8 +6,42 @@ export const WEEK_DAYS = [
   { key: "friday", label: "Viernes" },
 ];
 
+/**
+ * Plantillas de imagen del menú semanal. Los platos de todas se guardan juntos
+ * en `weekly_menus.days` (un objeto por día con una clave por comida):
+ * - classic: almuerzo y cena (`lunch`, `dinner`).
+ * - keto: un solo plato por día (`keto`).
+ */
+export const MENU_TYPES = {
+  classic: {
+    label: "Clásico",
+    title: "Menú semanal",
+    filePrefix: "menu-semanal",
+    slots: [{ key: "lunch", label: "Almuerzo" }, { key: "dinner", label: "Cena" }],
+  },
+  keto: {
+    label: "Keto",
+    title: "Menú keto",
+    filePrefix: "menu-keto",
+    slots: [{ key: "keto", label: "Plato del día", column: "Keto" }],
+  },
+};
+export const DEFAULT_MENU_TYPE = "classic";
+
+const ALL_SLOT_KEYS = Object.values(MENU_TYPES).flatMap(type => type.slots.map(slot => slot.key));
+
+/** Columnas de carga de la pantalla: una por comida de cada plantilla (`column` sobreescribe el rótulo). */
+export const MEAL_COLUMNS = Object.values(MENU_TYPES).flatMap(type => type.slots.map(slot => ({ key: slot.key, label: slot.column || slot.label })));
+
+export const normalizeMenuType = value => Object.hasOwn(MENU_TYPES, value) ? value : DEFAULT_MENU_TYPE;
+
 export const emptyWeekDays = () => Object.fromEntries(
-  WEEK_DAYS.map(({ key }) => [key, { lunch: "", dinner: "" }])
+  WEEK_DAYS.map(({ key }) => [key, Object.fromEntries(ALL_SLOT_KEYS.map(slot => [slot, ""]))])
+);
+
+/** ¿La semana tiene al menos un plato cargado para esa plantilla? */
+export const hasMenuDishes = (days, type) => WEEK_DAYS.some(({ key }) =>
+  MENU_TYPES[normalizeMenuType(type)].slots.some(slot => String(days?.[key]?.[slot.key] || "").trim())
 );
 
 export const mondayOf = (value = new Date()) => {
@@ -23,14 +57,10 @@ export const shiftWeek = (weekStart, amount) => {
   return mondayOf(date);
 };
 
+/** Completa los días que falten y descarta claves desconocidas (los menús viejos no traen `keto`). */
 export const normalizeWeekDays = value => {
   const result = emptyWeekDays();
-  WEEK_DAYS.forEach(({ key }) => {
-    result[key] = {
-      lunch: value?.[key]?.lunch || "",
-      dinner: value?.[key]?.dinner || "",
-    };
-  });
+  WEEK_DAYS.forEach(({ key }) => ALL_SLOT_KEYS.forEach(slot => { result[key][slot] = value?.[key]?.[slot] || ""; }));
   return result;
 };
 
@@ -46,60 +76,9 @@ export const weekLabel = weekStart => {
   return `${fmt(start)} al ${fmt(end)}`;
 };
 
-const wrapText = (ctx, text, maxWidth) => {
-  const words = String(text || "—").split(/\s+/);
-  const lines = [];
-  let line = "";
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (ctx.measureText(next).width > maxWidth && line) { lines.push(line); line = word; }
-    else line = next;
-  }
-  lines.push(line);
-  return lines.slice(0, 2);
+/** Número de día del mes (1-31) del día `index` (0 = lunes) de la semana que empieza en `weekStart`. */
+export const dayOfMonth = (weekStart, index) => {
+  const date = new Date(`${weekStart}T12:00:00`);
+  date.setDate(date.getDate() + index);
+  return date.getDate();
 };
-
-export const drawWeeklyMenu = (canvas, weekStart, days) => {
-  const ctx = canvas.getContext("2d");
-  canvas.width = 1080;
-  canvas.height = 1350;
-  ctx.fillStyle = "#f7f2e8";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#89b8ad";
-  ctx.fillRect(0, 0, 1080, 245);
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "700 70px Arial, sans-serif";
-  ctx.fillText("MENÚ SEMANAL", 540, 105);
-  ctx.font = "500 34px Arial, sans-serif";
-  ctx.fillText(`Lunes a viernes · ${weekLabel(weekStart)}`, 540, 170);
-  ctx.font = "700 30px Arial, sans-serif";
-  ctx.fillText("NUTRIFREE · LIBRE DE GLUTEN", 540, 218);
-
-  WEEK_DAYS.forEach(({ key, label }, index) => {
-    const y = 285 + index * 195;
-    ctx.fillStyle = index % 2 ? "#ffffff" : "#eef5f2";
-    ctx.fillRect(70, y, 940, 165);
-    ctx.textAlign = "left";
-    ctx.fillStyle = "#4c786f";
-    ctx.font = "700 36px Arial, sans-serif";
-    ctx.fillText(label.toUpperCase(), 100, y + 48);
-    [["ALMUERZO", days[key]?.lunch], ["CENA", days[key]?.dinner]].forEach(([kind, text], col) => {
-      const x = 100 + col * 455;
-      ctx.fillStyle = "#8a8a84";
-      ctx.font = "700 19px Arial, sans-serif";
-      ctx.fillText(kind, x, y + 82);
-      ctx.fillStyle = "#242a28";
-      ctx.font = "600 27px Arial, sans-serif";
-      wrapText(ctx, text, 400).forEach((line, lineIndex) => ctx.fillText(line, x, y + 116 + lineIndex * 31));
-    });
-  });
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#4c786f";
-  ctx.font = "600 28px Arial, sans-serif";
-  ctx.fillText("Consultas y pedidos · WhatsApp +54 9 2281 588834", 540, 1300);
-};
-
-export const canvasToPng = canvas => new Promise((resolve, reject) =>
-  canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("No se pudo generar la imagen")), "image/png")
-);

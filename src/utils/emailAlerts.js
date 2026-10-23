@@ -59,16 +59,26 @@ export async function sendInvoiceEmail(customer, files) {
   await emailjs.send(SERVICE_ID, INVOICE_TEMPLATE_ID, params, PUBLIC_KEY);
 }
 
-export async function sendWeeklyMenuEmail(email, week, imageUrl) {
-  if (!SERVICE_ID || !WEEKLY_MENU_TEMPLATE_ID || !PUBLIC_KEY) {
-    throw new Error("EmailJS no está configurado para enviar el menú");
-  }
-  await emailjs.send(SERVICE_ID, WEEKLY_MENU_TEMPLATE_ID, {
+/**
+ * Parámetros del mail del menú semanal. `images` es una lista de
+ * `{ label, url }` (menú semanal y, si corresponde, menú keto); por
+ * compatibilidad también acepta una sola URL.
+ */
+export const weeklyMenuEmailParams = (email, week, images) => {
+  const list = Array.isArray(images) ? images : [{ label: "Menú semanal", url: images }];
+  return {
     to_email: email,
     customer_name: "Nutrifree",
     subject: `Menú semanal ${week}`,
-    file_links: `• Menú semanal ${week}\n  ${imageUrl}`,
-    file_count: "1",
+    file_links: list.map(({ label, url }) => `• ${label} ${week}\n  ${url}`).join("\n"),
+    file_count: String(list.length),
     date: new Date().toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" }),
-  }, PUBLIC_KEY);
+  };
+};
+
+export async function sendWeeklyMenuEmail(email, week, images) {
+  if (!SERVICE_ID || !WEEKLY_MENU_TEMPLATE_ID || !PUBLIC_KEY) {
+    throw new Error("EmailJS no está configurado para enviar el menú");
+  }
+  await emailjs.send(SERVICE_ID, WEEKLY_MENU_TEMPLATE_ID, weeklyMenuEmailParams(email, week, images), PUBLIC_KEY);
 }
