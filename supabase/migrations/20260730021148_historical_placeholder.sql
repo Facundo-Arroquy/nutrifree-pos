@@ -1,0 +1,1 @@
+-- Cambio histórico ya incluido en 20261021220000_production_schema_baseline.sql.

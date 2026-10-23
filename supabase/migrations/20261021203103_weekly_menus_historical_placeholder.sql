@@ -1,0 +1,1 @@
+-- weekly_menus ya está incluida en 20261021220000_production_schema_baseline.sql.
