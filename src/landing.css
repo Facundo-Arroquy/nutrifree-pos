@@ -3,10 +3,10 @@
 .landing { --forest:#183b33; --sage:#83b7a8; --cream:#f7f4e9; --lime:#dce97e; --soft:#dcece5; color:var(--forest); background:var(--cream); font-family:'DM Sans',Arial,sans-serif; overflow:hidden; }
 .landing * { box-sizing:border-box; }
 .landing a { color:inherit; }
-.landing-nav { height:76px; padding:0 max(24px,calc((100vw - 1280px)/2)); display:flex; align-items:center; justify-content:space-between; gap:30px; position:fixed; inset:0 0 auto; z-index:20; background:rgba(118,168,152,.94); border-bottom:1px solid rgba(24,59,51,.14); box-shadow:0 8px 30px rgba(24,59,51,.08); backdrop-filter:blur(16px); }
-.landing-logo img { width:145px; display:block; filter:brightness(0) saturate(100%) invert(19%) sepia(18%) saturate(1135%) hue-rotate(112deg) brightness(91%) contrast(92%); }
+.landing-nav { height:76px; padding:0 max(24px,calc((100vw - 1280px)/2)); display:flex; align-items:center; justify-content:space-between; gap:30px; position:fixed; inset:0 0 auto; z-index:20; background:linear-gradient(135deg, #89b8ad 0%, #5a9e8f 60%); border-bottom:1px solid rgba(255,255,255,.12); box-shadow:0 8px 30px rgba(90,158,143,.2); backdrop-filter:blur(16px); }
+.landing-logo img { width:145px; display:block; }
 .landing-nav nav { display:flex; gap:30px; }
-.landing-nav nav a { text-decoration:none; font-size:13px; font-weight:600; }
+.landing-nav nav a { text-decoration:none; font-size:13px; font-weight:600; color:rgba(255,255,255,.85); }
 .landing-nav-cta { padding:11px 17px; border-radius:4px; color:var(--forest)!important; background:var(--cream); text-decoration:none; font-size:12px; font-weight:700; box-shadow:0 5px 16px rgba(24,59,51,.1); }
 .landing-nav-cta span,.landing-btn span { margin-left:8px; }
 .landing-hero { min-height:760px; max-width:1440px; margin:auto; padding:125px max(28px,calc((100% - 1280px)/2)) 70px; display:grid; grid-template-columns:.95fr 1.05fr; align-items:center; gap:60px; position:relative; }
@@ -41,7 +41,7 @@
 
 /* Capa de movimiento e interacción */
 .landing-logo img{transition:transform .35s ease}.landing-logo:hover img{transform:rotate(-2deg) scale(1.04)}
-.landing-nav nav a{position:relative}.landing-nav nav a::after{content:"";position:absolute;left:0;right:100%;bottom:-7px;height:2px;background:var(--forest);transition:right .3s ease}.landing-nav nav a:hover::after{right:0}
+.landing-nav nav a{position:relative}.landing-nav nav a::after{content:"";position:absolute;left:0;right:100%;bottom:-7px;height:2px;background:rgba(255,255,255,.7);transition:right .3s ease}.landing-nav nav a:hover::after{right:0}
 .landing-nav-cta{transition:transform .25s ease,box-shadow .25s ease}.landing-nav-cta:hover{transform:translateY(-2px);box-shadow:0 9px 22px rgba(24,59,51,.16)}
 .landing-hero-art{transform:translate(calc(var(--pointer-x,0) * 8px),calc(var(--pointer-y,0) * 8px));transition:transform .35s ease-out}
 .landing-scroll span{display:inline-block;animation:landingBounce 1.6s ease-in-out infinite}
