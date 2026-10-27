@@ -1096,6 +1096,75 @@ footer .footer-singluten {
   font-size: 13px;
 }
 
+.checkout-summary-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.checkout-summary-discount {
+  color: #1f7a5c;
+  font-weight: bold;
+}
+
+/* ── Cupón de descuento ── */
+.coupon-field-row {
+  display: flex;
+  gap: 8px;
+}
+
+.coupon-field-row input {
+  flex: 1;
+  min-width: 0;
+  text-transform: uppercase;
+}
+
+.coupon-field-row button,
+.coupon-applied button {
+  border: 1.5px solid #1a3a36;
+  background: #fff;
+  color: #1a3a36;
+  border-radius: 8px;
+  padding: 0 16px;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.coupon-field-row button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.coupon-field-error {
+  margin: 6px 0 0;
+  color: #c0392b;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+}
+
+.coupon-applied {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #e8f6f1;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  color: #1f7a5c;
+}
+
+.coupon-applied button {
+  padding: 6px 12px;
+  border-color: #1f7a5c;
+  color: #1f7a5c;
+}
+
 /* ── Pantalla de confirmación ── */
 .confirmation-screen {
   min-height: 100vh;

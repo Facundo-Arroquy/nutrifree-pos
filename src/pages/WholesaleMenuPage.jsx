@@ -350,7 +350,7 @@ function WholesaleMenu() {
       {showCheckout && (
         <CheckoutModal
           cartItems={cartItems}
-          total={cartTotal}
+          subtotal={cartTotal}
           requiresPreparation={requiresPreparation}
           priceList="wholesale"
           orderLabel="Pedido mayorista"

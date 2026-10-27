@@ -3,9 +3,11 @@ import { supabase, dbToProduct, saleToDb } from "../supabase.js";
 import { uid } from "../shared.jsx";
 import { availableStock } from "../utils/stock.js";
 import {
-  cartRequiresPreparation, isPublishedMenuProduct, minimumDeliveryDate, webOrderNotes,
+  buildWebOrderNotes, cartRequiresPreparation, isPublishedMenuProduct, minimumDeliveryDate,
 } from "../utils/webOrder.js";
+import { couponNote, couponSaleFields, lookupCoupon } from "../utils/coupons.js";
 import ProductImage from "../components/ProductImage.jsx";
+import CouponField from "../components/CouponField.jsx";
 import "../menu.css";
 
 const WA_NUMBER = "5492281588834";
@@ -147,7 +149,7 @@ export function CartDrawer({ cartItems, products, stockOf, onClose, onQtyChange,
 // ── Modal de checkout ────────────────────────────────────────────────────────
 export function CheckoutModal({
   cartItems,
-  total,
+  subtotal,
   requiresPreparation,
   onClose,
   onSuccess,
@@ -158,8 +160,11 @@ export function CheckoutModal({
   const [phone, setPhone] = useState("");
   const minDate = minimumDeliveryDate(requiresPreparation);
   const [date, setDate] = useState(minDate);
+  const [coupon, setCoupon] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  const pricing = couponSaleFields(subtotal, coupon);
 
   const maxDate = (() => {
     const d = new Date();
@@ -186,6 +191,18 @@ export function CheckoutModal({
 
     setSubmitting(true);
     try {
+      // El cupón pudo borrarse o cambiar desde que se aplicó: se revalida antes de guardar.
+      if (coupon) {
+        const current = await lookupCoupon(supabase, coupon.code);
+        if (current.error || current.coupon.discountPct !== coupon.discountPct) {
+          setCoupon(null);
+          setError(current.error
+            ? "El cupón ya no es válido. Quitalo o probá con otro."
+            : "El descuento del cupón cambió. Volvé a aplicarlo.");
+          return;
+        }
+      }
+
       const now = new Date().toISOString();
       const saleId = uid();
 
@@ -195,16 +212,16 @@ export function CheckoutModal({
         customerId: null,
         customerName: name.trim(),
         items: cartItems,
-        total,
+        total: pricing.total,
         priceList,
         paymentMethod: null,
         status: "open",
-        notes: `${webOrderNotes(phone)}${orderLabel ? ` | ${orderLabel}` : ""}`,
+        notes: buildWebOrderNotes({ phone, orderLabel, couponNote: couponNote(coupon) }),
         createdAt: now,
         paidAt: null,
-        discountType: "pct",
-        discountValue: 0,
-        discountAmount: 0,
+        discountType: pricing.discountType,
+        discountValue: pricing.discountValue,
+        discountAmount: pricing.discountAmount,
         deliveryDate: date,
         needsBilling: false,
         billingStatus: null,
@@ -213,7 +230,10 @@ export function CheckoutModal({
       const { error: dbErr } = await supabase.from("sales").insert(saleToDb(sale));
       if (dbErr) throw dbErr;
 
-      onSuccess({ saleId, name: name.trim(), phone: phone.trim(), date, total });
+      onSuccess({
+        saleId, name: name.trim(), phone: phone.trim(), date,
+        total: pricing.total, couponCode: coupon?.code ?? null, discountAmount: pricing.discountAmount,
+      });
     } catch (err) {
       console.error("[Checkout] Error:", err);
       setError("No pudimos registrar el pedido. Por favor intentá de nuevo.");
@@ -270,9 +290,21 @@ export function CheckoutModal({
             </p>
           )}
 
+          <CouponField coupon={coupon} onChange={setCoupon} />
+
           <div className="checkout-summary">
             <span>{cartItems.length} {cartItems.length === 1 ? "producto" : "productos"}</span>
-            <strong>{formatPrice(total)}</strong>
+            {coupon ? (
+              <div className="checkout-summary-detail">
+                <span>Subtotal {formatPrice(subtotal)}</span>
+                <span className="checkout-summary-discount">
+                  Descuento {coupon.code} −{formatPrice(pricing.discountAmount)}
+                </span>
+                <strong>{formatPrice(pricing.total)}</strong>
+              </div>
+            ) : (
+              <strong>{formatPrice(pricing.total)}</strong>
+            )}
           </div>
 
           {error && <p className="checkout-error">{error}</p>}
@@ -320,6 +352,12 @@ export function ConfirmationScreen({ info, onBack }) {
             <span>Entrega</span>
             <strong>{new Date(info.date + "T12:00:00").toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</strong>
           </div>
+          {info.couponCode && (
+            <div className="conf-row">
+              <span>Cupón {info.couponCode}</span>
+              <strong>−{formatPrice(info.discountAmount)}</strong>
+            </div>
+          )}
           <div className="conf-row">
             <span>Total</span>
             <strong>{formatPrice(info.total)}</strong>
@@ -691,7 +729,7 @@ export default function MenuPage({ onGoToLogin }) {
       {showCheckout && (
         <CheckoutModal
           cartItems={cartItems}
-          total={cartTotal}
+          subtotal={cartTotal}
           requiresPreparation={requiresPreparation}
           onClose={() => setShowCheckout(false)}
           onSuccess={(info) => {

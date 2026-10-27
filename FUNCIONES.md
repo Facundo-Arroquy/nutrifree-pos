@@ -290,6 +290,31 @@ Los helpers de cantidades mínimas y plazo de elaboración viven en
 `src/utils/webOrder.js`; los componentes visuales compartidos del carrito y
 checkout se exportan desde `src/pages/MenuPage.jsx`.
 
+### Cupones de descuento
+
+Los admins cargan cupones (código + % de descuento) en **Configuración → Cupones**
+(`src/components/CouponsSettings.jsx`, tabla `coupons`). En el checkout de ambos
+menús, `CouponField` valida el código y el pedido se guarda con el descuento
+aplicado: `total` ya viene rebajado y `discount_type` / `discount_value` /
+`discount_amount` quedan en `sales`, igual que un descuento del POS. Las notas del
+pedido suman `Cupón CODIGO (-N%)` para verlo en el Calendario de Pedidos. El
+descuento se calcula sobre el subtotal de los productos y se redondea a peso entero.
+
+| Función | Definida en | Qué hace |
+|---|---|---|
+| `validate_coupon(p_code)` | `supabase/migrations/20261027120000_coupons.sql` | RPC pública (`security definer`): devuelve `code` y `discount_pct` si el código existe, 0 filas si no. Permite validar sin dar lectura de la tabla `coupons`. |
+| `normalizeCouponCode(raw)` | `src/utils/coupons.js` | Saca espacios y pasa a mayúsculas. |
+| `validateCouponInput(input, existingCodes)` | `src/utils/coupons.js` | Valida el alta (formato del código, 0 < % ≤ 100, sin duplicados). Devuelve `{ ok, code, discountPct }` o `{ ok:false, error }`. |
+| `couponSaleFields(subtotal, coupon)` | `src/utils/coupons.js` | Campos de `sales` con el cupón aplicado: `discountType`, `discountValue`, `discountAmount`, `total`. Sin cupón, total = subtotal. |
+| `couponNote(coupon)` | `src/utils/coupons.js` | Texto `Cupón CODIGO (-N%)` para las notas del pedido. |
+| `lookupCoupon(client, rawCode)` | `src/utils/coupons.js` | Llama a `validate_coupon`. Devuelve `{ coupon }` o `{ error }`. |
+| `buildWebOrderNotes({ phone, orderLabel, couponNote })` | `src/utils/webOrder.js` | Arma las notas del pedido web separando las partes con `" \| "`. |
+
+El checkout revalida el cupón justo antes de guardar: si lo borraron o cambió el
+porcentaje mientras el cliente completaba el pedido, lo quita y avisa.
+
+Tests en `src/utils/coupons.test.js` (`npm test`).
+
 ---
 
 ## `src/routes/paths.js` — rutas de la aplicación

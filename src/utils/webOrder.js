@@ -41,3 +41,11 @@ export const webOrderPhone = sale => {
 };
 
 export const webOrderNotes = phone => `${WEB_ORDER_MARKER} WhatsApp: ${phone.trim()}`;
+
+/**
+ * Notas completas de un pedido web: marca + teléfono, y después, separados por
+ * " | ", la etiqueta del pedido (ej. mayorista) y el cupón usado. `webOrderPhone`
+ * corta en el primer "|", así que agregar partes no rompe la lectura del teléfono.
+ */
+export const buildWebOrderNotes = ({ phone, orderLabel = "", couponNote = "" }) =>
+  [webOrderNotes(phone), orderLabel, couponNote].filter(Boolean).join(" | ");
