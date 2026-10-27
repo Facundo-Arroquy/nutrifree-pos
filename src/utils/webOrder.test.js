@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  cartRequiresPreparation, decreaseOrderQuantity, initialOrderQuantity, isPublishedMenuProduct, isWebOrder,
-  minimumDeliveryDate, webOrderNotes, webOrderPhone,
+  WEB_ORDER_MARKER, cartRequiresPreparation, decreaseOrderQuantity, initialOrderQuantity, isPublishedMenuProduct,
+  isWebOrder, minimumDeliveryDate, webOrderNotes, webOrderPhone,
 } from "./webOrder.js";
 
 describe("minimumDeliveryDate", () => {
@@ -63,5 +63,15 @@ describe("publicación en los menús", () => {
     expect(isPublishedMenuProduct({ active: true, showInMenu: true })).toBe(true);
     expect(isPublishedMenuProduct({ active: true, showInMenu: false })).toBe(false);
     expect(isPublishedMenuProduct({ active: false, showInMenu: true })).toBe(false);
+  });
+});
+
+describe("marca de pedido web y RLS", () => {
+  // La política anon_insert_web_orders (supabase/migrations/20261027210000_cerrar_acceso_anonimo.sql)
+  // solo deja insertar ventas cuyas notas empiezan con "[WEB]". Si la marca cambia, el checkout
+  // público deja de poder registrar pedidos: hay que cambiar también la política.
+  it("las notas de un pedido web empiezan con la marca que exige la política", () => {
+    expect(WEB_ORDER_MARKER).toBe("[WEB]");
+    expect(webOrderNotes("2281 588834").startsWith("[WEB]")).toBe(true);
   });
 });

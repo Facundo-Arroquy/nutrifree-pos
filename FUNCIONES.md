@@ -425,3 +425,23 @@ Usar siempre `dayKey(x.createdAt)` para filtrar por fecha, nunca `createdAt.slic
 Campos `date` (ya guardados como `YYYY-MM-DD`) se comparan directo.
 
 Tests en `src/utils/dates.test.js` (`npm test`).
+
+---
+
+## Acceso anónimo: pedido web y verificación
+
+El checkout de `/menu` y `/menu-mayorista` registra el pedido con un `INSERT` directo
+en `sales` hecho como `anon`. La política `anon_insert_web_orders` acota ese insert
+(ver `TABLAS.md`, sección *Acceso anónimo (RLS)*). Consecuencias para el código:
+
+- La marca `WEB_ORDER_MARKER` (`"[WEB]"`, `src/utils/webOrder.js`) está duplicada en
+  la política: si se cambia, hay que cambiar también la política. Lo cubre un test en
+  `src/utils/webOrder.test.js`.
+- El insert no debe pedir la fila de vuelta (`.select()`): `anon` no puede leer `sales`.
+- Un pedido web nuevo debe nacer con `status='open'`; si algún día se reactiva el cobro
+  por MercadoPago desde el checkout (estado `pending`), hay que ampliar la política.
+- Si el menú pasa a leer otra tabla, hace falta una política de lectura para `anon`.
+
+`supabase/checks/cerrar_acceso_anonimo.check.sql` verifica el estado de RLS (qué ve y qué
+puede escribir `anon`, y que el personal autenticado conserva el acceso). Corre después de
+aplicar la migración y no deja datos. Falla con `FALLO: ...` o termina con `OK: N chequeos`.

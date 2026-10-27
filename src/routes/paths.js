@@ -10,6 +10,15 @@
  * Es un módulo sin JSX a propósito: se puede testear sin montar React.
  */
 
+// ─── DETECCIÓN DE SUBDOMINIO ────────────────────────────────────────────────────
+const _host = typeof window !== "undefined" ? window.location.hostname : "";
+/** true en app.nutrifree.lat → solo POS */
+export const isAppDomain  = _host === "app.nutrifree.lat";
+/** true en nutrifree.lat / www → solo público */
+export const isPublicDomain = _host === "nutrifree.lat" || _host === "www.nutrifree.lat";
+/** true en localhost → todo habilitado */
+export const isLocalDev = _host === "localhost" || _host === "127.0.0.1";
+
 // ─── RUTAS PÚBLICAS (no requieren sesión) ─────────────────────────────────────
 export const PUBLIC_PATHS = {
   home:          "/",                 // Landing pública
