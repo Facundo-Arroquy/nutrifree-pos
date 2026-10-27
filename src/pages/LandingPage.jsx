@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import "../landing.css";
 
 const WA_LINK = "https://wa.me/5492281588834?text=Hola%20NUTRIFREE!%20Quisiera%20hacer%20una%20consulta%20%F0%9F%8C%BF";
@@ -63,7 +64,7 @@ export default function LandingPage({ onGoToLogin }) {
           <a href="#propuesta">Lo que hacemos</a>
           <a href="#ubicacion">Dónde estamos</a>
         </nav>
-        <a className="landing-nav-cta" href="/menu">Ver catálogo <Arrow /></a>
+        <Link className="landing-nav-cta" to="/menu">Ver menú <Arrow /></Link>
       </header>
 
       <main>
@@ -73,8 +74,8 @@ export default function LandingPage({ onGoToLogin }) {
             <h1>Comer rico<br />se siente <em>bien.</em></h1>
             <p>Productos artesanales sin TACC, hechos en Azul con ingredientes seleccionados y muchísimo sabor.</p>
             <div className="landing-actions">
-              <a className="landing-btn landing-btn--primary" href="/menu">Ver catálogo minorista <Arrow /></a>
-              <a className="landing-btn landing-btn--ghost" href="/menu-mayorista">Soy mayorista</a>
+              <Link className="landing-btn landing-btn--primary" to="/menu">Ver menú minorista <Arrow /></Link>
+              <Link className="landing-btn landing-btn--ghost" to="/menu-mayorista">Ver menú mayorista</Link>
             </div>
           </div>
           <div className="landing-hero-art" data-reveal>
@@ -98,7 +99,7 @@ export default function LandingPage({ onGoToLogin }) {
             <p className="landing-first-kitchen"><span>01</span><strong>Somos la primera cocina 100% libre de gluten de la ciudad de Azul.</strong></p>
             <p>En NutriFree elaboramos alimentos libres de gluten con una mirada artesanal. Cada receta nace para que compartir una mesa vuelva a ser simple, seguro y delicioso.</p>
             <p>Trabajamos en pequeñas producciones, cuidando los ingredientes y cada detalle del proceso.</p>
-            <a href="/menu">Conocé nuestros productos <Arrow /></a>
+            <Link to="/menu">Conocé nuestros productos <Arrow /></Link>
           </div>
         </section>
 
@@ -143,14 +144,14 @@ export default function LandingPage({ onGoToLogin }) {
             <h2>Una opción para cada momento.</h2>
           </div>
           <div className="landing-offer-grid">
-            <a href="/menu" className="landing-offer-card" data-reveal>
+            <Link to="/menu" className="landing-offer-card" data-reveal>
               <span>01</span><img src="/imagenes/tortas.png" alt="Catálogo minorista" />
               <div><h3>Para tu mesa</h3><p>Panadería, pastelería, tortas, postres y viandas para disfrutar todos los días.</p><b>Ver catálogo <Arrow /></b></div>
-            </a>
-            <a href="/menu-mayorista" className="landing-offer-card landing-offer-card--dark" data-reveal>
+            </Link>
+            <Link to="/menu-mayorista" className="landing-offer-card landing-offer-card--dark" data-reveal>
               <span>02</span><img src="/imagenes/panaderia-grandes.svg" alt="Catálogo mayorista" />
               <div><h3>Para tu negocio</h3><p>Una propuesta mayorista confiable para sumar productos sin gluten a tu comercio.</p><b>Ver catálogo mayorista <Arrow /></b></div>
-            </a>
+            </Link>
             <a href={WA_LINK} target="_blank" rel="noopener noreferrer" className="landing-offer-card landing-offer-card--lime" data-reveal>
               <span>03</span><img src="/imagenes/menu-del-dia.png" alt="Pedidos especiales" />
               <div><h3>Pedidos especiales</h3><p>¿Tenés una celebración o una idea? Escribinos y armamos algo rico para vos.</p><b>Hablemos <Arrow /></b></div>
@@ -181,14 +182,14 @@ export default function LandingPage({ onGoToLogin }) {
         <section className="landing-closing" data-reveal>
           <p>¿Qué vas a probar hoy?</p>
           <h2>Tu próximo favorito<br />está acá.</h2>
-          <a className="landing-btn landing-btn--light" href="/menu">Explorar el catálogo <Arrow /></a>
+          <Link className="landing-btn landing-btn--light" to="/menu">Explorar el menú <Arrow /></Link>
         </section>
       </main>
 
       <footer className="landing-footer">
         <img src="/imagenes/logo.png" alt="NutriFree" />
         <p>Panadería &amp; pastelería sin gluten · Azul, Buenos Aires</p>
-        <div><a href="/menu">Minorista</a><a href="/menu-mayorista">Mayorista</a><a href={WA_LINK}>WhatsApp</a><button onClick={onGoToLogin}>Acceso interno</button></div>
+        <div><Link to="/menu">Minorista</Link><Link to="/menu-mayorista">Mayorista</Link><a href={WA_LINK}>WhatsApp</a><button onClick={onGoToLogin}>Acceso interno</button></div>
       </footer>
     </div>
   );

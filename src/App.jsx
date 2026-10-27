@@ -10,7 +10,7 @@
  *  6. Sidebar dinámico filtrado por rol del usuario
  */
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   CSS, Ico, Toast, LoginPage,
   SEED_PRODUCTS, SEED_CUSTOMERS, SEED_SALES, SEED_CATEGORIES,
@@ -37,6 +37,7 @@ import {
 } from "./supabase.js";
 
 import ChatWidget from "./components/ChatWidget.jsx";
+import LandingPage from "./pages/LandingPage.jsx";
 import MenuPage from "./pages/MenuPage.jsx";
 import WholesaleMenuPage from "./pages/WholesaleMenuPage.jsx";
 import PagoResultadoPage from "./pages/PagoResultadoPage.jsx";
@@ -564,7 +565,7 @@ export default function App() {
   }
 
   if (currentPath === PUBLIC_PATHS.home) {
-    return <Navigate to={PUBLIC_PATHS.menu} replace />;
+    return <LandingPage onGoToLogin={() => navigate(PUBLIC_PATHS.login)} />;
   }
 
   if (currentPath === PUBLIC_PATHS.menu) {

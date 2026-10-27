@@ -4,7 +4,7 @@
 .landing * { box-sizing:border-box; }
 .landing a { color:inherit; }
 .landing-nav { height:76px; padding:0 max(24px,calc((100vw - 1280px)/2)); display:flex; align-items:center; justify-content:space-between; gap:30px; position:fixed; inset:0 0 auto; z-index:20; background:rgba(118,168,152,.94); border-bottom:1px solid rgba(24,59,51,.14); box-shadow:0 8px 30px rgba(24,59,51,.08); backdrop-filter:blur(16px); }
-.landing-logo img { width:145px; display:block; }
+.landing-logo img { width:145px; display:block; filter:brightness(0) saturate(100%) invert(19%) sepia(18%) saturate(1135%) hue-rotate(112deg) brightness(91%) contrast(92%); }
 .landing-nav nav { display:flex; gap:30px; }
 .landing-nav nav a { text-decoration:none; font-size:13px; font-weight:600; }
 .landing-nav-cta { padding:11px 17px; border-radius:4px; color:var(--forest)!important; background:var(--cream); text-decoration:none; font-size:12px; font-weight:700; box-shadow:0 5px 16px rgba(24,59,51,.1); }
