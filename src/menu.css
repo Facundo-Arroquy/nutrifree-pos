@@ -744,7 +744,7 @@ footer .footer-singluten {
 
 .storefront .header-inner { max-width: 1320px; padding: 12px 28px; }
 .storefront .header-logo { height: 48px; filter:brightness(0) saturate(100%) invert(19%) sepia(18%) saturate(1135%) hue-rotate(112deg) brightness(91%) contrast(92%); }
-.menu-loading-logo { height:60px; opacity:.88; filter:brightness(0) saturate(100%) invert(19%) sepia(18%) saturate(1135%) hue-rotate(112deg) brightness(91%) contrast(92%); }
+.menu-loading-logo { height:60px; opacity:1; }
 .storefront .brand-lockup { display: flex; align-items: center; }
 .storefront header nav a { color: var(--ink); font-weight: 700; }
 .storefront header nav a:hover { background: var(--mint); color: var(--ink); }
