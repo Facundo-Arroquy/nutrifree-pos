@@ -111,7 +111,7 @@ export default function LandingPage({ onGoToLogin }) {
 
         <section className="landing-story" id="nosotros">
           <div className="landing-story-images" data-reveal>
-            <img src="/imagenes/landing/quienes-somos.webp.png" alt="Elaboración artesanal en nuestra cocina sin gluten" />
+            <img src="/imagenes/landing/quienes-somos-collage.png" alt="Collage artesanal de una persona amasando entre recortes de papel" />
             <img src="/imagenes/landing/detalle-artesanal.webp.png" alt="Detalle de terminación artesanal de un brownie" />
             <span>Desde<br /><strong>Azul</strong></span>
           </div>
