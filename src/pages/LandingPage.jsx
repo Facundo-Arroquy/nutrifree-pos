@@ -4,6 +4,12 @@ import "../landing.css";
 
 const WA_LINK = "https://wa.me/5492281588834?text=Hola%20NUTRIFREE!%20Quisiera%20hacer%20una%20consulta%20%F0%9F%8C%BF";
 
+const HERO_PHOTOS = [
+  { src: "/imagenes/Fotos Foto Producto Con Ia/Cookies.jpeg", alt: "Cookies artesanales NutriFree" },
+  { src: "/imagenes/Fotos Foto Producto Con Ia/chipaNuevo.JPG", alt: "Chipá artesanal NutriFree" },
+  { src: "/imagenes/Fotos Foto Producto Con Ia/Pizza Individual.JPG", alt: "Pizza individual NutriFree" },
+];
+
 // Reemplazar `src` por las fotos definitivas del local cuando estén disponibles.
 const LOCAL_SLIDES = [
   { id: 1, src: "/imagenes/landing/local-frente.webp.jpeg", label: "Nuestro espacio", caption: "Construcción de nuestra cocina en Azul" },
@@ -16,8 +22,16 @@ function Arrow() {
 }
 
 export default function LandingPage({ onGoToLogin }) {
+  const [heroPhoto, setHeroPhoto] = useState(0);
   const [localSlide, setLocalSlide] = useState(0);
   const [sliderPaused, setSliderPaused] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setHeroPhoto(current => (current + 1) % HERO_PHOTOS.length);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const nodes = document.querySelectorAll(".landing [data-reveal]");
@@ -61,8 +75,8 @@ export default function LandingPage({ onGoToLogin }) {
         </a>
         <nav aria-label="Navegación principal">
           <a href="#nosotros">Quiénes somos</a>
-          <a href="#propuesta">Lo que hacemos</a>
-          <a href="#ubicacion">Dónde estamos</a>
+          <Link to="/menu">Menú minorista</Link>
+          <Link to="/menu-mayorista">Menú mayorista</Link>
         </nav>
         <Link className="landing-nav-cta" to="/menu">Ver menú <Arrow /></Link>
       </header>
@@ -80,7 +94,15 @@ export default function LandingPage({ onGoToLogin }) {
           </div>
           <div className="landing-hero-art" data-reveal>
             <div className="landing-shape" />
-            <img className="landing-hero-img" src="/imagenes/landing/hero-productos.webp.png" alt="Selección de productos artesanales NutriFree" />
+            {HERO_PHOTOS.map((photo, index) => (
+              <img
+                className={`landing-hero-img${heroPhoto === index ? " is-active" : ""}`}
+                src={photo.src}
+                alt={photo.alt}
+                key={photo.src}
+                aria-hidden={heroPhoto !== index}
+              />
+            ))}
             <div className="landing-float landing-float--one">100% sin gluten <b>✓</b></div>
             <div className="landing-float landing-float--two">Hecho con amor <b>♡</b></div>
           </div>
