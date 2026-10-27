@@ -53,10 +53,6 @@ export function couponSaleFields(subtotal, coupon) {
   return { discountType: "pct", discountValue: coupon.discountPct, discountAmount, total: base - discountAmount };
 }
 
-/** Texto para las notas del pedido, así se ve en el Calendario qué cupón usó. */
-export const couponNote = coupon =>
-  coupon ? `Cupón ${coupon.code} (-${coupon.discountPct}%)` : "";
-
 /**
  * Consulta un código en la base (función `validate_coupon`).
  *

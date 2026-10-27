@@ -66,12 +66,11 @@ describe("publicación en los menús", () => {
   });
 });
 
-describe("marca de pedido web y RLS", () => {
-  // La política anon_insert_web_orders (supabase/migrations/20261027210000_cerrar_acceso_anonimo.sql)
-  // solo deja insertar ventas cuyas notas empiezan con "[WEB]". Si la marca cambia, el checkout
-  // público deja de poder registrar pedidos: hay que cambiar también la política.
-  it("las notas de un pedido web empiezan con la marca que exige la política", () => {
+describe("marca de pedido web", () => {
+  // create_web_order (supabase/migrations/20261028000000_create_web_order.sql) escribe las notas con
+  // este prefijo literal. isWebOrder y el Calendario de Pedidos dependen de que coincida.
+  it("la marca es la que escribe el servidor", () => {
     expect(WEB_ORDER_MARKER).toBe("[WEB]");
-    expect(webOrderNotes("2281 588834").startsWith("[WEB]")).toBe(true);
+    expect(webOrderNotes("2281 588834")).toBe("[WEB] WhatsApp: 2281 588834");
   });
 });

@@ -353,7 +353,6 @@ function WholesaleMenu() {
           subtotal={cartTotal}
           requiresPreparation={requiresPreparation}
           priceList="wholesale"
-          orderLabel="Pedido mayorista"
           onClose={() => setShowCheckout(false)}
           onSuccess={info => {
             setShowCheckout(false);

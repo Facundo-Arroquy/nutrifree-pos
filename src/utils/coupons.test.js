@@ -3,10 +3,8 @@ import {
   normalizeCouponCode,
   validateCouponInput,
   couponSaleFields,
-  couponNote,
   lookupCoupon,
 } from "./coupons.js";
-import { buildWebOrderNotes, webOrderPhone } from "./webOrder.js";
 
 describe("normalizeCouponCode", () => {
   it("saca espacios y pasa a mayúsculas", () => {
@@ -79,16 +77,6 @@ describe("couponSaleFields", () => {
   });
 });
 
-describe("couponNote", () => {
-  it("describe el cupón para las notas del pedido", () => {
-    expect(couponNote({ code: "PROMO10", discountPct: 10 })).toBe("Cupón PROMO10 (-10%)");
-  });
-
-  it("es vacío sin cupón", () => {
-    expect(couponNote(null)).toBe("");
-  });
-});
-
 describe("lookupCoupon", () => {
   const clientWith = result => ({ rpc: vi.fn().mockResolvedValue(result) });
 
@@ -114,23 +102,5 @@ describe("lookupCoupon", () => {
   it("distingue un error de red de un cupón inexistente", async () => {
     const result = await lookupCoupon(clientWith({ data: null, error: { message: "boom" } }), "PROMO10");
     expect(result.error).toMatch(/No pudimos validar/);
-  });
-});
-
-describe("buildWebOrderNotes", () => {
-  it("mantiene el formato histórico sin etiqueta ni cupón", () => {
-    expect(buildWebOrderNotes({ phone: " 2281 588834 " })).toBe("[WEB] WhatsApp: 2281 588834");
-  });
-
-  it("agrega etiqueta y cupón separados por barra", () => {
-    const notes = buildWebOrderNotes({
-      phone: "2281 588834", orderLabel: "Pedido mayorista", couponNote: "Cupón PROMO10 (-10%)",
-    });
-    expect(notes).toBe("[WEB] WhatsApp: 2281 588834 | Pedido mayorista | Cupón PROMO10 (-10%)");
-  });
-
-  it("el teléfono se sigue leyendo aunque haya cupón", () => {
-    const notes = buildWebOrderNotes({ phone: "2281 588834", couponNote: "Cupón PROMO10 (-10%)" });
-    expect(webOrderPhone({ notes })).toBe("2281 588834");
   });
 });
