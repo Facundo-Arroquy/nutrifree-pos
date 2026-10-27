@@ -52,3 +52,22 @@ operación. La aritmética está en `src/utils/orderPricing.js`.
 Un pedido `closed` ya generó su cargo en `account_payments`: **no** se edita
 desde el Calendario, porque cambiar el total dejaría la cuenta corriente
 descuadrada.
+
+## Acceso anónimo (RLS)
+
+El público usa la clave `anon`, que viaja en el JS de la web, así que **cualquier
+cosa que `anon` pueda hacer la puede hacer cualquier persona**. Hoy solo puede:
+
+| Tabla | Qué puede hacer `anon` | Política |
+|---|---|---|
+| `categories` | Leer | `anon_read_categories` |
+| `products` | Leer los productos activos (el menú también lee el stock de los componentes de cada kit, que están activos sin estar publicados) | `anon_read_active_products` |
+| `sales` | **Solo insertar** un pedido web: `status='open'`, sin cliente, sin medio de pago, sin pago ni facturación, `price_list` `retail` o `wholesale`, notas que empiezan con `[WEB]` y `total >= 0`. No puede leerlo ni modificarlo. | `anon_insert_web_orders` |
+
+Todo lo demás (ventas, clientes, gastos, cuenta corriente, recetas, ingredientes…)
+es solo para usuarios autenticados, con la política `solo_autenticados`. No crear
+políticas `allow_all_*` (`USING (true)`) para el rol público: la migración
+`20261027210000_cerrar_acceso_anonimo.sql` borró las que había. El webhook de
+MercadoPago usa la service role y no pasa por RLS.
+
+Para verificar el estado: `supabase/checks/cerrar_acceso_anonimo.check.sql`.
