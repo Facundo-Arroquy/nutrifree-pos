@@ -353,9 +353,10 @@ export default function MenuPage({ onGoToLogin }) {
   const [confirmation, setConfirmation] = useState(null); // { saleId, name, date, total }
 
   useEffect(() => {
+    const MENU_COLS = "id,name,category,price_retail,price_wholesale,stock,photo,kit_items,active,show_in_menu";
     Promise.all([
-      supabase.from("categories").select("*").order("name"),
-      supabase.from("products").select("*").eq("active", true).eq("show_in_menu", true).order("name"),
+      supabase.from("categories").select("name").order("name"),
+      supabase.from("products").select(MENU_COLS).eq("active", true).eq("show_in_menu", true).order("name"),
     ]).then(async ([{ data: cats }, { data: prods }]) => {
       setCategories(cats?.map(c => c.name) ?? []);
       const menuProds = (prods?.map(dbToProduct) ?? []).filter(isPublishedMenuProduct);
@@ -367,7 +368,7 @@ export default function MenuPage({ onGoToLogin }) {
         menuProds.flatMap(p => (p.kitItems || []).map(k => k.productId))
       )].filter(id => id && !menuProds.some(p => p.id === id));
       if (compIds.length) {
-        const { data: comps } = await supabase.from("products").select("*").in("id", compIds);
+        const { data: comps } = await supabase.from("products").select("id,stock,kit_items").in("id", compIds);
         setKitComponents(comps?.map(dbToProduct) ?? []);
       }
       setLoading(false);
@@ -505,10 +506,10 @@ export default function MenuPage({ onGoToLogin }) {
     return (
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "center",
-        height: "100vh", background: "#f3faf8", flexDirection: "column", gap: 16,
+        height: "100vh", background: "#89b8ad", flexDirection: "column", gap: 16,
       }}>
-        <img src="/imagenes/logo.png" style={{ height: 60, opacity: 0.7 }} alt="NutriFree" />
-        <div style={{ fontFamily: "Arial, sans-serif", fontSize: ".9em", color: "#89b8ad" }}>
+        <img src="/imagenes/logo.png" className="menu-loading-logo" alt="NutriFree" />
+        <div style={{ fontFamily: "Arial, sans-serif", fontSize: ".9em", color: "#17352f", fontWeight: 600 }}>
           Cargando menú…
         </div>
       </div>

@@ -9,8 +9,8 @@
  *  5. Alertas de entrega al login (según ventana de horario configurable)
  *  6. Sidebar dinámico filtrado por rol del usuario
  */
-import { useState, useEffect, useMemo, useRef } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   CSS, Ico, Toast, LoginPage,
   SEED_PRODUCTS, SEED_CUSTOMERS, SEED_SALES, SEED_CATEGORIES,
@@ -37,8 +37,9 @@ import {
 } from "./supabase.js";
 
 import ChatWidget from "./components/ChatWidget.jsx";
-import MenuPage from "./pages/MenuPage.jsx";
-import WholesaleMenuPage from "./pages/WholesaleMenuPage.jsx";
+const LandingPage = lazy(() => import("./pages/LandingPage.jsx"));
+const MenuPage = lazy(() => import("./pages/MenuPage.jsx"));
+const WholesaleMenuPage = lazy(() => import("./pages/WholesaleMenuPage.jsx"));
 import PagoResultadoPage from "./pages/PagoResultadoPage.jsx";
 import AppRoutes from "./routes/AppRoutes.jsx";
 import {
@@ -560,15 +561,15 @@ export default function App() {
   // ─── Rutas públicas: se renderizan sin el layout de la app ────────────────
   const currentPath = location.pathname;
   if (currentPath === PUBLIC_PATHS.wholesaleMenu) {
-    return <WholesaleMenuPage />;
+    return <Suspense fallback={null}><WholesaleMenuPage /></Suspense>;
   }
 
   if (currentPath === PUBLIC_PATHS.home) {
-    return <Navigate to={PUBLIC_PATHS.menu} replace />;
+    return <Suspense fallback={null}><LandingPage onGoToLogin={() => navigate(PUBLIC_PATHS.login)} /></Suspense>;
   }
 
   if (currentPath === PUBLIC_PATHS.menu) {
-    return <MenuPage onGoToLogin={() => navigate(PUBLIC_PATHS.login)} />;
+    return <Suspense fallback={null}><MenuPage onGoToLogin={() => navigate(PUBLIC_PATHS.login)} /></Suspense>;
   }
 
   // Páginas de resultado de pago MP (públicas)
