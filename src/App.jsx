@@ -45,6 +45,7 @@ import AppRoutes from "./routes/AppRoutes.jsx";
 import {
   PUBLIC_PATHS, PAY_RESULT_PATHS, SIDEBAR_SECTIONS, DEFAULT_SETTINGS_SECTION,
   pathForPage, pageIdForPath, homePathFor, navItemsFor, settingsSectionsFor,
+  isAppDomain, isPublicDomain, isLocalDev,
 } from "./routes/paths.js";
 import { auditIsDue, runAudit, sendAuditEmail } from "./utils/auditCheck.js";
 import { fetchAllPages } from "./utils/supabasePagination.js";
@@ -558,21 +559,48 @@ export default function App() {
     }).length;
   }, [products, recipes]);
 
-  // ─── Rutas públicas: se renderizan sin el layout de la app ────────────────
+  // ─── Routing por subdominio ──────────────────────────────────────────────────
   const currentPath = location.pathname;
-  if (currentPath === PUBLIC_PATHS.wholesaleMenu) {
-    return <Suspense fallback={null}><WholesaleMenuPage /></Suspense>;
+
+  // En dominio público (nutrifree.lat): solo servir landing + menús.
+  // Cualquier otra ruta redirige a app.nutrifree.lat
+  if (isPublicDomain) {
+    const publicRoutes = [PUBLIC_PATHS.home, PUBLIC_PATHS.menu, PUBLIC_PATHS.wholesaleMenu, ...PAY_RESULT_PATHS];
+    if (!publicRoutes.includes(currentPath)) {
+      window.location.href = `https://app.nutrifree.lat${currentPath}`;
+      return null;
+    }
   }
 
-  if (currentPath === PUBLIC_PATHS.home) {
-    return <Suspense fallback={null}><LandingPage onGoToLogin={() => navigate(PUBLIC_PATHS.login)} /></Suspense>;
+  // En app.nutrifree.lat: NO mostrar landing/menús públicos → redirigir a nutrifree.lat
+  if (isAppDomain && [PUBLIC_PATHS.home, PUBLIC_PATHS.menu, PUBLIC_PATHS.wholesaleMenu].includes(currentPath)) {
+    if (currentPath === PUBLIC_PATHS.home) {
+      // "/" en app.nutrifree.lat → ir al dashboard (no a la landing)
+      // Se deja pasar para que caiga en la lógica de auth abajo
+    } else {
+      window.location.href = `https://nutrifree.lat${currentPath}`;
+      return null;
+    }
   }
 
-  if (currentPath === PUBLIC_PATHS.menu) {
-    return <Suspense fallback={null}><MenuPage onGoToLogin={() => navigate(PUBLIC_PATHS.login)} /></Suspense>;
+  // Rutas públicas: landing + menús (en localhost o dominio público)
+  const goToLogin = isPublicDomain
+    ? () => { window.location.href = "https://app.nutrifree.lat/login"; }
+    : () => navigate(PUBLIC_PATHS.login);
+
+  if (!isAppDomain) {
+    if (currentPath === PUBLIC_PATHS.wholesaleMenu) {
+      return <Suspense fallback={null}><WholesaleMenuPage /></Suspense>;
+    }
+    if (currentPath === PUBLIC_PATHS.home) {
+      return <Suspense fallback={null}><LandingPage onGoToLogin={goToLogin} /></Suspense>;
+    }
+    if (currentPath === PUBLIC_PATHS.menu) {
+      return <Suspense fallback={null}><MenuPage onGoToLogin={goToLogin} /></Suspense>;
+    }
   }
 
-  // Páginas de resultado de pago MP (públicas)
+  // Páginas de resultado de pago MP (públicas, ambos dominios)
   if (PAY_RESULT_PATHS.includes(currentPath)) {
     return <PagoResultadoPage />;
   }
