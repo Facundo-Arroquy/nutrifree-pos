@@ -507,7 +507,7 @@ export default function MenuPage({ onGoToLogin }) {
         display: "flex", alignItems: "center", justifyContent: "center",
         height: "100vh", background: "#f3faf8", flexDirection: "column", gap: 16,
       }}>
-        <img src="/imagenes/logo.png" style={{ height: 60, opacity: 0.7 }} alt="NutriFree" />
+        <img src="/imagenes/logo.png" className="menu-loading-logo" alt="NutriFree" />
         <div style={{ fontFamily: "Arial, sans-serif", fontSize: ".9em", color: "#89b8ad" }}>
           Cargando menú…
         </div>
