@@ -13,6 +13,7 @@ const PRODUCT_PHOTOS = [
   { matches: ["pack viandas x 3", "pack x 3 viandas"], file: "Pack%20Viandasx3.JPG" },
   { matches: ["pan x 1 kg", "pan integral 1 kg"], file: "Pan%201kg.JPG" },
   { matches: ["pastafrola"], file: "Pastafrola.jpg" },
+  { matches: ["pizza grande capresse", "pizza grande caprese"], file: "pizza-caprese.jpeg" },
   { matches: ["pizza muzzarela individual"], file: "Pizza%20Individual.JPG" },
   { matches: ["tarta porcion", "porcion de tarta"], file: "Porcion%20de%20tarta.JPG" },
   { matches: ["scons"], file: "Scons.png" },

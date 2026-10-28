@@ -15,6 +15,7 @@ describe("product images", () => {
     expect(productImage({ name: "Alfajor Maicena Grande" })).toContain("AlfMaicena.jpeg");
     expect(productImage({ name: "Chipá x 3" })).toContain("chipaNuevo.JPG");
     expect(productImage({ name: "Cuadrado de Pastafrola" })).toContain("Pastafrola.jpg");
+    expect(productImage({ name: "Pizza Grande Capresse" })).toContain("pizza-caprese.jpeg");
   });
 
   it("no reutiliza fotos parecidas en productos que todavía no tienen imagen", () => {
