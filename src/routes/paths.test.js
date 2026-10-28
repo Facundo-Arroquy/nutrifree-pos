@@ -135,6 +135,8 @@ describe("sidebar", () => {
 
   it("filtra las subsecciones de configuración por rol", () => {
     expect(settingsSectionsFor(vendor).map(s => s.id)).not.toContain("empleados");
+    expect(settingsSectionsFor(vendor).map(s => s.id)).not.toContain("cupones");
+    expect(settingsSectionsFor(admin).map(s => s.id)).toContain("cupones");
     expect(settingsSectionsFor(admin)).toHaveLength(SETTINGS_SECTIONS.length);
     expect(settingsSectionsFor(demo)).toHaveLength(SETTINGS_SECTIONS.length);
   });

@@ -280,7 +280,8 @@ Tests en `src/utils/priceImport.test.js` (`npm test`).
 Tanto `/menu` como `/menu-mayorista` muestran únicamente productos activos con
 `show_in_menu = true`. Ambos permiten armar un carrito, completar nombre,
 WhatsApp y fecha de entrega, y registrar el pedido en `sales` con estado `open`
-para que aparezca en el Calendario de Pedidos. El menú mayorista usa
+para que aparezca en el Calendario de Pedidos. El pedido lo crea la función
+`create_web_order` (ver más abajo): el servidor calcula precios y total. El menú mayorista usa
 `price_list = wholesale`, los precios mayoristas y un mínimo de 4 unidades por
 producto. Si la cantidad supera el stock disponible, la fecha mínima contempla
 48 horas de elaboración. Desde el encabezado y el pie del catálogo mayorista se
@@ -289,6 +290,47 @@ puede volver directamente a `/menu`.
 Los helpers de cantidades mínimas y plazo de elaboración viven en
 `src/utils/webOrder.js`; los componentes visuales compartidos del carrito y
 checkout se exportan desde `src/pages/MenuPage.jsx`.
+
+### Cupones de descuento
+
+Los admins cargan cupones (código + % de descuento) en **Configuración → Cupones**
+(`src/components/CouponsSettings.jsx`, tabla `coupons`). En el checkout de ambos
+menús, `CouponField` valida el código para mostrar el descuento, y `create_web_order`
+lo vuelve a buscar y lo aplica en el servidor: `total` ya viene rebajado y
+`discount_type` / `discount_value` / `discount_amount` quedan en `sales`, igual que un
+descuento del POS. Las notas del pedido suman `Cupón CODIGO (-N%)` para verlo en el
+Calendario de Pedidos. El descuento se calcula sobre el subtotal de los productos y se
+redondea a peso entero.
+
+| Función | Definida en | Qué hace |
+|---|---|---|
+| `validate_coupon(p_code)` | `supabase/migrations/20261027120000_coupons.sql` | RPC pública (`security definer`): devuelve `code` y `discount_pct` si el código existe, 0 filas si no. Permite validar sin dar lectura de la tabla `coupons`. |
+| `normalizeCouponCode(raw)` | `src/utils/coupons.js` | Saca espacios y pasa a mayúsculas. |
+| `validateCouponInput(input, existingCodes)` | `src/utils/coupons.js` | Valida el alta (formato del código, 0 < % ≤ 100, sin duplicados). Devuelve `{ ok, code, discountPct }` o `{ ok:false, error }`. |
+| `couponSaleFields(subtotal, coupon)` | `src/utils/coupons.js` | Vista previa del checkout: descuento y total con el cupón aplicado. El valor que se guarda lo calcula el servidor. |
+| `lookupCoupon(client, rawCode)` | `src/utils/coupons.js` | Llama a `validate_coupon`. Devuelve `{ coupon }` o `{ error }`. |
+
+El checkout revalida el cupón justo antes de enviar para avisar si cambió el porcentaje
+mientras el cliente completaba el pedido; si lo borraron, el servidor rechaza el pedido
+(`coupon_not_found`) y el checkout lo quita.
+
+Tests en `src/utils/coupons.test.js` (`npm test`).
+
+### Pedido web calculado en el servidor
+
+| Función | Definida en | Qué hace |
+|---|---|---|
+| `create_web_order(p_customer_name, p_phone, p_delivery_date, p_price_list, p_items, p_coupon_code)` | `supabase/migrations/20261028000000_create_web_order.sql` | RPC pública (`security definer`). Valida nombre, teléfono, lista (`retail`/`wholesale`), fecha (lunes a sábado, desde mañana) y productos publicados con cantidad entera (mayorista: mínimo 4). Toma el precio de `products`, aplica el cupón de `coupons`, arma `items` y `notes` e inserta la venta `open`. Devuelve `{ saleId, subtotal, discountAmount, total, couponCode, discountPct }`. Falla con `web_order:<motivo>`. |
+| `buildWebOrderRequest(order)` | `src/utils/createWebOrder.js` | Arma los argumentos de la RPC. Cada ítem lleva solo `productId` y `qty`: el precio no viaja. |
+| `submitWebOrder(client, request)` | `src/utils/createWebOrder.js` | Llama a la RPC. Devuelve `{ order }` con los importes del servidor, o `{ error, reason }` con el mensaje para el cliente. |
+| `webOrderError(rawMessage)` | `src/utils/createWebOrder.js` | Traduce `web_order:<motivo>` a un texto en español; cualquier otro error da el mensaje genérico. |
+
+Lo que `create_web_order` **no** valida (sigue siendo del front): el plazo de 48 horas
+para productos sin stock y el tope de unidades por stock. Tampoco limita la cantidad de
+pedidos por persona.
+
+Tests en `src/utils/createWebOrder.test.js` (`npm test`) y, para la función SQL,
+`supabase/checks/create_web_order.check.sql`.
 
 ---
 
@@ -405,18 +447,25 @@ Tests en `src/utils/dates.test.js` (`npm test`).
 
 ## Acceso anónimo: pedido web y verificación
 
-El checkout de `/menu` y `/menu-mayorista` registra el pedido con un `INSERT` directo
-en `sales` hecho como `anon`. La política `anon_insert_web_orders` acota ese insert
-(ver `TABLAS.md`, sección *Acceso anónimo (RLS)*). Consecuencias para el código:
+El checkout de `/menu` y `/menu-mayorista` no inserta en `sales`: llama a la RPC
+`create_web_order` (ver *Pedido web calculado en el servidor*). `anon` no tiene ninguna
+política de lectura ni de escritura sobre `sales` (ver `TABLAS.md`, sección *Acceso
+anónimo (RLS)*). Consecuencias para el código:
 
-- La marca `WEB_ORDER_MARKER` (`"[WEB]"`, `src/utils/webOrder.js`) está duplicada en
-  la política: si se cambia, hay que cambiar también la política. Lo cubre un test en
-  `src/utils/webOrder.test.js`.
-- El insert no debe pedir la fila de vuelta (`.select()`): `anon` no puede leer `sales`.
-- Un pedido web nuevo debe nacer con `status='open'`; si algún día se reactiva el cobro
-  por MercadoPago desde el checkout (estado `pending`), hay que ampliar la política.
+- El formato de las notas lo escribe el SQL (`[WEB] WhatsApp: <tel> | Pedido mayorista |
+  Cupón CODIGO (-N%)`) y lo lee `isWebOrder` / `webOrderPhone` (`src/utils/webOrder.js`).
+  Un test en `src/utils/createWebOrder.test.js` fija ese contrato.
+- La constante `MIN_WHOLESALE_QTY` (4) está duplicada en `create_web_order`
+  (`c_min_wholesale_qty`): si cambia, cambiar las dos.
+- Un pedido web nuevo nace con `status='open'`. Si algún día se reactiva el cobro por
+  MercadoPago desde el checkout (estado `pending`), hay que extender la función.
 - Si el menú pasa a leer otra tabla, hace falta una política de lectura para `anon`.
 
-`supabase/checks/cerrar_acceso_anonimo.check.sql` verifica el estado de RLS (qué ve y qué
-puede escribir `anon`, y que el personal autenticado conserva el acceso). Corre después de
-aplicar la migración y no deja datos. Falla con `FALLO: ...` o termina con `OK: N chequeos`.
+Verificación (corren después de aplicar las migraciones y no dejan datos; fallan con
+`FALLO: ...` o terminan con `OK: N chequeos`):
+
+- `supabase/checks/cerrar_acceso_anonimo.check.sql`: qué ve y qué puede escribir `anon`
+  (nada directo en `sales`), y que el personal autenticado conserva el acceso. Describe el
+  estado **final**, después de `20261028000100_cerrar_insert_anonimo_sales.sql`.
+- `supabase/checks/create_web_order.check.sql`: la función (precios del servidor, cupones,
+  notas, validaciones y permisos).

@@ -87,6 +87,7 @@ export const SETTINGS_SECTIONS = [
   { id:"general",   label:"General",           roles:["admin","vendor"] },
   { id:"sistema",   label:"Sistema",           roles:["admin","vendor"] },
   { id:"precios",   label:"Listas de precios", roles:["admin","vendor"] },
+  { id:"cupones",   label:"Cupones",           roles:["admin"] },
   { id:"empleados", label:"Empleados",         roles:["admin"] },
   { id:"notas",     label:"Notas internas",    roles:["admin"] },
   { id:"backup",    label:"Backup",            roles:["admin"] },

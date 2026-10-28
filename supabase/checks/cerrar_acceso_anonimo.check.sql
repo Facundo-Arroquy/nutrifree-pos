@@ -1,6 +1,8 @@
--- Verificación de 20261027210000_cerrar_acceso_anonimo.sql
+-- Verificación del estado FINAL del acceso anónimo: 20261027210000_cerrar_acceso_anonimo.sql
+-- más 20261028000100_cerrar_insert_anonimo_sales.sql (anon no inserta ni siquiera en sales;
+-- el pedido web se crea con create_web_order, que se verifica en create_web_order.check.sql).
 --
--- Ejecutar DESPUÉS de aplicar la migración (SQL Editor, psql o MCP). No deja datos:
+-- Ejecutar DESPUÉS de aplicar esas migraciones (SQL Editor, psql o MCP). No deja datos:
 -- cada prueba que escribe corre en un sub-bloque que se revierte (SQLSTATE P0099).
 -- Ante el primer chequeo incumplido falla con "FALLO: ..."; si todo está bien
 -- termina con NOTICE "OK: N chequeos".
@@ -16,7 +18,7 @@ declare
     'sales', 'customers', 'expenses', 'account_payments', 'products',
     'recipes', 'ingredients', 'categories', 'expense_categories'
   ];
-  -- Columnas de sales que valida la política anon_insert_web_orders.
+  -- Columnas de sales para los inserts directos de prueba.
   cols text := 'id, status, customer_id, payment_method, paid_at, billing_status, needs_billing, price_list, notes, total';
 begin
   ---------------------------------------------------------------- estructura
@@ -30,6 +32,11 @@ begin
   select count(*) into n from pg_policies
   where schemaname = 'public' and tablename = any (tablas) and policyname ilike 'allow%';
   if n <> 0 then raise exception 'FALLO: quedan % politicas allow_*', n; end if;
+  checks := checks + 1;
+
+  select count(*) into n from pg_policies
+  where schemaname = 'public' and tablename = 'sales' and policyname = 'anon_insert_web_orders';
+  if n <> 0 then raise exception 'FALLO: sigue la politica anon_insert_web_orders'; end if;
   checks := checks + 1;
 
   select count(*) into n from pg_policies
@@ -109,22 +116,18 @@ begin
     checks := checks + 1;
   end;
 
-  --------------------------------------------- anon solo puede crear pedidos web
-  -- Pedido web válido: se inserta, pero no se puede leer de vuelta.
+  --------------------------------------------- anon no inserta directo en sales
+  -- Ni siquiera un pedido web válido: se crea con create_web_order.
   begin
     set local role anon;
     insert into public.sales (id, status, customer_id, payment_method, paid_at, billing_status, needs_billing, price_list, notes, total)
     values ('chk-web-1', 'open', null, null, null, null, false, 'retail', '[WEB] WhatsApp: 2281000000', 1000);
-    insert into public.sales (id, status, customer_id, payment_method, paid_at, billing_status, needs_billing, price_list, notes, total)
-    values ('chk-web-2', 'open', null, null, null, null, false, 'wholesale', '[WEB] WhatsApp: 2281000000 | Pedido mayorista', 0);
-    select count(*) into n from public.sales where id like 'chk-web-%';
-    if n <> 0 then raise exception 'FALLO: anon puede leer los pedidos que creo (%)', n; end if;
-    raise exception using errcode = 'P0099', message = 'rollback';
-  exception when sqlstate 'P0099' then
-    checks := checks + 2;
+    raise exception 'FALLO: anon pudo insertar un pedido directo en sales';
+  exception when insufficient_privilege then
+    checks := checks + 1;
   end;
 
-  -- Variantes inválidas: cada una debe ser rechazada por RLS.
+  -- Variantes (válidas o no): ninguna entra por INSERT directo.
   foreach v in array array[
     $v$'chk-x1', 'closed', null, null, null, null, false, 'retail', '[WEB] a', 100$v$,     -- estado distinto de open
     $v$'chk-x2', 'open', null, 'cash', null, null, false, 'retail', '[WEB] a', 100$v$,     -- con medio de pago
@@ -139,7 +142,7 @@ begin
     begin
       set local role anon;
       execute format('insert into public.sales (%s) values (%s)', cols, v);
-      raise exception 'FALLO: anon pudo insertar un pedido invalido: %', v;
+      raise exception 'FALLO: anon pudo insertar directo en sales: %', v;
     exception when insufficient_privilege then
       checks := checks + 1;
     end;
