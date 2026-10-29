@@ -33,6 +33,14 @@ export const DEMO_SEED = {
   products: [
     { id:"dp1", name:"Milanesa con puré",     category:"Viandas",   price_retail:2200, price_wholesale:1800, unit:"unit", stock:14, active:true, photo:null, description:"Milanesa de ternera con puré casero", kit_items:[] },
     { id:"dp2", name:"Tarta de verduras",      category:"Viandas",   price_retail:1600, price_wholesale:1300, unit:"unit", stock:7,  active:true, photo:null, description:"Tarta de acelga y ricota",           kit_items:[] },
+    { id:"dp9", name:"Pollo al horno con verduras", category:"Viandas", price_retail:2100, price_wholesale:1750, unit:"unit", stock:10, active:true, photo:null, description:"Pollo al horno con vegetales de estación", kit_items:[] },
+    { id:"dp10", name:"Empanadas de carne x3", category:"Viandas", price_retail:1800, price_wholesale:1450, unit:"unit", stock:15, active:true, photo:null, description:"Tres empanadas de carne sin TACC", kit_items:[] },
+    { id:"dp11", name:"Lasaña de verduras", category:"Viandas", price_retail:2300, price_wholesale:1900, unit:"unit", stock:8, active:true, photo:null, description:"Lasaña rellena de verduras y salsa", kit_items:[] },
+    { id:"dp12", name:"Pizza individual", category:"Viandas", price_retail:1700, price_wholesale:1400, unit:"unit", stock:12, active:true, photo:null, description:"Pizza individual de muzzarella sin TACC", kit_items:[] },
+    { id:"dp13", name:"Pastel de papa", category:"Viandas", price_retail:2200, price_wholesale:1800, unit:"unit", stock:9, active:true, photo:null, description:"Pastel de papa con carne", kit_items:[] },
+    { id:"dp14", name:"Canelones de espinaca", category:"Viandas", price_retail:2250, price_wholesale:1850, unit:"unit", stock:7, active:true, photo:null, description:"Canelones de espinaca y ricota", kit_items:[] },
+    { id:"dp15", name:"Arroz con pollo", category:"Viandas", price_retail:2050, price_wholesale:1700, unit:"unit", stock:11, active:true, photo:null, description:"Arroz con pollo y vegetales", kit_items:[] },
+    { id:"dp16", name:"Ñoquis con salsa", category:"Viandas", price_retail:2150, price_wholesale:1750, unit:"unit", stock:10, active:true, photo:null, description:"Ñoquis de papa sin TACC con salsa", kit_items:[] },
     { id:"dp3", name:"Brownie de chocolate",   category:"Panadería", price_retail:800,  price_wholesale:650,  unit:"unit", stock:20, active:true, photo:null, description:"Brownie húmedo sin TACC",            kit_items:[] },
     { id:"dp4", name:"Pan de molde sin TACC",  category:"Panadería", price_retail:1100, price_wholesale:900,  unit:"unit", stock:8,  active:true, photo:null, description:"Pan de molde 400g",                  kit_items:[] },
     { id:"dp5", name:"Flan casero",            category:"Postres",   price_retail:900,  price_wholesale:750,  unit:"unit", stock:6,  active:true, photo:null, description:"Flan de vainilla con caramelo",      kit_items:[] },
@@ -156,6 +164,22 @@ export function initDemoDb(force = false) {
       localStorage.setItem(k, JSON.stringify(DEMO_SEED[table]));
     }
   }
+}
+
+/**
+ * Agrega al Demo los productos incorporados en versiones nuevas del seed sin
+ * sobrescribir ediciones ni productos creados por quien está probando el flujo.
+ */
+export function syncDemoProducts() {
+  const key = KEY + "products";
+  let current;
+  try { current = JSON.parse(localStorage.getItem(key) || "[]"); }
+  catch { current = []; }
+  const existingIds = new Set(current.map(product => product.id));
+  const missing = DEMO_SEED.products.filter(product => !existingIds.has(product.id));
+  const merged = [...current, ...missing];
+  if (missing.length) localStorage.setItem(key, JSON.stringify(merged));
+  return merged;
 }
 
 // ─── Reset demo DB ────────────────────────────────────────────────────────────

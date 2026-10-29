@@ -61,6 +61,7 @@ export const ROUTES = [
   { id:"dashboard",      path:"/dashboard",          label:"Dashboard",             icon:"dashboard",   roles:["admin","vendor"],          section:"top" },
   { id:"pos",            path:"/pos",                label:"Ventas en Mostrador",   icon:"pos",         roles:["admin","vendor"],          section:"ventas" },
   { id:"menu-banner",    path:null,                  label:"Menú del Día",          icon:"dashboard",   roles:["admin","vendor","cocina"], section:"ventas" },
+  { id:"weekly-menu",    path:"/menu-semanal",      label:"Menú Semanal",          icon:"reports",     roles:["admin","vendor","cocina"], section:"ventas" },
   { id:"orders-kanban",  path:"/calendario-pedidos", label:"Calendario de Pedidos", icon:"orders",      roles:["admin","vendor","cocina"], section:"ventas" },
   { id:"orders",         path:"/pedidos",            label:"Pedidos",               icon:"orders",      roles:["admin","vendor"],          section:"ventas" },
   { id:"billing",        path:"/facturacion",        label:"Facturación",           icon:"billing",     roles:["admin","vendor"],          section:"ventas" },

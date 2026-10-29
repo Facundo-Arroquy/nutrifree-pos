@@ -9,10 +9,16 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { demoClient } from "./demoSupabase.js";
+import { assertSafeSupabaseEnvironment } from "./utils/supabaseEnvironment.js";
 
 // ─── Credenciales desde variables de entorno (.env) ─────────────────────────
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE;
+assertSafeSupabaseEnvironment({
+  url: SUPABASE_URL,
+  isDevelopment: import.meta.env.DEV,
+  hasWindow: typeof window !== "undefined",
+});
 // ────────────────────────────────────────────────────────────────────────────
 
 const _prod = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -45,6 +51,8 @@ export const dbToProduct = r => ({
   kitItems: r.kit_items || [],
   isFavorite: r.is_favorite ?? false,
   showInMenu: r.show_in_menu ?? false,
+  // undefined (columna inexistente) ≠ null (sin clasificar): ver productToDb.
+  costTier: r.cost_tier,
 });
 
 export const productToDb = p => ({
@@ -55,6 +63,9 @@ export const productToDb = p => ({
   kit_items: p.kitItems || [],
   is_favorite: p.isFavorite ?? false,
   show_in_menu: p.showInMenu ?? false,
+  // Solo se envía si el producto trae el campo: no rompe ni pisa nada en
+  // entornos donde la migración de cost_tier todavía no se aplicó.
+  ...(p.costTier !== undefined && { cost_tier: p.costTier || null }),
 });
 
 export const dbToCustomer = r => ({

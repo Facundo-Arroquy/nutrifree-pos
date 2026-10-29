@@ -16,7 +16,7 @@ import {
   SEED_PRODUCTS, SEED_CUSTOMERS, SEED_SALES, SEED_CATEGORIES,
   $, STATUS_LABELS, STATUS_COLORS, todayStr,
 } from "./shared.jsx";
-import { initDemoDb, resetDemoDb } from "./demoData.js";
+import { initDemoDb, resetDemoDb, syncDemoProducts } from "./demoData.js";
 import {
   supabase,
   dbToProduct, productToDb,
@@ -137,6 +137,7 @@ export default function App() {
   const [inactiveDismissed, setInactiveDismissed] = useState([]); // [{ customerId, lastSaleAt, dismissedAt, dismissedBy }]
   const [frozenDiscount, setFrozenDiscount] = useState(15);
   const [vatRate, setVatRate] = useState(21);
+  const [weeklyMenuEmails, setWeeklyMenuEmails] = useState("");
   const [toast, setToast] = useState(null);
   const [deliveryAlerts, setDeliveryAlerts] = useState([]);
   const [showMenuReminder, setShowMenuReminder] = useState(false);
@@ -148,6 +149,13 @@ export default function App() {
   const alertsChecked = useRef(false);
   const deliveryChecked = useRef(false);
   const loadDataRef = useRef(null);
+
+  // Mantiene actualizado el catálogo ficticio sin borrar cambios hechos durante
+  // la demostración. Es útil cuando una versión agrega productos al seed.
+  useEffect(() => {
+    if (!user?.isDemo) return;
+    setProducts(syncDemoProducts().map(dbToProduct));
+  }, [user?.isDemo]);
 
   // ─── Supabase Auth: restaurar sesión y escuchar cambios ───────────────────
   useEffect(() => {
@@ -257,6 +265,8 @@ export default function App() {
         if (vat) setVatRate(Number(vat.value) || 21);
         const inactiveDays = settings.find(s => s.key === "inactive_days_threshold");
         if (inactiveDays) setInactiveDayThreshold(Number(inactiveDays.value) || 0);
+        const menuEmails = settings.find(s => s.key === "weekly_menu_emails");
+        setWeeklyMenuEmails(menuEmails?.value || "");
       }
       if (inactiveDis) setInactiveDismissed(inactiveDis.map(r => ({
         customerId: r.customer_id,
@@ -394,6 +404,7 @@ export default function App() {
           const frozen = s.find(x => x.key === "frozen_discount");       if (frozen) setFrozenDiscount(Number(frozen.value) || 15);
           const vat = s.find(x => x.key === "vat_rate");                 if (vat) setVatRate(Number(vat.value) || 21);
           const inact = s.find(x => x.key === "inactive_days_threshold"); if (inact) setInactiveDayThreshold(Number(inact.value) || 0);
+          const menuEmails = s.find(x => x.key === "weekly_menu_emails"); setWeeklyMenuEmails(menuEmails?.value || "");
         }).catch(err => console.error("[rt_app_settings]", err));
       }).subscribe();
 
@@ -703,7 +714,7 @@ export default function App() {
     document.addEventListener("mouseup", onUp);
   };
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenseSubcategories, setExpenseSubcategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, inactiveDismissed, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction, settingsSection, setSettingsSection };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenseSubcategories, setExpenseSubcategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, inactiveDismissed, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, weeklyMenuEmails, setWeeklyMenuEmails, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction, settingsSection, setSettingsSection };
 
   return (
     <>
