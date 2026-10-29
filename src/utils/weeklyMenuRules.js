@@ -2,7 +2,7 @@
  * Regla de costos del menú semanal.
  *
  * La semana tiene 10 menús (lunes a viernes, almuerzo y cena). Para cuidar el
- * margen, la mezcla de niveles de costo (`products.cost_tier`) debe respetar
+ * margen, la mezcla de niveles de costo calculados desde las recetas debe respetar
  * `WEEKLY_COST_RULE`. Con 10 menús y un mínimo de 3 por nivel, el máximo
  * posible de un nivel es 4; por eso "alto" se topa en 3.
  */
@@ -84,7 +84,7 @@ export const evaluateWeeklyCostRule = (days, products = [], rule = WEEKLY_COST_R
     }
   }
   if (unclassified) {
-    issues.push({ level: "warning", code: "unclassified", message: `${plural(unclassified, "plato sin nivel de costo", "platos sin nivel de costo")}: no cuentan para la regla (se asigna en Productos).` });
+    issues.push({ level: "warning", code: "unclassified", message: `${plural(unclassified, "plato sin receta con costo", "platos sin receta con costo")}: no cuentan para la regla.` });
   }
 
   return {

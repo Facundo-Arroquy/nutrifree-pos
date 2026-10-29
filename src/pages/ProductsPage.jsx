@@ -11,7 +11,7 @@ import { useState } from "react";
 import { Ico, Modal, $, uid, useSortable, SortableTh, exportXlsx } from "../shared.jsx";
 import { supabase, productToDb } from "../supabase.js";
 import { availableStock, isKitProduct } from "../utils/stock.js";
-import { COST_TIERS } from "../utils/costTier.js";
+import { automaticCostTier, productRecipeCost } from "../utils/costTier.js";
 import CostTierBadge from "../components/CostTierBadge.jsx";
 
 export default function ProductsPage({ products, setProducts, categories, recipes, ingredients, showToast, logAction }) {
@@ -46,29 +46,20 @@ export default function ProductsPage({ products, setProducts, categories, recipe
   const openNew = () => { setForm(emptyForm); setKitProductId(""); setKitQty(1); setModal("new"); };
   const openEdit = p => { setForm({...p, isKit: p.kitItems?.length > 0, kitItems: p.kitItems || []}); setKitProductId(""); setKitQty(1); setModal(p); };
 
-  const getRecipeCost = (product) => {
-    const recipe = (recipes || []).find(r => r.productId === product.id);
-    if (!recipe || !recipe.ingredients?.length) return "";
-    const total = recipe.ingredients.reduce((sum, i) => {
-      const ing = i.ingredientId
-        ? (ingredients || []).find(x => x.id === i.ingredientId)
-        : (ingredients || []).find(x => x.name?.toLowerCase() === i.name?.toLowerCase());
-      return sum + (ing ? i.qty * ing.unitCost : Number(i.cost) || 0);
-    }, 0);
-    return recipe.yield > 0 ? total / recipe.yield : total;
-  };
+  const getRecipeCost = product => productRecipeCost(product, recipes, ingredients);
+  const getCostTier = product => automaticCostTier(product, recipes, ingredients);
 
   const exportExcel = () => {
     const headers = ["Nombre","Categoría","Precio Minorista","Precio Mayorista","Costo (receta)","Margen Minorista (%)","Margen Mayorista (%)","Unidad","Stock","Activo","Descripción"];
     const rows = products.map(p => {
       const cost = getRecipeCost(p);
-      const marginRetail = cost !== "" && p.priceRetail > 0
+      const marginRetail = cost > 0 && p.priceRetail > 0
         ? (((p.priceRetail - cost) / p.priceRetail) * 100).toFixed(1)
         : "";
-      const marginWholesale = cost !== "" && p.priceWholesale > 0
+      const marginWholesale = cost > 0 && p.priceWholesale > 0
         ? (((p.priceWholesale - cost) / p.priceWholesale) * 100).toFixed(1)
         : "";
-      return [p.name, p.category, p.priceRetail, p.priceWholesale, cost !== "" ? Number(cost.toFixed(3)) : "", marginRetail, marginWholesale, p.unit, availableStock(p, products), p.active?"Sí":"No", p.description||""];
+      return [p.name, p.category, p.priceRetail, p.priceWholesale, cost > 0 ? Number(cost.toFixed(3)) : "", marginRetail, marginWholesale, p.unit, availableStock(p, products), p.active?"Sí":"No", p.description||""];
     });
     exportXlsx(headers, rows, "productos");
   };
@@ -171,7 +162,7 @@ export default function ProductsPage({ products, setProducts, categories, recipe
                   <div style={{ fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
                     {p.name}
                     {p.kitItems?.length > 0 && <span className="badge badge-blue" style={{ fontSize:".7em" }}>Kit</span>}
-                    <CostTierBadge tier={p.costTier}/>
+                    <CostTierBadge tier={getCostTier(p)}/>
                   </div>
                   {p.description&&<div style={{ fontSize:".74em", color:"var(--t3)" }}>{p.description}</div>}
                 </td>
@@ -243,11 +234,10 @@ export default function ProductsPage({ products, setProducts, categories, recipe
                 <option value="false">No</option>
               </select>
             </div>
-            <div className="form-group"><label className="lbl">Nivel de costo (menú semanal)</label>
-              <select value={form.costTier || ""} onChange={e=>set("costTier",e.target.value)}>
-                <option value="">Sin clasificar</option>
-                {COST_TIERS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
+            <div className="form-group"><label className="lbl">Nivel de costo (automático)</label>
+              <div style={{ minHeight:40, display:"flex", alignItems:"center" }}>
+                <CostTierBadge tier={getCostTier(form)} />
+              </div>
             </div>
             <div className="form-group full"><label className="lbl">Descripción</label><textarea value={form.description} onChange={e=>set("description",e.target.value)}/></div>
             <div className="form-group full">

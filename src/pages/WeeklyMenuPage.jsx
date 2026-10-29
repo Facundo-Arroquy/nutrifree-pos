@@ -7,6 +7,7 @@ import { MEAL_COLUMNS, MENU_TYPES, WEEK_DAYS, emptyWeekDays, mondayOf, normalize
 import { canvasToPng, drawWeeklyMenu, loadWeeklyMenuAssets } from "../utils/weeklyMenuImage.js";
 import { evaluateWeeklyCostRule } from "../utils/weeklyMenuRules.js";
 import { computeWeeklyProduction } from "../utils/weeklyProduction.js";
+import { withAutomaticCostTiers } from "../utils/costTier.js";
 import CostTierBadge from "../components/CostTierBadge.jsx";
 import WeeklyCostRulePanel from "../components/WeeklyCostRulePanel.jsx";
 import WeeklyIngredientsPanel from "../components/WeeklyIngredientsPanel.jsx";
@@ -81,8 +82,9 @@ export default function WeeklyMenuPage({ user, products = [], recipes = [], ingr
   const classicCanvas = useRef(null);
   const ketoCanvas = useRef(null);
   const canvasRefs = { classic: classicCanvas, keto: ketoCanvas };
-  const mealOptions = weeklyMenuProducts(products);
-  const costRule = evaluateWeeklyCostRule(days, products);
+  const productsWithCostTier = withAutomaticCostTiers(products, recipes, ingredients);
+  const mealOptions = weeklyMenuProducts(productsWithCostTier);
+  const costRule = evaluateWeeklyCostRule(days, productsWithCostTier);
   const production = computeWeeklyProduction({ days, products, recipes, ingredients });
 
   useEffect(() => {
