@@ -112,6 +112,14 @@ export const saleToDb = s => ({
   billing_status: s.billingStatus || null,
 });
 
+export const dbToCoupon = r => ({
+  id: r.id, code: r.code, discountPct: Number(r.discount_pct) || 0, createdAt: r.created_at,
+});
+
+export const couponToDb = c => ({
+  id: c.id, code: c.code, discount_pct: c.discountPct,
+});
+
 export const dbToRecipe = r => ({
   id: r.id, productId: r.product_id, prepTime: r.prep_time,
   cookTime: r.cook_time, packagingTime: r.packaging_time || 0,

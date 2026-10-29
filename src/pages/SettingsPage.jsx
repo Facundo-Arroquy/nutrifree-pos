@@ -4,6 +4,7 @@
  * Subsecciones:
  *  - general   → Categorías de productos y gastos
  *  - sistema   → Recordatorios, alertas, valores comerciales
+ *  - cupones   → Cupones de descuento para pedidos web (admin only)
  *  - empleados → Gestión de empleados (admin only)
  *  - notas     → Notas / Fichas internas (admin only)
  *  - cuenta    → Cambiar contraseña
@@ -15,6 +16,7 @@ import { getLastAuditResult, auditIsDue, runAudit, sendAuditEmail } from "../uti
 import { SETTINGS_SECTIONS } from "../routes/paths.js";
 import { fetchAllPages } from "../utils/supabasePagination.js";
 import { invalidEmailRecipients, normalizeEmailRecipients } from "../utils/emailRecipients.js";
+import CouponsSettings from "../components/CouponsSettings.jsx";
 
 export default function SettingsPage({ user, products, categories, setCategories, expenseCategories, setExpenseCategories, expenseSubcategories, setExpenseSubcategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, weeklyMenuEmails, setWeeklyMenuEmails, settingsSection = "general", setPage }) {
   const [newCat, setNewCat] = useState("");
@@ -612,6 +614,11 @@ export default function SettingsPage({ user, products, categories, setCategories
             Solo se incluyen productos activos. Usá Ctrl+P o el diálogo de impresión del navegador para guardar como PDF.
           </p>
         </div>
+      )}
+
+      {/* ── CUPONES ─────────────────────────────────────────────────── */}
+      {settingsSection === "cupones" && user?.role === "admin" && (
+        <CouponsSettings showToast={showToast}/>
       )}
 
       {/* ── EMPLEADOS ───────────────────────────────────────────────── */}

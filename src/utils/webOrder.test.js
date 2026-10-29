@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  cartRequiresPreparation, decreaseOrderQuantity, initialOrderQuantity, isPublishedMenuProduct, isWebOrder,
-  minimumDeliveryDate, webOrderNotes, webOrderPhone,
+  WEB_ORDER_MARKER, cartRequiresPreparation, decreaseOrderQuantity, initialOrderQuantity, isPublishedMenuProduct,
+  isWebOrder, minimumDeliveryDate, webOrderNotes, webOrderPhone,
 } from "./webOrder.js";
 
 describe("minimumDeliveryDate", () => {
@@ -63,5 +63,14 @@ describe("publicación en los menús", () => {
     expect(isPublishedMenuProduct({ active: true, showInMenu: true })).toBe(true);
     expect(isPublishedMenuProduct({ active: true, showInMenu: false })).toBe(false);
     expect(isPublishedMenuProduct({ active: false, showInMenu: true })).toBe(false);
+  });
+});
+
+describe("marca de pedido web", () => {
+  // create_web_order (supabase/migrations/20261028000000_create_web_order.sql) escribe las notas con
+  // este prefijo literal. isWebOrder y el Calendario de Pedidos dependen de que coincida.
+  it("la marca es la que escribe el servidor", () => {
+    expect(WEB_ORDER_MARKER).toBe("[WEB]");
+    expect(webOrderNotes("2281 588834")).toBe("[WEB] WhatsApp: 2281 588834");
   });
 });

@@ -48,9 +48,10 @@ function WholesaleMenu() {
   const [confirmation, setConfirmation] = useState(null);
 
   useEffect(() => {
+    const MENU_COLS = "id,name,category,price_retail,price_wholesale,stock,photo,kit_items,active,show_in_menu";
     Promise.all([
-      supabase.from("categories").select("*").order("name"),
-      supabase.from("products").select("*").eq("active", true).eq("show_in_menu", true).order("name"),
+      supabase.from("categories").select("name").order("name"),
+      supabase.from("products").select(MENU_COLS).eq("active", true).eq("show_in_menu", true).order("name"),
     ]).then(async ([{ data: cats }, { data: prods }]) => {
       const mapped = (prods ?? [])
         .map(dbToProduct)
@@ -62,7 +63,7 @@ function WholesaleMenu() {
         mapped.flatMap(product => (product.kitItems || []).map(item => item.productId))
       )].filter(id => id && !mapped.some(product => product.id === id));
       if (componentIds.length) {
-        const { data: components } = await supabase.from("products").select("*").in("id", componentIds);
+        const { data: components } = await supabase.from("products").select("id,stock,kit_items").in("id", componentIds);
         setKitComponents(components?.map(dbToProduct) ?? []);
       }
       setLoading(false);
@@ -349,10 +350,9 @@ function WholesaleMenu() {
       {showCheckout && (
         <CheckoutModal
           cartItems={cartItems}
-          total={cartTotal}
+          subtotal={cartTotal}
           requiresPreparation={requiresPreparation}
           priceList="wholesale"
-          orderLabel="Pedido mayorista"
           onClose={() => setShowCheckout(false)}
           onSuccess={info => {
             setShowCheckout(false);

@@ -10,9 +10,18 @@
  * Es un módulo sin JSX a propósito: se puede testear sin montar React.
  */
 
+// ─── DETECCIÓN DE SUBDOMINIO ────────────────────────────────────────────────────
+const _host = typeof window !== "undefined" ? window.location.hostname : "";
+/** true en app.nutrifree.lat → solo POS */
+export const isAppDomain  = _host === "app.nutrifree.lat";
+/** true en nutrifree.lat / www → solo público */
+export const isPublicDomain = _host === "nutrifree.lat" || _host === "www.nutrifree.lat";
+/** true en localhost → todo habilitado */
+export const isLocalDev = _host === "localhost" || _host === "127.0.0.1";
+
 // ─── RUTAS PÚBLICAS (no requieren sesión) ─────────────────────────────────────
 export const PUBLIC_PATHS = {
-  home:          "/",                 // Redirige al catálogo minorista
+  home:          "/",                 // Landing pública
   menu:          "/menu",             // Catálogo minorista
   login:         "/login",
   wholesaleMenu: "/menu-mayorista",   // Menú mayorista (público con código)
@@ -79,6 +88,7 @@ export const SETTINGS_SECTIONS = [
   { id:"general",   label:"General",           roles:["admin","vendor"] },
   { id:"sistema",   label:"Sistema",           roles:["admin","vendor"] },
   { id:"precios",   label:"Listas de precios", roles:["admin","vendor"] },
+  { id:"cupones",   label:"Cupones",           roles:["admin"] },
   { id:"empleados", label:"Empleados",         roles:["admin"] },
   { id:"notas",     label:"Notas internas",    roles:["admin"] },
   { id:"backup",    label:"Backup",            roles:["admin"] },

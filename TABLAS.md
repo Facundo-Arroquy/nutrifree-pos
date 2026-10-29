@@ -23,6 +23,7 @@
 | `app_settings`         | Configuración de la app | Parámetros globales de la aplicación (nombre del negocio, moneda, etc.).                                   |
 | `audit_log`            | Registro de auditoría | Log de acciones importantes: ventas, producciones, eliminaciones y accesos, con usuario, acción y detalle. Entidad `pos` = mostrador, `calendario` = Calendario de Pedidos. |
 | `customer_inactive_dismissed` | Clientes inactivos contactados | Registro de clientes inactivos cuya alerta fue descartada: cliente, última venta al descartar, quién la descartó y cuándo. La alerta reaparece automáticamente si el cliente hace una nueva compra. |
+| `coupons` | Cupones de descuento | Cupones para pedidos web (`/menu` y `/menu-mayorista`): `code` (único, mayúsculas, 3–20 caracteres `A-Z 0-9 _ -`), `discount_pct` (0–100, descuento porcentual), `created_by`, `created_at`. Solo los admins activos la leen y escriben (RLS); el público **no** puede listarla: valida un código con la función `validate_coupon`. Se quita un cupón borrando la fila. El pedido que lo usa (lo crea `create_web_order`) guarda `discount_type='pct'`, `discount_value` y `discount_amount` en `sales`, y deja `Cupón CODIGO (-N%)` en `notes`. Migración: `supabase/migrations/20261027120000_coupons.sql`. |
 | `production_kanban` | Tablero de producción Kanban | Tarjetas del módulo de producción para cocina. Campos: `product_id`, `product_name`, `qty_requested` (total pedido en orders activas), `qty_stock` (stock al crear/actualizar), `qty_to_produce` (calculado), `status` (`pending`/`in_progress`/`ready`), `stock_updated` (true cuando se sumó stock al pasar a ready). Al mover a `ready`: suma stock vía `adjust_product_stock`. Al volver atrás: revierte. El tablero se vacía manualmente por admin (DELETE, sin revertir stock). |
 
 ## Estados de `sales` y stock
@@ -53,3 +54,34 @@ operación. La aritmética está en `src/utils/orderPricing.js`.
 Un pedido `closed` ya generó su cargo en `account_payments`: **no** se edita
 desde el Calendario, porque cambiar el total dejaría la cuenta corriente
 descuadrada.
+
+## Acceso anónimo (RLS)
+
+El público usa la clave `anon`, que viaja en el JS de la web, así que **cualquier
+cosa que `anon` pueda hacer la puede hacer cualquier persona**. Hoy solo puede:
+
+| Qué | Cómo | Política / función |
+|---|---|---|
+| Leer `categories` | `SELECT` | `anon_read_categories` |
+| Leer los `products` activos (el menú también lee el stock de los componentes de cada kit, que están activos sin estar publicados) | `SELECT` | `anon_read_active_products` |
+| Validar un cupón | RPC | `validate_coupon` |
+| **Crear un pedido web** | RPC | `create_web_order` |
+
+`anon` **no puede leer ni escribir directamente `sales`**: el pedido se crea con
+`create_web_order`, una función `SECURITY DEFINER` que calcula precios (desde
+`products`), descuento (desde `coupons`) y total en el servidor, valida los datos y
+arma las notas. El cliente solo decide nombre, teléfono, fecha, lista de precios,
+productos con cantidad y código de cupón; no puede imponer un precio ni un total.
+Las migraciones son `20261028000000_create_web_order.sql` (la función) y
+`20261028000100_cerrar_insert_anonimo_sales.sql` (borra la política
+`anon_insert_web_orders`, que se aplica **después** de desplegar el front que usa
+la función).
+
+Todo lo demás (ventas, clientes, gastos, cuenta corriente, recetas, ingredientes…)
+es solo para usuarios autenticados, con la política `solo_autenticados`. No crear
+políticas `allow_all_*` (`USING (true)`) para el rol público: la migración
+`20261027210000_cerrar_acceso_anonimo.sql` borró las que había. El webhook de
+MercadoPago usa la service role y no pasa por RLS.
+
+Para verificar el estado: `supabase/checks/cerrar_acceso_anonimo.check.sql` (acceso) y
+`supabase/checks/create_web_order.check.sql` (la función).
