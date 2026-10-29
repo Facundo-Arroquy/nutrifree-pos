@@ -448,8 +448,8 @@ Tests en `src/utils/dates.test.js` (`npm test`).
 ## `src/utils/weeklyMenuRules.js` — regla de costos del menú semanal
 
 El menú semanal tiene 10 comidas (lunes a viernes, almuerzo y cena). Para cuidar el
-margen, la mezcla de **nivel de costo** (`products.cost_tier`: `bajo`/`medio`/`alto`)
-debe respetar `WEEKLY_COST_RULE`:
+margen, la mezcla de **nivel de costo automático** (`bajo`/`medio`/`alto`) debe respetar
+`WEEKLY_COST_RULE`:
 
 | Regla | Valor |
 |---|---|
@@ -464,8 +464,8 @@ alto topado en 3, las únicas mezclas válidas (bajo/medio/alto) son 4/3/3 y 3/4
 **Niveles** (sobre el precio estándar de $11.000): bajo < $3.300 (<30%), medio $3.300–$4.400,
 alto > $4.400 (>40%). Costo por porción = cantidad × costo actual del ingrediente ÷
 rendimiento de la receta (el mismo cálculo de Recetas). Los que no tienen receta completa
-se clasificaron por la mediana de su familia (pollo, pasta, verdura/huevo, vacuno, cerdo,
-pescado, ensalada…); se corrigen a mano en **Productos → Nivel de costo**.
+o cuyo costo por porción es 0 muestran **Sin receta** y no cuentan para la regla. El nivel
+se recalcula con los costos actuales de ingredientes; no requiere edición manual ni seed.
 
 | Función | Qué hace |
 |---|---|
@@ -476,17 +476,15 @@ Una semana a medio armar no marca error por los mínimos pendientes (`pending`),
 los lugares libres ya no alcancen para cumplirlos (`unreachable`). Los platos sin nivel
 ocupan lugar pero no cuentan para ningún nivel (advertencia `unclassified`).
 
-`src/utils/costTier.js` define `COST_TIERS`, `costTierLabel` y `normalizeCostTier`.
+`src/utils/costTier.js` calcula el costo por porción y el nivel automático.
 La UI vive en `WeeklyCostRulePanel` (panel en Menú semanal) y `CostTierBadge`.
 
 ### Migraciones
 
 - `20261022130000_products_cost_tier.sql` — agrega `products.cost_tier` con CHECK (`bajo`/`medio`/`alto`), nullable.
-- `20261022130100_seed_products_cost_tier.sql` — clasificación inicial por nombre del estudio de costos
-  (200 viandas). Solo completa viandas sin nivel; no pisa ediciones manuales; es idempotente.
 
-`productToDb` solo envía `cost_tier` si el producto trae el campo, así que la app sigue
-funcionando contra una base a la que todavía no se le aplicó la migración.
+La columna queda por compatibilidad con datos existentes, pero la clasificación que muestra
+y valida la aplicación se deriva siempre de la receta y no de `products.cost_tier`.
 
 Tests en `src/utils/weeklyMenuRules.test.js`, `src/utils/costTier.test.js` y
 `src/supabase.costTier.test.js` (`npm test`).
