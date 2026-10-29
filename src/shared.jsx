@@ -105,6 +105,7 @@ const CSS = `
   --bg:#f5f5f7;--s0:#ffffff;--s1:#fafafa;--s2:#f2f2f5;
   --border:rgba(0,0,0,.07);--border2:rgba(0,0,0,.15);
   --green:#89b8ad;--green2:#72a99d;--greenl:#edf4f2;--greenlb:#c5ddd9;
+  --terracota:#8e4b28;
   --amber:#d97706;--amberl:#fffbeb;--amberlb:#fde68a;
   --red:#dc2626;--redl:#fef2f2;--redlb:#fecaca;
   --blue:#2563eb;--bluel:#eff6ff;--blueb:#bfdbfe;
