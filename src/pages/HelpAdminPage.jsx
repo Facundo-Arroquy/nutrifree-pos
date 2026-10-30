@@ -4,8 +4,7 @@
  */
 import { useState } from "react";
 import { Ico } from "../shared.jsx";
-import { supabase } from "../supabase.js";
-import { dbToFaqEntry, faqEntryToDb } from "../supabase.js";
+import { supabase, faqEntryToDb } from "../supabase.js";
 
 const EMPTY = { id: "", question: "", answer: "" };
 

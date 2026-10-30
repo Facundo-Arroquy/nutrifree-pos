@@ -18,7 +18,7 @@ import { fetchAllPages } from "../utils/supabasePagination.js";
 import { invalidEmailRecipients, normalizeEmailRecipients } from "../utils/emailRecipients.js";
 import CouponsSettings from "../components/CouponsSettings.jsx";
 
-export default function SettingsPage({ user, products, categories, setCategories, expenseCategories, setExpenseCategories, expenseSubcategories, setExpenseSubcategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, weeklyMenuEmails, setWeeklyMenuEmails, settingsSection = "general", setPage }) {
+export default function SettingsPage({ user, products, categories, setCategories, expenseCategories, setExpenseCategories, expenseSubcategories, setExpenseSubcategories, showToast, reminderStart, setReminderStart, reminderEnd, setReminderEnd, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, weeklyMenuEmails, setWeeklyMenuEmails, settingsSection = "general", setPage }) {
   const [newCat, setNewCat] = useState("");
   const [newExpCat, setNewExpCat] = useState("");
   const [newSubcatName, setNewSubcatName] = useState("");
@@ -44,7 +44,7 @@ export default function SettingsPage({ user, products, categories, setCategories
 
   useEffect(() => {
     if (settingsSection !== "empleados") return;
-    if (!user || user.role !== "admin" || user.isDemo || !domain) return;
+    if (!user || user.role !== "admin" || !domain) return;
     setLoadingEmps(true);
     supabase
       .from("business_users")
@@ -159,7 +159,7 @@ export default function SettingsPage({ user, products, categories, setCategories
 
   useEffect(() => {
     if (settingsSection !== "notas") return;
-    if (user?.role !== "admin" || user?.isDemo) return;
+    if (user?.role !== "admin") return;
     setLoadingNotes(true);
     fetchAllPages((from, to) => supabase
       .from("internal_notes")
@@ -569,17 +569,6 @@ export default function SettingsPage({ user, products, categories, setCategories
             </p>
           </div>
 
-          {user?.isDemo && (
-            <div className="card" style={{ maxWidth:420, borderColor:"var(--amberlb)" }}>
-              <div className="section-title">🧪 Entorno Demo</div>
-              <p style={{ fontSize:".84em", color:"var(--t3)", marginBottom:14 }}>
-                Restaura todos los datos de demostración a su estado inicial.
-              </p>
-              <button className="btn btn-amber btn-sm" onClick={resetDemo}>
-                ↺ Restaurar datos de demo
-              </button>
-            </div>
-          )}
         </>
       )}
 
@@ -632,9 +621,7 @@ export default function SettingsPage({ user, products, categories, setCategories
             </span>
           </div>
 
-          {user?.isDemo ? (
-            <p style={{ fontSize:".85em", color:"var(--t3)", padding:"12px 0" }}>No disponible en modo demo.</p>
-          ) : loadingEmps ? (
+          {loadingEmps ? (
             <p style={{ fontSize:".85em", color:"var(--t3)", padding:"12px 0" }}>Cargando...</p>
           ) : employees.length === 0 ? (
             <p style={{ fontSize:".85em", color:"var(--t3)", padding:"12px 0" }}>
@@ -809,7 +796,7 @@ export default function SettingsPage({ user, products, categories, setCategories
       )}
 
       {/* ── MI CUENTA ───────────────────────────────────────────────── */}
-      {settingsSection === "cuenta" && !user?.isDemo && (
+      {settingsSection === "cuenta" && (
         <div className="card" style={{ maxWidth:420 }}>
           <div className="section-title">Cambiar contraseña</div>
           <p style={{ fontSize:".82em", color:"var(--t3)", marginBottom:14 }}>
@@ -831,13 +818,6 @@ export default function SettingsPage({ user, products, categories, setCategories
           <button className="btn btn-primary btn-sm" onClick={changePassword} disabled={changingPass || !newPass || !newPassConfirm}>
             {changingPass ? "Guardando..." : "Actualizar contraseña"}
           </button>
-        </div>
-      )}
-
-      {settingsSection === "cuenta" && user?.isDemo && (
-        <div className="card" style={{ maxWidth:420 }}>
-          <div className="section-title">Mi cuenta</div>
-          <p style={{ fontSize:".84em", color:"var(--t3)" }}>No disponible en modo demo.</p>
         </div>
       )}
     </div>
@@ -867,7 +847,6 @@ function BackupSection({ user, showToast }) {
   const [auditing, setAuditing] = useState(false);
 
   const handleRunAudit = async () => {
-    if (user?.isDemo) return;
     setAuditing(true);
     try {
       const result = await runAudit();
@@ -886,7 +865,6 @@ function BackupSection({ user, showToast }) {
   };
 
   const handleExport = async () => {
-    if (user?.isDemo) { showToast("No disponible en modo demo", "error"); return; }
     setLoading(true);
     try {
       const backup = { exported_at: new Date().toISOString(), tables: {} };
@@ -965,7 +943,7 @@ function BackupSection({ user, showToast }) {
       <button
         className="btn btn-primary"
         onClick={handleExport}
-        disabled={loading || user?.isDemo}
+        disabled={loading}
         style={{ display: "flex", alignItems: "center", gap: 8 }}
       >
         <Ico n="download" s={14} />
@@ -978,64 +956,56 @@ function BackupSection({ user, showToast }) {
         </p>
       )}
 
-      {user?.isDemo && (
-        <p style={{ fontSize: ".8em", color: "var(--t4)", marginTop: 10, fontStyle: "italic" }}>
-          No disponible en modo demo.
-        </p>
-      )}
-
       {/* Panel de auditoría */}
-      {!user?.isDemo && (
-        <div style={{ marginTop: 24, borderTop: "1px solid var(--border)", paddingTop: 18 }}>
-          <div className="section-title" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <Ico n="check" s={14} c="var(--t2)" />
-            Auditoría de integridad
-            {auditIsDue() && !auditResult && (
-              <span style={{ marginLeft: 6, fontSize: ".72em", padding: "1px 6px", borderRadius: 4, background: "var(--amber-bg,#451a03)", color: "var(--amber)" }}>
-                pendiente
-              </span>
-            )}
-          </div>
-
-          {auditResult && (
-            <div style={{
-              borderRadius: 6, padding: "10px 14px", marginBottom: 12, fontSize: ".84em",
-              background: auditResult.ok ? "var(--greenl,#052e16)" : "var(--redl,#450a0a)",
-              border: `1px solid ${auditResult.ok ? "var(--greenlb,#166534)" : "var(--redlb,#991b1b)"}`,
-            }}>
-              <div style={{ fontWeight: 600, marginBottom: 4, color: auditResult.ok ? "var(--green)" : "var(--red)" }}>
-                {auditResult.ok ? "✓ Sin problemas detectados" : `⚠️ ${auditResult.orphanedCredits.length + auditResult.uncoveredSales.length} problema(s) detectado(s)`}
-              </div>
-              {!auditResult.ok && (
-                <ul style={{ margin: "4px 0 0 16px", color: "var(--t3)", lineHeight: 1.7 }}>
-                  {auditResult.orphanedCredits.length > 0 && (
-                    <li>{auditResult.orphanedCredits.length} crédito(s) sin cargo de consumo</li>
-                  )}
-                  {auditResult.uncoveredSales.length > 0 && (
-                    <li>{auditResult.uncoveredSales.length} venta(s) en cuenta sin cargo registrado</li>
-                  )}
-                </ul>
-              )}
-              <div style={{ fontSize: ".8em", color: "var(--t4)", marginTop: 6 }}>
-                Última ejecución: {auditResult.date}
-              </div>
-            </div>
+      <div style={{ marginTop: 24, borderTop: "1px solid var(--border)", paddingTop: 18 }}>
+        <div className="section-title" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <Ico n="check" s={14} c="var(--t2)" />
+          Auditoría de integridad
+          {auditIsDue() && !auditResult && (
+            <span style={{ marginLeft: 6, fontSize: ".72em", padding: "1px 6px", borderRadius: 4, background: "var(--amber-bg,#451a03)", color: "var(--amber)" }}>
+              pendiente
+            </span>
           )}
-
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={handleRunAudit}
-            disabled={auditing}
-            style={{ display: "flex", alignItems: "center", gap: 7 }}
-          >
-            <Ico n="check" s={13} />
-            {auditing ? "Verificando..." : "Ejecutar auditoría ahora"}
-          </button>
-          <p style={{ fontSize: ".75em", color: "var(--t4)", marginTop: 8 }}>
-            Se ejecuta automáticamente cada 7 días al iniciar sesión.
-          </p>
         </div>
-      )}
+
+        {auditResult && (
+          <div style={{
+            borderRadius: 6, padding: "10px 14px", marginBottom: 12, fontSize: ".84em",
+            background: auditResult.ok ? "var(--greenl,#052e16)" : "var(--redl,#450a0a)",
+            border: `1px solid ${auditResult.ok ? "var(--greenlb,#166534)" : "var(--redlb,#991b1b)"}`,
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: 4, color: auditResult.ok ? "var(--green)" : "var(--red)" }}>
+              {auditResult.ok ? "✓ Sin problemas detectados" : `⚠️ ${auditResult.orphanedCredits.length + auditResult.uncoveredSales.length} problema(s) detectado(s)`}
+            </div>
+            {!auditResult.ok && (
+              <ul style={{ margin: "4px 0 0 16px", color: "var(--t3)", lineHeight: 1.7 }}>
+                {auditResult.orphanedCredits.length > 0 && (
+                  <li>{auditResult.orphanedCredits.length} crédito(s) sin cargo de consumo</li>
+                )}
+                {auditResult.uncoveredSales.length > 0 && (
+                  <li>{auditResult.uncoveredSales.length} venta(s) en cuenta sin cargo registrado</li>
+                )}
+              </ul>
+            )}
+            <div style={{ fontSize: ".8em", color: "var(--t4)", marginTop: 6 }}>
+              Última ejecución: {auditResult.date}
+            </div>
+          </div>
+        )}
+
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={handleRunAudit}
+          disabled={auditing}
+          style={{ display: "flex", alignItems: "center", gap: 7 }}
+        >
+          <Ico n="check" s={13} />
+          {auditing ? "Verificando..." : "Ejecutar auditoría ahora"}
+        </button>
+        <p style={{ fontSize: ".75em", color: "var(--t4)", marginTop: 8 }}>
+          Se ejecuta automáticamente cada 7 días al iniciar sesión.
+        </p>
+      </div>
     </div>
   );
 }

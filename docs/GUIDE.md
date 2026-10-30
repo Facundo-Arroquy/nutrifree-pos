@@ -2,13 +2,13 @@
 
 ## Acceso y usuarios
 
-| Usuario | Contraseña | Rol | Acceso |
-|---|---|---|---|
-| Administrador | *(ver src/shared.jsx)* | admin | Todo el sistema |
-| Vendedor | *(ver src/shared.jsx)* | vendor | Todo excepto Reportes |
-| Demo | demo1234 | admin (demo) | Entorno aislado, sin DB real |
+El acceso es con email y contraseña (Supabase Auth). El rol se asigna en el primer ingreso según el email y se puede cambiar en **Configuración → Empleados**:
 
-El usuario **Demo** opera completamente sobre localStorage. Ningún dato demo toca Supabase.
+| Email | Rol | Acceso |
+|---|---|---|
+| `admin@...` | admin | Todo el sistema |
+| `cocina@...` | cocina | Calendario de pedidos, producción, recetas y ayuda |
+| Cualquier otro | vendor | Todo excepto las secciones de administración |
 
 ---
 
@@ -128,23 +128,12 @@ El sidebar izquierdo está dividido en secciones:
 - Agregar/eliminar categorías de productos y categorías de gastos
 - Configurar horario del recordatorio de entregas (aparece al login)
 - Ver usuarios del sistema
-- *Solo en modo Demo*: botón para restaurar datos demo al estado inicial
 
 ---
 
 ## Alertas de entrega
 
 Al iniciar sesión, si hay pedidos con `delivery_date = hoy` y estado abierto/pendiente, aparece un pop-up de aviso. El horario en que aparece esta alerta se configura en **Configuración → Sistema**.
-
----
-
-## Modo Demo
-
-- Ingresá con usuario **Demo** / contraseña `demo1234`
-- Todos los datos son ficticios y se guardan en localStorage del navegador
-- El banner naranja en la parte superior indica que estás en modo demo
-- El botón **Restaurar datos de demo** restablece todos los datos al estado original
-- Al cerrar sesión se limpia el flag de demo; los usuarios reales nunca ven datos demo
 
 ---
 
@@ -155,8 +144,7 @@ Al iniciar sesión, si hay pedidos con `delivery_date = hoy` y estado abierto/pe
 | Frontend | React + Vite |
 | Base de datos | Supabase (PostgreSQL) |
 | Estilos | CSS-in-JS (sin librería externa) |
-| Autenticación | Passwords en código (sin JWT) |
-| Demo | localStorage mock con interfaz idéntica a Supabase |
+| Autenticación | Supabase Auth (email + contraseña) |
 
 ---
 
@@ -167,8 +155,6 @@ src/
 ├── App.jsx              # Raíz: estado global, carga de datos, navegación
 ├── shared.jsx           # Utilidades, constantes, CSS global, componentes UI base
 ├── supabase.js          # Cliente Supabase + mappers DB↔App (snake_case↔camelCase)
-├── demoData.js          # Datos de seed para el modo demo
-├── demoSupabase.js      # Mock de Supabase sobre localStorage
 └── pages/
     ├── DashboardPage.jsx
     ├── POSPage.jsx

@@ -8,7 +8,7 @@
  *
  * Props: recipes, setRecipes, products, ingredients, showToast
  */
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Ico, Modal, $, exportXlsx } from "../shared.jsx";
 import { supabase, recipeToDb, recipeIngredientToDb } from "../supabase.js";
 import { updateIngredientQty, sanitizeIngredients } from "../utils/recipeIngredients.js";

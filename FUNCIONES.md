@@ -7,15 +7,15 @@ valor absoluto, para que dos operaciones simultáneas no se pisen.
 
 | Función | Definida en | Qué hace |
 |---|---|---|
-| `apply_production` | `supabase-concurrency-fixes.sql` | Suma stock al producto, registra el movimiento y descuenta los ingredientes consumidos, todo en una transacción. |
-| `complete_sale_stocks` | `supabase/migrations/20260729_fix_stock_deduction.sql` | Descuenta stock de productos por una venta o pedido. No lanza excepción ante falta de stock: devuelve `shortfall` (faltante) y `missing` (producto inexistente) por fila para que la UI avise. |
-| `cancel_order_stocks` | `supabase-concurrency-fixes.sql` | Restaura el stock de un pedido cancelado y registra los movimientos con el motivo. |
-| `descontar_stock_pedido` | `supabase/migrations/20260729_fix_stock_deduction.sql` | Descuenta stock de un pedido web pagado por MercadoPago. **Sí lanza excepción** si falta stock o el producto no existe: el webhook la captura y reembolsa el pago. |
-| `adjust_ingredient_stock` | `supabase-concurrency-fixes.sql` | Ajuste relativo del stock de un ingrediente y, opcionalmente, su costo unitario. |
-| `adjust_product_stock` | `supabase-concurrency-fixes.sql` | Ajuste relativo del stock de un producto (registro manual de producción). |
-| `adjust_customer_balance` | `supabase-concurrency-fixes.sql` | Ajuste relativo del saldo en cuenta corriente de un cliente. |
-| `accumulate_employee_hours` | `supabase-productions.sql` | Acumula horas de cocina y empaque de un empleado. |
-| `handle_new_auth_user` | `supabase-business-users.sql` | Trigger: crea el perfil de usuario al registrarse en Auth. |
+| `apply_production` | `supabase/migrations_legacy/supabase-concurrency-fixes.sql` | Suma stock al producto, registra el movimiento y descuenta los ingredientes consumidos, todo en una transacción. |
+| `complete_sale_stocks` | `supabase/migrations_legacy/20260729_fix_stock_deduction.sql` | Descuenta stock de productos por una venta o pedido. No lanza excepción ante falta de stock: devuelve `shortfall` (faltante) y `missing` (producto inexistente) por fila para que la UI avise. |
+| `cancel_order_stocks` | `supabase/migrations_legacy/supabase-concurrency-fixes.sql` | Restaura el stock de un pedido cancelado y registra los movimientos con el motivo. |
+| `descontar_stock_pedido` | `supabase/migrations_legacy/20260729_fix_stock_deduction.sql` | Descuenta stock de un pedido web pagado por MercadoPago. **Sí lanza excepción** si falta stock o el producto no existe: el webhook la captura y reembolsa el pago. |
+| `adjust_ingredient_stock` | `supabase/migrations_legacy/supabase-concurrency-fixes.sql` | Ajuste relativo del stock de un ingrediente y, opcionalmente, su costo unitario. |
+| `adjust_product_stock` | `supabase/migrations_legacy/supabase-concurrency-fixes.sql` | Ajuste relativo del stock de un producto (registro manual de producción). |
+| `adjust_customer_balance` | `supabase/migrations_legacy/supabase-concurrency-fixes.sql` | Ajuste relativo del saldo en cuenta corriente de un cliente. |
+| `accumulate_employee_hours` | `supabase/migrations_legacy/supabase-productions.sql` | Acumula horas de cocina y empaque de un empleado. |
+| `handle_new_auth_user` | `supabase/migrations_legacy/supabase-business-users.sql` | Trigger: crea el perfil de usuario al registrarse en Auth. |
 
 ### Por qué dos políticas distintas ante falta de stock
 
