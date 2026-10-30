@@ -54,3 +54,4 @@ docs/                   Guía de uso, auditoría y reportes
 - [`docs/GUIDE.md`](docs/GUIDE.md) — guía de uso del panel
 - [`docs/AUDITORIA.md`](docs/AUDITORIA.md) — controles periódicos de integridad
 - [`docs/reportes/`](docs/reportes) — revisiones y reportes históricos
+- [`docs/migracion/`](docs/migracion) — plan de migración a FastAPI + React + Tailwind (repos `nutrifree-api` y `nutrifree-web`)
