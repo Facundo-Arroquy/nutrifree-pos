@@ -13,7 +13,7 @@
  */
 import { useState, useMemo, useCallback } from "react";
 import { dayKey, todayKey, daysAgoKey, monthStartKey } from "../utils/dates.js";
-import { Ico, $, fmtDate, fmtTime, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, useSortable, SortableTh, exportXlsx } from "../shared.jsx";
+import { $, fmtDate, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, useSortable, SortableTh, exportXlsx } from "../shared.jsx";
 import { expenseStatus, expensePaidAmount, expenseRemaining } from "../utils/supplierAccount.js";
 
 // ─── Bar chart (CSS-based, no library) ────────────────────────────────────────

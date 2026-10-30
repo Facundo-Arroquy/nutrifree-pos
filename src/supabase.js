@@ -2,13 +2,11 @@
  * supabase.js — Cliente Supabase y mappers DB↔App
  *
  * Exporta:
- *  - `supabase`: proxy inteligente que redirige a demoClient (localStorage) o al
- *    cliente real de Supabase según el flag `nutrifree_mode` en localStorage.
+ *  - `supabase`: cliente de Supabase configurado con las variables de entorno.
  *  - Mappers `dbTo*`: convierten filas DB (snake_case) a objetos React (camelCase).
  *  - Mappers `*ToDb`: convierten objetos React (camelCase) a filas DB (snake_case).
  */
 import { createClient } from "@supabase/supabase-js";
-import { demoClient } from "./demoSupabase.js";
 import { assertSafeSupabaseEnvironment } from "./utils/supabaseEnvironment.js";
 
 // ─── Credenciales desde variables de entorno (.env) ─────────────────────────
@@ -21,24 +19,7 @@ assertSafeSupabaseEnvironment({
 });
 // ────────────────────────────────────────────────────────────────────────────
 
-const _prod = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// Smart client: routes to demo (localStorage) or production (Supabase) at call time.
-// auth y channel siempre apuntan al cliente real (no aplica al modo demo).
-export const supabase = {
-  from: (table) => {
-    const isDemo = typeof localStorage !== "undefined" && localStorage.getItem("nutrifree_mode") === "demo";
-    return isDemo ? demoClient.from(table) : _prod.from(table);
-  },
-  rpc: (fn, args) => {
-    const isDemo = typeof localStorage !== "undefined" && localStorage.getItem("nutrifree_mode") === "demo";
-    return isDemo ? demoClient.rpc(fn, args) : _prod.rpc(fn, args);
-  },
-  auth: _prod.auth,
-  storage: _prod.storage,
-  channel: (...args) => _prod.channel(...args),
-  removeChannel: (...args) => _prod.removeChannel(...args),
-};
+export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ─── MAPPERS: DB (snake_case) ↔ App (camelCase) ───────────────────────────
 // Cada entidad tiene un par dbTo*(row) → objeto App y *ToDb(obj) → fila DB.
@@ -182,10 +163,6 @@ export const dbToExpenseSubcategory = r => ({
   id: r.id, name: r.name, categoryName: r.category_name,
 });
 
-export const expenseSubcategoryToDb = s => ({
-  id: s.id, name: s.name, category_name: s.categoryName,
-});
-
 export const dbToSupplier = r => ({
   id: r.id, name: r.name, phone: r.phone, email: r.email,
   address: r.address, notes: r.notes, createdAt: r.created_at,
@@ -250,11 +227,6 @@ export const dbToStockMovement = r => ({
   qty: r.qty, type: r.type, notes: r.notes, createdAt: r.created_at,
 });
 
-export const stockMovementToDb = m => ({
-  id: m.id, product_id: m.productId, product_name: m.productName,
-  qty: m.qty, type: m.type, notes: m.notes,
-});
-
 export const dbToCashShift = r => ({
   id: r.id, openedBy: r.opened_by, openedAt: r.opened_at,
   closedAt: r.closed_at, status: r.status, initialCash: r.initial_cash,
@@ -272,20 +244,4 @@ export const cashShiftToDb = s => ({
   sales_card: s.salesCard, sales_account: s.salesAccount,
   expenses_cash: s.expensesCash, expected_cash: s.expectedCash,
   counted_cash: s.countedCash, difference: s.difference, notes: s.notes,
-});
-
-// ─── PRODUCCIONES & BANCO DE HORAS ────────────────────────────────────────
-export const dbToProduction = r => ({
-  id: r.id, recipeId: r.recipe_id, createdAt: r.created_at,
-});
-
-export const dbToProductionEmployee = r => ({
-  id: r.id, productionId: r.production_id, employeeId: r.employee_id,
-  role: r.role, hours: r.hours || 0,
-});
-
-export const dbToEmployeeHours = r => ({
-  employeeId: r.employee_id,
-  cookingHours: r.cooking_hours || 0,
-  packagingHours: r.packaging_hours || 0,
 });

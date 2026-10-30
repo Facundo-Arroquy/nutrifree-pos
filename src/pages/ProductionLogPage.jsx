@@ -44,7 +44,6 @@ export default function ProductionLogPage({ user, recipes, products, setProducts
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (user?.isDemo) { setLoadingEmps(false); return; }
     supabase
       .from("business_users")
       .select("id, name, email, active")

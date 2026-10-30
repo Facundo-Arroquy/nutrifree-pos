@@ -4,7 +4,7 @@
  * Responsabilidades:
  *  1. Carga inicial de todos los datos desde Supabase (14 tablas en paralelo)
  *  2. Estado global compartido con todas las páginas vía objeto `props`
- *  3. Lógica de autenticación: login, logout, modo demo
+ *  3. Lógica de autenticación: login y logout
  *  4. Layout general (sidebar + topbar) y montaje del router (`routes/`)
  *  5. Alertas de entrega al login (según ventana de horario configurable)
  *  6. Sidebar dinámico filtrado por rol del usuario
@@ -13,14 +13,12 @@ import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   CSS, Ico, Toast, LoginPage,
-  SEED_PRODUCTS, SEED_CUSTOMERS, SEED_SALES, SEED_CATEGORIES,
   $, STATUS_LABELS, STATUS_COLORS, todayStr,
 } from "./shared.jsx";
-import { initDemoDb, resetDemoDb, syncDemoProducts } from "./demoData.js";
 import {
   supabase,
   dbToProduct, productToDb,
-  dbToCustomer, customerToDb,
+  dbToCustomer,
   dbToSale,
   dbToRecipe,
   dbToExpense,
@@ -44,8 +42,8 @@ import PagoResultadoPage from "./pages/PagoResultadoPage.jsx";
 import AppRoutes from "./routes/AppRoutes.jsx";
 import {
   PUBLIC_PATHS, PAY_RESULT_PATHS, SIDEBAR_SECTIONS, DEFAULT_SETTINGS_SECTION,
-  pathForPage, pageIdForPath, homePathFor, navItemsFor, settingsSectionsFor,
-  isAppDomain, isPublicDomain, isLocalDev,
+  pathForPage, pageIdForPath, navItemsFor, settingsSectionsFor,
+  isAppDomain, isPublicDomain,
 } from "./routes/paths.js";
 import { auditIsDue, runAudit, sendAuditEmail } from "./utils/auditCheck.js";
 import { fetchAllPages } from "./utils/supabasePagination.js";
@@ -58,7 +56,7 @@ const sessionToUser = (session) => {
     : lower.startsWith("cocina") ? "cocina"
     : "vendor";
   const name = session.user.user_metadata?.name || email.split("@")[0] || "Usuario";
-  return { name, role, email, isDemo: false };
+  return { name, role, email };
 };
 
 // Sincroniza el usuario con business_users y devuelve el user con el rol guardado en DB.
@@ -150,13 +148,6 @@ export default function App() {
   const deliveryChecked = useRef(false);
   const loadDataRef = useRef(null);
 
-  // Mantiene actualizado el catálogo ficticio sin borrar cambios hechos durante
-  // la demostración. Es útil cuando una versión agrega productos al seed.
-  useEffect(() => {
-    if (!user?.isDemo) return;
-    setProducts(syncDemoProducts().map(dbToProduct));
-  }, [user?.isDemo]);
-
   // ─── Supabase Auth: restaurar sesión y escuchar cambios ───────────────────
   useEffect(() => {
     // Sincroniza en background: no bloquea la carga inicial.
@@ -181,7 +172,7 @@ export default function App() {
         setUser(sessionToUser(session));
         syncInBackground(session);
       } else {
-        setUser(prev => (prev?.isDemo ? prev : null));
+        setUser(null);
       }
     });
     return () => subscription.unsubscribe();
@@ -196,7 +187,7 @@ export default function App() {
   }, [user, page]);
 
   useEffect(() => {
-    if (!user || user.isDemo) return;
+    if (!user) return;
     const load = async () => {
       // PostgREST limita a 1000 filas por respuesta: las tablas que crecen sin
       // techo se paginan. Los saldos de cuenta corriente (clientes y
@@ -285,7 +276,7 @@ export default function App() {
 
   // ─── Re-fetch al volver a la tab (visibilitychange) ────────────────────────
   useEffect(() => {
-    if (!user || user.isDemo) return;
+    if (!user) return;
     const onVisible = () => {
       if (document.visibilityState === "visible") loadDataRef.current?.();
     };
@@ -298,7 +289,7 @@ export default function App() {
   useEffect(() => { ingredientsRef.current = ingredients; }, [ingredients]);
 
   useEffect(() => {
-    if (!user || user.isDemo) return;
+    if (!user) return;
 
     // Helper genérico: INSERT agrega al frente (sin duplicar), UPDATE reemplaza por id, DELETE filtra
     const sub = (table, mapper, setter) =>
@@ -453,7 +444,6 @@ export default function App() {
 
   // ─── Auditoría ─────────────────────────────────────────────────────────────
   const logAction = async (action, entity, detail = "") => {
-    if (user?.isDemo) return;
     try {
       await supabase.from("audit_log").insert({
         id: crypto.randomUUID(),
@@ -469,13 +459,13 @@ export default function App() {
   // ─── Auditoría semanal de integridad (solo admin) ──────────────────────────
   const auditChecked = useRef(false);
   useEffect(() => {
-    if (!user || user.isDemo || user.role !== "admin" || auditChecked.current) return;
+    if (!user || user.role !== "admin" || auditChecked.current) return;
     if (!auditIsDue()) return;
     auditChecked.current = true;
     runAudit().then(result => {
       if (!result.ok) {
         showToast(
-          `⚠️ Auditoría: ${result.orphanedCredits.length + result.uncoveredSales.length} problema(s) detectado(s). Revisá AUDITORIA.md.`,
+          `⚠️ Auditoría: ${result.orphanedCredits.length + result.uncoveredSales.length} problema(s) detectado(s). Revisá docs/AUDITORIA.md.`,
           "error"
         );
         sendAuditEmail(result).catch(() => {});
@@ -483,9 +473,9 @@ export default function App() {
     }).catch(() => {});
   }, [user]);
 
-  // ─── Alertas de entrega para usuarios reales (luego de cargar ventas) ──────
+  // ─── Alertas de entrega (luego de cargar ventas) ───────────────────────────
   useEffect(() => {
-    if (!user || user.isDemo || alertsChecked.current) return;
+    if (!user || alertsChecked.current) return;
     alertsChecked.current = true;
     const now = new Date();
     const cur = now.getHours() * 60 + now.getMinutes();
@@ -502,7 +492,7 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
-    if (!user || user.isDemo || deliveryChecked.current || sales.length === 0) return;
+    if (!user || deliveryChecked.current || sales.length === 0) return;
     deliveryChecked.current = true;
     const now = new Date();
     const cur = now.getHours() * 60 + now.getMinutes();
@@ -631,73 +621,13 @@ export default function App() {
   if (!user) return (
     <>
       <style>{CSS}</style>
-      <LoginPage onLogin={u => {
-        // onLogin solo se llama para modo demo. Los usuarios reales son manejados
-        // por onAuthStateChange (supabase.auth.signInWithPassword en LoginPage).
-        if (u.isDemo) {
-          initDemoDb(false);
-          localStorage.setItem("nutrifree_mode", "demo");
-          const get = (k) => { try { return JSON.parse(localStorage.getItem("nutrifree_demo_" + k) || "[]"); } catch { return []; } };
-          const dProds  = get("products");   const dCusts = get("customers");
-          const dSls    = get("sales");       const dCats  = get("categories");
-          const dExpCats= get("expense_categories"); const dExps = get("expenses");
-          const dIngrs  = get("ingredients"); const dRecs  = get("recipes");
-          const dRecIngrs = get("recipe_ingredients");
-          const dAccPays  = get("account_payments");
-          const dStockMovs= get("stock_movements");
-          const dSupps    = get("suppliers");
-          const dSuppPays = get("supplier_payments");
-          const dShifts   = get("cash_shifts");
-          setProducts(dProds.map(dbToProduct));
-          setCustomers(dCusts.map(dbToCustomer));
-          setSales(dSls.map(dbToSale));
-          setCategories(dCats.map(c => c.name));
-          setExpenseCategories(dExpCats.map(c => c.name));
-          setExpenses(dExps.map(dbToExpense));
-          setIngredients(dIngrs.map(dbToIngredient));
-          setRecipes(dRecs.map(r => ({
-            ...dbToRecipe(r),
-            ingredients: dRecIngrs
-              .filter(ri => ri.recipe_id === r.id)
-              .map(ri => dbToRecipeIngredient(ri, dIngrs)),
-          })));
-          setAccountPayments(dAccPays.map(dbToAccountPayment));
-          setStockMovements(dStockMovs.map(dbToStockMovement));
-          setSuppliers(dSupps.map(dbToSupplier));
-          setSupplierPayments(dSuppPays.map(dbToSupplierPayment));
-          setCashShifts(dShifts.map(dbToCashShift));
-          // Alertas de entrega para modo demo
-          const now = new Date();
-          const cur = now.getHours() * 60 + now.getMinutes();
-          const [sh, sm] = reminderStart.split(":").map(Number);
-          const [eh, em] = reminderEnd.split(":").map(Number);
-          if (cur >= sh * 60 + sm && cur < eh * 60 + em) {
-            const today = todayStr();
-            if (localStorage.getItem("menuSavedDate") !== today) {
-              setShowMenuReminder(true);
-              setMenuLunchId(localStorage.getItem("menuLunchId_" + today) || "");
-              setMenuDinnerId(localStorage.getItem("menuDinnerId_" + today) || "");
-              setMenuSearch({ lunch: "", dinner: "" });
-            }
-          }
-        }
-        setUser(u);
-        // Si venía de /login o /, AppRoutes lo lleva a la home de su rol;
-        // si entró por un deep link (ej. /pos), se respeta esa URL.
-        navigate(pageIdForPath(currentPath) ? currentPath : homePathFor(u), { replace: true });
-      }} />
+      <LoginPage />
     </>
   );
 
   const nav = navItemsFor(user);
   const SETTINGS_SECTIONS = settingsSectionsFor(user);
   const sidebarSections = SIDEBAR_SECTIONS;
-
-  /** Restaura los datos demo a su estado original y recarga la aplicación. */
-  const resetDemo = () => {
-    resetDemoDb();
-    window.location.reload();
-  };
 
   const startResize = (e) => {
     e.preventDefault();
@@ -714,7 +644,7 @@ export default function App() {
     document.addEventListener("mouseup", onUp);
   };
 
-  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenseSubcategories, setExpenseSubcategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, inactiveDismissed, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, weeklyMenuEmails, setWeeklyMenuEmails, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, resetDemo, logAction, settingsSection, setSettingsSection };
+  const props = { user, products, setProducts, customers, setCustomers, sales, setSales, recipes, setRecipes, categories, setCategories, expenseCategories, setExpenseCategories, expenseSubcategories, setExpenseSubcategories, expenses, setExpenses, ingredients, setIngredients, accountPayments, setAccountPayments, stockMovements, setStockMovements, suppliers, setSuppliers, supplierPayments, setSupplierPayments, cashShifts, setCashShifts, faqEntries, setFaqEntries, faqMissed, setFaqMissed, alertBalanceThreshold, setAlertBalanceThreshold, inactiveDayThreshold, setInactiveDayThreshold, inactiveDismissed, frozenDiscount, setFrozenDiscount, vatRate, setVatRate, weeklyMenuEmails, setWeeklyMenuEmails, openRecipeId, setOpenRecipeId, highlightRecipeId, setHighlightRecipeId, showToast, setPage, reminderStart, setReminderStart, reminderEnd, setReminderEnd, logAction, settingsSection, setSettingsSection };
 
   return (
     <>
@@ -811,18 +741,11 @@ export default function App() {
             </button>
             <span className="mob-header-brand">Nutrifree Manager</span>
             <button className="btn btn-ghost btn-icon btn-sm" onClick={async () => {
-              localStorage.removeItem("nutrifree_mode");
-              if (!user.isDemo) await supabase.auth.signOut();
+              await supabase.auth.signOut();
               setUser(null);
             }} title="Salir"><Ico n="logout" s={13}/></button>
           </div>
 
-          {user.isDemo && (
-            <div className="demo-banner">
-              🧪 Entorno Demo — Los datos no afectan la base de datos real
-              <button className="demo-banner-btn" onClick={resetDemo}>↺ Restaurar datos</button>
-            </div>
-          )}
           <div className="topbar">
             <div className="topbar-brand">
               <img src="/logo.jpg" alt="Nutrifree" style={{ height:22, borderRadius:5 }}/>
@@ -835,8 +758,7 @@ export default function App() {
                 <span className="topbar-user-name">{user.name}</span>
               </div>
               <button className="btn btn-ghost btn-icon btn-sm" onClick={async () => {
-                localStorage.removeItem("nutrifree_mode");
-                if (!user.isDemo) await supabase.auth.signOut();
+                await supabase.auth.signOut();
                 setUser(null);
               }} title="Salir"><Ico n="logout" s={13}/></button>
             </div>

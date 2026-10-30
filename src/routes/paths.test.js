@@ -5,10 +5,9 @@ import {
   canAccess, navItemsFor, settingsSectionsFor,
 } from "./paths.js";
 
-const admin  = { role: "admin",  isDemo: false };
-const vendor = { role: "vendor", isDemo: false };
-const cocina = { role: "cocina", isDemo: false };
-const demo   = { role: "vendor", isDemo: true };
+const admin  = { role: "admin" };
+const vendor = { role: "vendor" };
+const cocina = { role: "cocina" };
 
 describe("catálogo de rutas", () => {
   it("no repite ids", () => {
@@ -103,10 +102,6 @@ describe("canAccess", () => {
     }
   });
 
-  it("el modo demo entra a todo", () => {
-    for (const r of ROUTES) expect(canAccess(demo, r.id)).toBe(true);
-  });
-
   it("un id desconocido usa el permiso por defecto (admin/vendor)", () => {
     expect(canAccess(admin, "zzz")).toBe(true);
     expect(canAccess(cocina, "zzz")).toBe(false);
@@ -138,6 +133,5 @@ describe("sidebar", () => {
     expect(settingsSectionsFor(vendor).map(s => s.id)).not.toContain("cupones");
     expect(settingsSectionsFor(admin).map(s => s.id)).toContain("cupones");
     expect(settingsSectionsFor(admin)).toHaveLength(SETTINGS_SECTIONS.length);
-    expect(settingsSectionsFor(demo)).toHaveLength(SETTINGS_SECTIONS.length);
   });
 });

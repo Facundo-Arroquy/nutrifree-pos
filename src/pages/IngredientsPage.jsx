@@ -9,7 +9,7 @@
  */
 import { useState } from "react";
 import { Ico, Modal, $, SortableTh, exportXlsx } from "../shared.jsx";
-import { supabase, ingredientToDb, recipeToDb } from "../supabase.js";
+import { supabase, ingredientToDb } from "../supabase.js";
 import { round3 } from "../utils/money.js";
 
 const INGR_CATS = ["Harinas","Lácteos","Grasas/Aceites","Endulzantes","Frutas/Verduras","Especias","Proteínas","Otros"];

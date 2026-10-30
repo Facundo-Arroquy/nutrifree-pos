@@ -47,7 +47,7 @@ VALUES (gen_random_uuid(), '<customer_id>', null, <amount>, 'charge', 'balance',
 
 **Contexto:** bug detectado el 2026-05-20. La migración inicial corrigió 3 registros
 (sih1ak2, vk18hgt, mh0skfv). El código en `registerPayment` fue corregido para
-que no vuelva a ocurrir. Ver `CAMBIOS_2026-05-20.md`.
+que no vuelva a ocurrir. Ver `reportes/CAMBIOS_2026-05-20.md`.
 
 --- 
 

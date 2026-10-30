@@ -16,8 +16,6 @@ const _host = typeof window !== "undefined" ? window.location.hostname : "";
 export const isAppDomain  = _host === "app.nutrifree.lat";
 /** true en nutrifree.lat / www → solo público */
 export const isPublicDomain = _host === "nutrifree.lat" || _host === "www.nutrifree.lat";
-/** true en localhost → todo habilitado */
-export const isLocalDev = _host === "localhost" || _host === "127.0.0.1";
 
 // ─── RUTAS PÚBLICAS (no requieren sesión) ─────────────────────────────────────
 export const PUBLIC_PATHS = {
@@ -53,7 +51,7 @@ export const SIDEBAR_SECTIONS = [
  *            llamar `setPage("recipes")`); se mantiene para no tocar las vistas.
  *  path    → URL propia de la sección. `null` = no es una ruta, es una acción
  *            del sidebar (ej. "Menú del Día" abre un modal).
- *  roles   → roles con permiso. El modo demo ve todo.
+ *  roles   → roles con permiso.
  *  section → sección del sidebar. `null` = no se muestra en el sidebar
  *            (se llega desde otra página).
  */
@@ -121,17 +119,16 @@ export const pageIdForPath = (pathname = "") => {
 export const homePathFor = (user) =>
   user?.role === "cocina" ? pathForPage("orders-kanban") : pathForPage("dashboard");
 
-/** ¿El usuario puede entrar a esta página? El modo demo tiene acceso total. */
+/** ¿El usuario puede entrar a esta página? */
 export const canAccess = (user, pageId) => {
-  if (user?.isDemo) return true;
   const roles = routeById(pageId)?.roles || ["admin", "vendor"];
   return roles.includes(user?.role);
 };
 
 /** Ítems visibles del sidebar para el usuario (respetando el orden declarado). */
 export const navItemsFor = (user) =>
-  ROUTES.filter(r => r.section && (user?.isDemo || r.roles.includes(user?.role)));
+  ROUTES.filter(r => r.section && r.roles.includes(user?.role));
 
 /** Subsecciones de Configuración visibles para el usuario. */
 export const settingsSectionsFor = (user) =>
-  SETTINGS_SECTIONS.filter(s => user?.isDemo || s.roles.includes(user?.role));
+  SETTINGS_SECTIONS.filter(s => s.roles.includes(user?.role));

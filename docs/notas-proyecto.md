@@ -12,8 +12,8 @@
 - `src/pages/POSPage.jsx` — punto de venta
 - `src/shared.jsx` — Ico (SVG icons), Modal, componentes UI compartidos
 - `TABLAS.md` — descripción de todas las tablas de la DB
-- `AUDITORIA.md` — queries periódicas de control de integridad
-- `CAMBIOS_2026-05-20.md` — registro de cambios del 2026-05-20 con instrucciones de reversión
+- `docs/AUDITORIA.md` — queries periódicas de control de integridad
+- `docs/reportes/CAMBIOS_2026-05-20.md` — registro de cambios del 2026-05-20 con instrucciones de reversión
 
 ## Roles de usuario
 - `admin`: emails que empiezan con "admin@..."
@@ -32,14 +32,14 @@
 - `customers.balance` en DB está desincronizado — NO se usa para display, solo `custBal()`.
 
 ## Auditoría semanal
-- Archivo: `AUDITORIA.md`
+- Archivo: `docs/AUDITORIA.md`
 - Query 1: créditos sin consumo (resultado esperado: 0 filas)
 - Query 2: balance guardado vs real
 - Query 3: ventas en cuenta sin cargo en account_payments
-- Registrar resultados en la tabla "Historial de ejecuciones" de AUDITORIA.md
+- Registrar resultados en la tabla "Historial de ejecuciones" de docs/AUDITORIA.md
 
 ## Cambios 2026-05-20
 1. Backup admin en Configuración → Settings → Backup
 2. Fix double counting en computeAllocations (filtro !p.saleId)
 3. Fix consumo de crédito en registerPayment (agrega charge "Crédito consumido")
-4. Migración SQL pendiente: 3 INSERTs en account_payments (ver CAMBIOS_2026-05-20.md)
+4. Migración SQL pendiente: 3 INSERTs en account_payments (ver docs/reportes/CAMBIOS_2026-05-20.md)

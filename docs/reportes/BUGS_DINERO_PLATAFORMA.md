@@ -12,13 +12,13 @@ Alcance:
 
 | Módulo | Archivos clave |
 |--------|----------------|
-| POS (mostrador) | [src/pages/POSPage.jsx](src/pages/POSPage.jsx) |
-| Kanban de pedidos | [src/pages/OrdersKanbanPage.jsx](src/pages/OrdersKanbanPage.jsx) |
-| Caja / Turnos | [src/pages/CashShiftPage.jsx](src/pages/CashShiftPage.jsx) |
-| Reportes | [src/pages/ReportsPage.jsx](src/pages/ReportsPage.jsx) |
-| Cuenta corriente clientes | [src/pages/CustomersPage.jsx](src/pages/CustomersPage.jsx) |
-| Cuenta corriente proveedores | [src/pages/SuppliersPage.jsx](src/pages/SuppliersPage.jsx), [src/pages/ExpensesPage.jsx](src/pages/ExpensesPage.jsx) |
-| Mapeo / persistencia | [src/supabase.js](src/supabase.js) |
+| POS (mostrador) | [src/pages/POSPage.jsx](../../src/pages/POSPage.jsx) |
+| Kanban de pedidos | [src/pages/OrdersKanbanPage.jsx](../../src/pages/OrdersKanbanPage.jsx) |
+| Caja / Turnos | [src/pages/CashShiftPage.jsx](../../src/pages/CashShiftPage.jsx) |
+| Reportes | [src/pages/ReportsPage.jsx](../../src/pages/ReportsPage.jsx) |
+| Cuenta corriente clientes | [src/pages/CustomersPage.jsx](../../src/pages/CustomersPage.jsx) |
+| Cuenta corriente proveedores | [src/pages/SuppliersPage.jsx](../../src/pages/SuppliersPage.jsx), [src/pages/ExpensesPage.jsx](../../src/pages/ExpensesPage.jsx) |
+| Mapeo / persistencia | [src/supabase.js](../../src/supabase.js) |
 
 Leyenda de severidad:
 
@@ -65,7 +65,7 @@ Leyenda de severidad:
 
 ## 1.1 🔴 Venta y descuento de stock sin atomicidad
 
-**Evidencia:** [src/pages/POSPage.jsx:193-201](src/pages/POSPage.jsx:193). El propio comentario admite el problema:
+**Evidencia:** [src/pages/POSPage.jsx:193-201](../../src/pages/POSPage.jsx:193). El propio comentario admite el problema:
 
 ```js
 // Insertar la venta primero: si falla el stock, el pedido queda registrado y se puede corregir manualmente.
@@ -86,7 +86,7 @@ if (stockErr) {
 
 ## 1.2 🔴 Cobro `account` con `selectedCustomer = null`
 
-**Evidencia:** [src/pages/POSPage.jsx:207](src/pages/POSPage.jsx:207). La condición:
+**Evidencia:** [src/pages/POSPage.jsx:207](../../src/pages/POSPage.jsx:207). La condición:
 
 ```js
 if (status === "closed" && payMethod === "account" && selectedCustomer) {
@@ -104,7 +104,7 @@ ALTER TABLE sales
 
 ## 1.3 🟠 Descuento % sin techo + precio editado sin auditoría
 
-**Evidencia:** [src/pages/POSPage.jsx:127-138](src/pages/POSPage.jsx:127):
+**Evidencia:** [src/pages/POSPage.jsx:127-138](../../src/pages/POSPage.jsx:127):
 
 ```js
 const overridePrice = (productId, newPrice) => {
@@ -130,13 +130,13 @@ const discountAmt = discountType==="pct"
 
 ## 1.4 🟠 `crypto.randomUUID()` mezclado con `uid()`
 
-**Evidencia:** [src/pages/POSPage.jsx:162](src/pages/POSPage.jsx:162) usa `uid()` para `sale.id` y [POSPage.jsx:210](src/pages/POSPage.jsx:210) usa `crypto.randomUUID()` para `account_payments.id`. La inconsistencia complica búsquedas y joins por id, y `uid()` puede no ser UUID-compatible.
+**Evidencia:** [src/pages/POSPage.jsx:162](../../src/pages/POSPage.jsx:162) usa `uid()` para `sale.id` y [POSPage.jsx:210](../../src/pages/POSPage.jsx:210) usa `crypto.randomUUID()` para `account_payments.id`. La inconsistencia complica búsquedas y joins por id, y `uid()` puede no ser UUID-compatible.
 
 **Solución:** una única función `newId()` que delegue siempre a `crypto.randomUUID()`. Tipo `uuid` en todas las PK.
 
 ## 1.5 🟡 Multi-step de cobro `account` sin transacción
 
-**Evidencia:** [src/pages/POSPage.jsx:207-241](src/pages/POSPage.jsx:207). Cuatro INSERTs separados (sale, charge, credit payment, credit consumption) sin tx. Si cualquiera falla en el medio:
+**Evidencia:** [src/pages/POSPage.jsx:207-241](../../src/pages/POSPage.jsx:207). Cuatro INSERTs separados (sale, charge, credit payment, credit consumption) sin tx. Si cualquiera falla en el medio:
 
 - La sale ya está `closed`.
 - El charge puede no existir → cliente sin deuda registrada.
@@ -150,7 +150,7 @@ const discountAmt = discountType==="pct"
 
 ## 2.1 🔴 Cancelar pedido NO reembolsa stock
 
-**Evidencia:** [src/pages/OrdersKanbanPage.jsx:249-256](src/pages/OrdersKanbanPage.jsx:249):
+**Evidencia:** [src/pages/OrdersKanbanPage.jsx:249-256](../../src/pages/OrdersKanbanPage.jsx:249):
 
 ```js
 const cancelOrder = async (sale) => {
@@ -173,7 +173,7 @@ const cancelOrder = async (sale) => {
 
 ## 2.2 🔴 Stock descontado ANTES de insertar la sale
 
-**Evidencia:** [src/pages/OrdersKanbanPage.jsx:339-369](src/pages/OrdersKanbanPage.jsx:339):
+**Evidencia:** [src/pages/OrdersKanbanPage.jsx:339-369](../../src/pages/OrdersKanbanPage.jsx:339):
 
 ```js
 if (stockDeltas.length > 0) {
@@ -192,7 +192,7 @@ if (error) throw error;
 
 ## 2.3 🔴 Cobrar un pedido ya cobrado — sin guard server-side
 
-**Evidencia:** [src/pages/OrdersKanbanPage.jsx:185-246](src/pages/OrdersKanbanPage.jsx:185). `closeOrder` actualiza `sales.status='closed'` y `payment_method`. No verifica si la sale ya estaba `closed`. Si el cliente abre detalle desde dos dispositivos y presiona "Cobrar" en ambos:
+**Evidencia:** [src/pages/OrdersKanbanPage.jsx:185-246](../../src/pages/OrdersKanbanPage.jsx:185). `closeOrder` actualiza `sales.status='closed'` y `payment_method`. No verifica si la sale ya estaba `closed`. Si el cliente abre detalle desde dos dispositivos y presiona "Cobrar" en ambos:
 
 - Webhook MP llega entretanto (con `status='ready'`) y deja la sale en `paid`.
 - Cajero abre el modal viendo `ready`, presiona "Cobrar" en cash, queda `closed` con `paymentMethod='cash'`.
@@ -204,7 +204,7 @@ if (error) throw error;
 
 ## 2.4 🟠 Drag & drop sin máquina de estados
 
-**Evidencia:** [src/pages/OrdersKanbanPage.jsx:141-154](src/pages/OrdersKanbanPage.jsx:141):
+**Evidencia:** [src/pages/OrdersKanbanPage.jsx:141-154](../../src/pages/OrdersKanbanPage.jsx:141):
 
 ```js
 const handleDrop = async (e, newStatus) => {
@@ -229,7 +229,7 @@ Esto permite arrastrar de `ready` a `open` (retroceder), o saltar `open → read
 
 ## 3.1 🔴 Ventas MP (`status='ready'`) no entran al turno
 
-**Evidencia:** [src/pages/CashShiftPage.jsx:33-38](src/pages/CashShiftPage.jsx:33):
+**Evidencia:** [src/pages/CashShiftPage.jsx:33-38](../../src/pages/CashShiftPage.jsx:33):
 
 ```js
 const shiftSales = openShift
@@ -248,7 +248,7 @@ Las ventas online quedan en `status='ready'` (ver `mp-webhook/index.ts:84-90`). 
 
 ## 3.2 🔴 Filtrado por `createdAt` vs `date` en gastos
 
-**Evidencia:** [src/pages/CashShiftPage.jsx:53-58](src/pages/CashShiftPage.jsx:53):
+**Evidencia:** [src/pages/CashShiftPage.jsx:53-58](../../src/pages/CashShiftPage.jsx:53):
 
 ```js
 const shiftExpenses = openShift
@@ -256,7 +256,7 @@ const shiftExpenses = openShift
   : [];
 ```
 
-Pero Reports usa `expense.date >= from && expense.date <= to` ([ReportsPage.jsx:250](src/pages/ReportsPage.jsx:250)). Para el mismo gasto:
+Pero Reports usa `expense.date >= from && expense.date <= to` ([ReportsPage.jsx:250](../../src/pages/ReportsPage.jsx:250)). Para el mismo gasto:
 
 - Si lo cargás hoy con `date='ayer'`, **aparece en el turno de hoy** (createdAt=hoy).
 - Pero en Reports del día de ayer también aparece (`date=ayer`).
@@ -285,7 +285,7 @@ Con eso, el segundo INSERT falla y el segundo usuario ve el turno del primero.
 
 ## 3.4 🟠 Cierre de turno mezcla ventas y cobros CC en `sales_cash`
 
-**Evidencia:** [src/pages/CashShiftPage.jsx:98](src/pages/CashShiftPage.jsx:98):
+**Evidencia:** [src/pages/CashShiftPage.jsx:98](../../src/pages/CashShiftPage.jsx:98):
 
 ```js
 salesCash: sCash + apCash,        // ventas efectivo + cobros CC efectivo, sin desglose
@@ -300,13 +300,13 @@ salesAccount: sAccount,
 
 ## 3.5 🟠 No hay columna para MercadoPago en `cash_shifts`
 
-**Evidencia:** [src/supabase.js:227-243](src/supabase.js:227). El mapeo `dbToCashShift/cashShiftToDb` solo conoce `sales_cash/transfer/card/account`. MP queda sin lugar.
+**Evidencia:** [src/supabase.js:227-243](../../src/supabase.js:227). El mapeo `dbToCashShift/cashShiftToDb` solo conoce `sales_cash/transfer/card/account`. MP queda sin lugar.
 
 **Solución:** agregar `sales_mp` y `expenses_transfer`, `expenses_mp` (si pagás algo con MP business).
 
 ## 3.6 🟡 Egresos por transferencia no se restan de "Digital" en el panel
 
-**Evidencia:** [src/pages/CashShiftPage.jsx:207-212](src/pages/CashShiftPage.jsx:207) muestra `− Egresos por transferencia` pero **no se suman en `expectedCash` ni en columnas del cierre**, solo se visualizan. El balance bancario real no se persiste.
+**Evidencia:** [src/pages/CashShiftPage.jsx:207-212](../../src/pages/CashShiftPage.jsx:207) muestra `− Egresos por transferencia` pero **no se suman en `expectedCash` ni en columnas del cierre**, solo se visualizan. El balance bancario real no se persiste.
 
 **Solución:** incluir `eTransfer` en una métrica `digital_balance` y persistirla en `cash_shifts`.
 
@@ -316,7 +316,7 @@ salesAccount: sAccount,
 
 ## 4.1 🔴 Multi-step en `registerPayment` sin transacción
 
-**Evidencia:** [src/pages/CustomersPage.jsx:177-280](src/pages/CustomersPage.jsx:177). El flujo realiza hasta 6 INSERTs encadenados (payment, charge consumo crédito, payment a deuda inicial, payment a pedidos efectivo, charge "deuda apertura", excedente). Cada uno con su propio `if (error)`.
+**Evidencia:** [src/pages/CustomersPage.jsx:177-280](../../src/pages/CustomersPage.jsx:177). El flujo realiza hasta 6 INSERTs encadenados (payment, charge consumo crédito, payment a deuda inicial, payment a pedidos efectivo, charge "deuda apertura", excedente). Cada uno con su propio `if (error)`.
 
 **Impacto:** si el 4to falla, los 3 anteriores ya están persistidos. El saldo del cliente queda en un estado imposible: por ejemplo, pago aplicado pero crédito no consumido (cliente recibe doble beneficio).
 
@@ -324,7 +324,7 @@ salesAccount: sAccount,
 
 ## 4.2 🔴 Eliminar cliente deja `sales` huérfanas
 
-**Evidencia:** [src/pages/CustomersPage.jsx:156-174](src/pages/CustomersPage.jsx:156):
+**Evidencia:** [src/pages/CustomersPage.jsx:156-174](../../src/pages/CustomersPage.jsx:156):
 
 ```js
 const del = async (id) => {
@@ -343,7 +343,7 @@ Las `sales` con `customer_id = id` quedan con FK rota (si la FK existe con ON DE
 
 ## 4.3 🟠 `customer.balance` mezclado con `account_payments`
 
-**Evidencia:** [src/pages/ReportsPage.jsx:113-118](src/pages/ReportsPage.jsx:113):
+**Evidencia:** [src/pages/ReportsPage.jsx:113-118](../../src/pages/ReportsPage.jsx:113):
 
 ```js
 const outstandingDebt = (customers || []).reduce((sum, c) => {
@@ -354,7 +354,7 @@ const outstandingDebt = (customers || []).reduce((sum, c) => {
 }, 0);
 ```
 
-Mientras tanto [src/pages/POSPage.jsx:19-21](src/pages/POSPage.jsx:19) calcula:
+Mientras tanto [src/pages/POSPage.jsx:19-21](../../src/pages/POSPage.jsx:19) calcula:
 
 ```js
 const custBal = (id) =>
@@ -371,7 +371,7 @@ const custBal = (id) =>
 
 ## 4.4 🟠 `paymentMethod = 'balance'` para crédito interno mezclado con métodos reales
 
-**Evidencia:** `account_payments.payment_method = 'balance'` se usa para movimientos internos de crédito (sin dinero real). [src/pages/ReportsPage.jsx:104-107](src/pages/ReportsPage.jsx:104) lo excluye correctamente para ingresos:
+**Evidencia:** `account_payments.payment_method = 'balance'` se usa para movimientos internos de crédito (sin dinero real). [src/pages/ReportsPage.jsx:104-107](../../src/pages/ReportsPage.jsx:104) lo excluye correctamente para ingresos:
 
 ```js
 const pAccountPayments = (accountPayments || []).filter(p =>
@@ -379,7 +379,7 @@ const pAccountPayments = (accountPayments || []).filter(p =>
 );
 ```
 
-Pero **CashShiftPage no aplica el mismo filtro** ([CashShiftPage.jsx:46](src/pages/CashShiftPage.jsx:46)):
+Pero **CashShiftPage no aplica el mismo filtro** ([CashShiftPage.jsx:46](../../src/pages/CashShiftPage.jsx:46)):
 
 ```js
 const shiftAccPayments = (accountPayments || []).filter(p => p.type === "payment" && p.createdAt && new Date(p.createdAt) >= shiftStart);
@@ -401,7 +401,7 @@ const shiftAccPayments = (accountPayments || []).filter(p => p.type === "payment
 
 ## 5.1 🔴 Eliminar gasto borra `supplier_payments` retroactivamente
 
-**Evidencia:** [src/pages/ExpensesPage.jsx:328-340](src/pages/ExpensesPage.jsx:328):
+**Evidencia:** [src/pages/ExpensesPage.jsx:328-340](../../src/pages/ExpensesPage.jsx:328):
 
 ```js
 const del = async (id) => {
@@ -420,7 +420,7 @@ const del = async (id) => {
 
 ## 5.2 🟠 `paymentMethod` del payment usa `todayStr()` perdiendo la fecha real del pago
 
-**Evidencia:** [src/pages/ExpensesPage.jsx:214](src/pages/ExpensesPage.jsx:214) y [ExpensesPage.jsx:308](src/pages/ExpensesPage.jsx:308):
+**Evidencia:** [src/pages/ExpensesPage.jsx:214](../../src/pages/ExpensesPage.jsx:214) y [ExpensesPage.jsx:308](../../src/pages/ExpensesPage.jsx:308):
 
 ```js
 const payment = { ..., date: todayStr(), notes: "Pago de gasto" };
@@ -432,7 +432,7 @@ Si pagás un gasto retroactivamente (vino factura de octubre, la cargás en novi
 
 ## 5.3 🟠 Eliminar proveedor sin tx
 
-**Evidencia:** [src/pages/SuppliersPage.jsx:63-80](src/pages/SuppliersPage.jsx:63). Tres operaciones secuenciales:
+**Evidencia:** [src/pages/SuppliersPage.jsx:63-80](../../src/pages/SuppliersPage.jsx:63). Tres operaciones secuenciales:
 1. `delete from supplier_payments`
 2. `update expenses set supplier=null`
 3. `delete from suppliers`
@@ -443,7 +443,7 @@ Si la 2 falla, el proveedor sigue existiendo pero sus movimientos no.
 
 ## 5.4 🟡 Gastos de `Ingredientes` con IVA — cálculo en cliente
 
-**Evidencia:** [src/pages/ExpensesPage.jsx:190-194](src/pages/ExpensesPage.jsx:190). `unitPrice` se calcula en el cliente y se guarda. Si el `vatRate` global cambia mañana, los gastos viejos no se recalculan, pero los nuevos sí. Inconsistencia para reportes históricos.
+**Evidencia:** [src/pages/ExpensesPage.jsx:190-194](../../src/pages/ExpensesPage.jsx:190). `unitPrice` se calcula en el cliente y se guarda. Si el `vatRate` global cambia mañana, los gastos viejos no se recalculan, pero los nuevos sí. Inconsistencia para reportes históricos.
 
 **Solución:** guardar `vat_rate_at_save` como parte del expense. Mostrarlo en los reportes.
 
@@ -453,7 +453,7 @@ Si la 2 falla, el proveedor sigue existiendo pero sus movimientos no.
 
 ## 6.1 🔴 `closedSales` excluye `'paid'` y `'ready'`
 
-**Evidencia:** [src/pages/ReportsPage.jsx:95](src/pages/ReportsPage.jsx:95):
+**Evidencia:** [src/pages/ReportsPage.jsx:95](../../src/pages/ReportsPage.jsx:95):
 
 ```js
 const closedSales = pSales.filter(s => s.status === "closed" || s.status === "delivered");
@@ -469,7 +469,7 @@ Probablemente OK, pero combinado con §6.1, los ingresos por MP no se computan.
 
 ## 6.3 🟠 Mezcla `expense.date` (string) con `Date()`
 
-**Evidencia:** [src/pages/ReportsPage.jsx:296-299](src/pages/ReportsPage.jsx:296). Comparaciones de fechas via `e.date >= from && e.date <= to` donde `from/to` son strings ISO. Funciona porque ISO es ordenable lexicográficamente, **pero** si `e.date` viniera como `null`, el filtro silenciosamente lo deja afuera (o lo incluye según ordenamiento). Sin coverage de tests.
+**Evidencia:** [src/pages/ReportsPage.jsx:296-299](../../src/pages/ReportsPage.jsx:296). Comparaciones de fechas via `e.date >= from && e.date <= to` donde `from/to` son strings ISO. Funciona porque ISO es ordenable lexicográficamente, **pero** si `e.date` viniera como `null`, el filtro silenciosamente lo deja afuera (o lo incluye según ordenamiento). Sin coverage de tests.
 
 **Solución:** normalizar todos los `date` como `DATE` SQL no nulo. CHECK constraint.
 

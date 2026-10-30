@@ -7,7 +7,7 @@
  * Props: sales, products, cashShifts, setPage
  */
 import { useState, useMemo } from "react";
-import { $, fmtDT, fmtTime, PAY_LABELS, Ico } from "../shared.jsx";
+import { $, fmtDT, fmtTime, PAY_LABELS } from "../shared.jsx";
 import { dayKey, todayKey } from "../utils/dates.js";
 import { supabase } from "../supabase.js";
 

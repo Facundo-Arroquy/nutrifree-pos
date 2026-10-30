@@ -2,67 +2,13 @@
  * shared.jsx — Módulo compartido de la aplicación
  *
  * Exporta:
- *  - Datos seed de fallback (SEED_*)
  *  - Utilidades de formato: $, fmtDate, fmtTime, fmtDT, todayStr, uid, clamp
  *  - Constantes de UI: STATUS_LABELS/COLORS, PAY_LABELS, PAY_ORDER_LABELS
  *  - Estilos globales: CSS (string inyectado con <style>)
  *  - Componentes base: Ico, Modal, Toast, LoginPage
- *  - Lista de usuarios del sistema: USERS
  */
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "./supabase.js";
-
-// ─── SEED DATA ────────────────────────────────────────────────────────────────
-// Datos de fallback usados solo si la DB está vacía (no se insertan automáticamente)
-const SEED_CATEGORIES = ["Viandas", "Panadería", "Postres", "Bebidas", "Otros"];
-
-const SEED_PRODUCTS = [
-  { id:"p1", name:"Milanesa con puré", category:"Viandas", priceRetail:1800, priceWholesale:1500, unit:"unit", stock:12, active:true, photo:null, description:"Milanesa de ternera con puré de papa" },
-  { id:"p2", name:"Pollo al horno con verduras", category:"Viandas", priceRetail:1600, priceWholesale:1350, unit:"unit", stock:8, active:true, photo:null, description:"Cuarto de pollo con ensalada de estación" },
-  { id:"p3", name:"Tarta de verduras", category:"Viandas", priceRetail:1200, priceWholesale:1000, unit:"unit", stock:6, active:true, photo:null, description:"Tarta casera de acelga y ricota" },
-  { id:"p4", name:"Brownie de chocolate", category:"Panadería", priceRetail:600, priceWholesale:500, unit:"unit", stock:20, active:true, photo:null, description:"Brownie húmedo sin TACC" },
-  { id:"p5", name:"Pan de molde", category:"Panadería", priceRetail:900, priceWholesale:750, unit:"unit", stock:15, active:true, photo:null, description:"Pan de molde sin gluten, 400g" },
-  { id:"p6", name:"Budín de limón", category:"Postres", priceRetail:1100, priceWholesale:900, unit:"unit", stock:10, active:true, photo:null, description:"Budín esponjoso con glaseado de limón" },
-  { id:"p7", name:"Flan casero", category:"Postres", priceRetail:700, priceWholesale:600, unit:"unit", stock:5, active:true, photo:null, description:"Flan de vainilla con caramelo" },
-  { id:"p8", name:"Agua saborizada", category:"Bebidas", priceRetail:400, priceWholesale:350, unit:"unit", stock:30, active:true, photo:null, description:"Botella 500ml" },
-];
-
-const SEED_CUSTOMERS = [
-  { id:"c1", name:"María González", phone:"11-1234-5678", address:"Av. Corrientes 1234", notes:"Sin gluten estricto", priceList:"retail", balance:0 },
-  { id:"c2", name:"Carlos Fernández", phone:"11-9876-5432", address:"", notes:"Mayorista", priceList:"wholesale", balance:500 },
-  { id:"c3", name:"Restaurante El Rincón", phone:"11-5555-0000", address:"Av. San Martín 456", notes:"Pedido fijo lunes y jueves", priceList:"wholesale", balance:-1200 },
-];
-
-const SEED_RECIPES = [
-  {
-    id:"r1", productId:"p1", prepTime:20, cookTime:15, yield:1, notes:"Usar papa tipo Spunta para mejor textura.",
-    ingredients:[
-      { name:"Ternera (nalga)", qty:200, unit:"g", cost:800 },
-      { name:"Pan rallado sin TACC", qty:50, unit:"g", cost:120 },
-      { name:"Huevo", qty:1, unit:"unidad", cost:80 },
-      { name:"Papa", qty:300, unit:"g", cost:150 },
-      { name:"Manteca", qty:20, unit:"g", cost:60 },
-    ],
-    steps:["Golpear la carne hasta 1cm de espesor.","Pasar por huevo batido y pan rallado.","Freír a fuego medio 3 min por lado.","Hervir papa, pisarla con manteca y sal."]
-  },
-  {
-    id:"r2", productId:"p4", prepTime:15, cookTime:25, yield:12, notes:"Mezclar lo justo — no batir de más.",
-    ingredients:[
-      { name:"Chocolate negro", qty:200, unit:"g", cost:600 },
-      { name:"Manteca", qty:150, unit:"g", cost:350 },
-      { name:"Azúcar", qty:200, unit:"g", cost:200 },
-      { name:"Huevo", qty:3, unit:"unidades", cost:240 },
-      { name:"Harina de arroz", qty:80, unit:"g", cost:180 },
-    ],
-    steps:["Derretir chocolate con manteca a baño María.","Incorporar azúcar y huevos.","Agregar harina tamizada.","Volcar en molde enmantecado.","Hornear 25 min a 170°C."]
-  },
-];
-
-const SEED_SALES = [
-  { id:"s1", customerId:"c1", customerName:"María González", items:[{productId:"p1",name:"Milanesa con puré",qty:2,price:1800,subtotal:3600},{productId:"p4",name:"Brownie de chocolate",qty:3,price:600,subtotal:1800}], total:5400, priceList:"retail", paymentMethod:"transfer", status:"closed", notes:"", createdAt: new Date(Date.now()-3600000*2).toISOString() },
-  { id:"s2", customerId:null, customerName:"Anónimo", items:[{productId:"p5",name:"Pan de molde",qty:1,price:900,subtotal:900}], total:900, priceList:"retail", paymentMethod:"cash", status:"closed", notes:"", createdAt: new Date(Date.now()-3600000*4).toISOString() },
-  { id:"s3", customerId:"c3", customerName:"Restaurante El Rincón", items:[{productId:"p2",name:"Pollo al horno",qty:6,price:1350,subtotal:8100},{productId:"p3",name:"Tarta de verduras",qty:4,price:1000,subtotal:4000}], total:12100, priceList:"wholesale", paymentMethod:"account", status:"open", notes:"Entregar jueves 12hs", createdAt: new Date(Date.now()-3600000*1).toISOString() },
-];
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
 /** Genera un ID corto aleatorio (7 caracteres base-36). */
@@ -290,10 +236,6 @@ tbody tr:hover td{background:var(--s1)}
 .toast.info{background:var(--blue)}
 @keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 
-/* DEMO BANNER */
-.demo-banner{background:linear-gradient(90deg,#d97706,#f59e0b);color:white;text-align:center;padding:8px 16px;font-size:.78em;font-weight:600;letter-spacing:.03em;display:flex;align-items:center;justify-content:center;gap:10px;flex-shrink:0}
-.demo-banner-btn{background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.4);color:white;border-radius:6px;padding:3px 10px;font-size:.82em;font-weight:600;cursor:pointer;transition:background .13s}
-.demo-banner-btn:hover{background:rgba(255,255,255,.35)}
 
 /* KANBAN */
 .kanban-board-wrap{width:100%}
@@ -444,7 +386,7 @@ function Modal({ title, onClose, children, lg=false }) {
 }
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
-function LoginPage({ onLogin }) {
+function LoginPage() {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -461,10 +403,6 @@ function LoginPage({ onLogin }) {
       setTimeout(() => setErr(""), 3000);
     }
     // Al iniciar sesión exitosamente, onAuthStateChange en App.jsx maneja el resto
-  };
-
-  const demoLogin = () => {
-    onLogin({ name: "Usuario Demo", role: "admin", isDemo: true });
   };
 
   return (
@@ -492,12 +430,6 @@ function LoginPage({ onLogin }) {
         <button className="btn btn-primary btn-lg btn-block" onClick={login} disabled={loading}>
           {loading ? "Ingresando..." : "Ingresar"}
         </button>
-        <button className="btn btn-ghost btn-block" style={{ marginTop:10, fontSize:".82em" }} onClick={demoLogin}>
-          🧪 Modo demo (sin cuenta)
-        </button>
-        <div style={{ textAlign:"center", fontSize:".72em", color:"var(--t4)", marginTop:6 }}>
-          💻 Demo solo disponible desde PC
-        </div>
       </div>
     </div>
   );
@@ -548,4 +480,4 @@ function exportXlsx(headers, rows, filename) {
   XLSX.writeFile(wb, filename + ".xlsx");
 }
 
-export { CSS, Ico, Toast, Modal, LoginPage, uid, $, fmtDate, fmtTime, fmtDT, todayStr, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, PAY_ORDER_LABELS, SEED_PRODUCTS, SEED_CUSTOMERS, SEED_RECIPES, SEED_SALES, SEED_CATEGORIES, useSortable, SortableTh, exportXlsx };
+export { CSS, Ico, Toast, Modal, LoginPage, uid, $, fmtDate, fmtTime, fmtDT, todayStr, STATUS_LABELS, STATUS_COLORS, PAY_LABELS, PAY_ORDER_LABELS, useSortable, SortableTh, exportXlsx };

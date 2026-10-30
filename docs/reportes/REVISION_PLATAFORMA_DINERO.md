@@ -15,15 +15,15 @@ Módulos auditados en esta revisión:
 
 | Módulo | Archivos clave |
 |--------|----------------|
-| Productos / Pricing | [src/pages/ProductsPage.jsx](src/pages/ProductsPage.jsx), [src/pages/IngredientsPage.jsx](src/pages/IngredientsPage.jsx) |
-| Recetas / Costeo | [src/pages/RecipesPage.jsx](src/pages/RecipesPage.jsx) |
-| Producción / Stock | [src/pages/ProductionPage.jsx](src/pages/ProductionPage.jsx), [src/pages/ProductionLogPage.jsx](src/pages/ProductionLogPage.jsx) |
-| Banco de horas | [src/pages/HoursBankPage.jsx](src/pages/HoursBankPage.jsx) |
-| Facturación | [src/pages/BillingPage.jsx](src/pages/BillingPage.jsx) |
-| Settings (parámetros financieros) | [src/pages/SettingsPage.jsx](src/pages/SettingsPage.jsx) |
-| Importación masiva | [src/pages/ImportPage.jsx](src/pages/ImportPage.jsx) |
-| Menú mayorista | [src/pages/WholesaleMenuPage.jsx](src/pages/WholesaleMenuPage.jsx) |
-| Email / Storage / RLS | [src/utils/emailAlerts.js](src/utils/emailAlerts.js), [src/App.jsx](src/App.jsx) |
+| Productos / Pricing | [src/pages/ProductsPage.jsx](../../src/pages/ProductsPage.jsx), [src/pages/IngredientsPage.jsx](../../src/pages/IngredientsPage.jsx) |
+| Recetas / Costeo | [src/pages/RecipesPage.jsx](../../src/pages/RecipesPage.jsx) |
+| Producción / Stock | [src/pages/ProductionPage.jsx](../../src/pages/ProductionPage.jsx), [src/pages/ProductionLogPage.jsx](../../src/pages/ProductionLogPage.jsx) |
+| Banco de horas | [src/pages/HoursBankPage.jsx](../../src/pages/HoursBankPage.jsx) |
+| Facturación | [src/pages/BillingPage.jsx](../../src/pages/BillingPage.jsx) |
+| Settings (parámetros financieros) | [src/pages/SettingsPage.jsx](../../src/pages/SettingsPage.jsx) |
+| Importación masiva | [src/pages/ImportPage.jsx](../../src/pages/ImportPage.jsx) |
+| Menú mayorista | [src/pages/WholesaleMenuPage.jsx](../../src/pages/WholesaleMenuPage.jsx) |
+| Email / Storage / RLS | [src/utils/emailAlerts.js](../../src/utils/emailAlerts.js), [src/App.jsx](../../src/App.jsx) |
 
 Leyenda de severidad (igual que docs anteriores):
 🔴 CRÍTICO · 🟠 ALTO · 🟡 MEDIO · 🔵 BAJO
@@ -61,7 +61,7 @@ Leyenda de severidad (igual que docs anteriores):
 
 ## 1.1 🔴 Precios se editan desde el frontend con `anon` key
 
-**Evidencia:** [src/pages/ProductsPage.jsx:80-86](src/pages/ProductsPage.jsx:80):
+**Evidencia:** [src/pages/ProductsPage.jsx:80-86](../../src/pages/ProductsPage.jsx:80):
 
 ```js
 const { error } = await supabase.from("products").insert(productToDb(newProduct));
@@ -88,7 +88,7 @@ y poner los productos a $1. Combinado con el bug §13 (`WholesaleMenuPage`), un 
 
 ## 1.2 🟠 Cambiar `unit_cost` de un ingrediente NO recosta recetas históricas
 
-**Evidencia:** [src/pages/IngredientsPage.jsx:206-208](src/pages/IngredientsPage.jsx:206):
+**Evidencia:** [src/pages/IngredientsPage.jsx:206-208](../../src/pages/IngredientsPage.jsx:206):
 
 ```js
 const { error } = await supabase.from("ingredients").update({ unit_cost: val }).eq("id", id);
@@ -111,7 +111,7 @@ Las `recipe_ingredients.cost` viejas no se tocan (excepto en el flujo de cambio 
 
 ## 1.3 🟠 Eliminar producto con ventas históricas rompe Reports
 
-**Evidencia:** [src/pages/ProductsPage.jsx:109](src/pages/ProductsPage.jsx:109):
+**Evidencia:** [src/pages/ProductsPage.jsx:109](../../src/pages/ProductsPage.jsx:109):
 
 ```js
 const { error } = await supabase.from("products").delete().eq("id", id);
@@ -129,7 +129,7 @@ Resultado: en Reports aparece el UUID como nombre. El top de productos rentables
 
 ## 1.4 🟡 `kitItems` no valida que la suma de componentes coincida con `priceRetail`
 
-**Evidencia:** los kits arman su precio manualmente; si un componente sube de precio, el kit no. El POS calcula stock máximo del kit con `getKitMaxStock` ([POSPage.jsx:53-62](src/pages/POSPage.jsx:53)), pero **no** revalida que el precio del kit sea coherente con la suma de componentes.
+**Evidencia:** los kits arman su precio manualmente; si un componente sube de precio, el kit no. El POS calcula stock máximo del kit con `getKitMaxStock` ([POSPage.jsx:53-62](../../src/pages/POSPage.jsx:53)), pero **no** revalida que el precio del kit sea coherente con la suma de componentes.
 
 **Por qué importa:** un kit configurado a $1.000 con ingredientes que ahora cuestan $1.500 se vende perdiendo plata, y nadie lo nota.
 
@@ -137,7 +137,7 @@ Resultado: en Reports aparece el UUID como nombre. El top de productos rentables
 
 ## 1.5 🟡 Productos con `priceRetail=0` permiten override en POS
 
-**Evidencia:** [POSPage.jsx:86](src/pages/POSPage.jsx:86): `const price = priceList==="retail" ? prod.priceRetail : prod.priceWholesale;` → 0. Luego el cajero puede `overridePrice` y cobrar lo que quiera. Combinado con bug §1.3 del [BUGS_DINERO_PLATAFORMA.md](BUGS_DINERO_PLATAFORMA.md), no hay auditoría.
+**Evidencia:** [POSPage.jsx:86](../../src/pages/POSPage.jsx:86): `const price = priceList==="retail" ? prod.priceRetail : prod.priceWholesale;` → 0. Luego el cajero puede `overridePrice` y cobrar lo que quiera. Combinado con bug §1.3 del [BUGS_DINERO_PLATAFORMA.md](BUGS_DINERO_PLATAFORMA.md), no hay auditoría.
 
 **Solución:** marcar productos con precio 0 como "no vendibles" en POS. Forzar a cargar precio en `ProductsPage` antes de habilitarlos.
 
@@ -147,7 +147,7 @@ Resultado: en Reports aparece el UUID como nombre. El top de productos rentables
 
 ## 2.1 🟠 Producción no contabiliza costo de mano de obra
 
-**Evidencia:** [src/pages/ProductionPage.jsx:39-46](src/pages/ProductionPage.jsx:39) llama a `apply_production`. La RPC suma stock y descuenta ingredientes, pero las horas de mano de obra **solo se acumulan en `employee_hours`** ([HoursBankPage.jsx:24-32](src/pages/HoursBankPage.jsx:24)) — sin tarifa.
+**Evidencia:** [src/pages/ProductionPage.jsx:39-46](../../src/pages/ProductionPage.jsx:39) llama a `apply_production`. La RPC suma stock y descuenta ingredientes, pero las horas de mano de obra **solo se acumulan en `employee_hours`** ([HoursBankPage.jsx:24-32](../../src/pages/HoursBankPage.jsx:24)) — sin tarifa.
 
 Resultado: `Reports.profit` se calcula como `precio - costo_ingredientes`. La mano de obra (sueldos, banco de horas pagado) **no entra en el costo unitario**. La "rentabilidad" reportada es bruta, no neta.
 
@@ -162,7 +162,7 @@ Resultado: `Reports.profit` se calcula como `precio - costo_ingredientes`. La ma
 
 ## 2.2 🟠 Descuento de horas en `HoursBankPage` puede dar negativo
 
-**Evidencia:** [HoursBankPage.jsx:59-72](src/pages/HoursBankPage.jsx:59) llama `accumulate_employee_hours` con `-pe.hours`. Si el admin descuenta dos veces el mismo registro (modal recargado, click duplicado), el banco queda en negativo.
+**Evidencia:** [HoursBankPage.jsx:59-72](../../src/pages/HoursBankPage.jsx:59) llama `accumulate_employee_hours` con `-pe.hours`. Si el admin descuenta dos veces el mismo registro (modal recargado, click duplicado), el banco queda en negativo.
 
 **Por qué importa:** el banco de horas suele alimentar liquidación de sueldos. Negativos rompen la lógica de "horas a pagar".
 
@@ -174,7 +174,7 @@ Resultado: `Reports.profit` se calcula como `precio - costo_ingredientes`. La ma
 
 ## 2.3 🟡 Producción sin receta no registra costo nulo en `stock_movements`
 
-**Evidencia:** [ProductionPage.jsx:35-37](src/pages/ProductionPage.jsx:35):
+**Evidencia:** [ProductionPage.jsx:35-37](../../src/pages/ProductionPage.jsx:35):
 
 ```js
 const ingDeltas = (recipe?.ingredients?.length)
@@ -192,7 +192,7 @@ Productos sin receta producen stock con costo 0 implícito en Reports.
 
 ## 3.1 🟠 No se persiste el número de factura ni el link al PDF en `sales`
 
-**Evidencia:** [BillingPage.jsx:97-104](src/pages/BillingPage.jsx:97) solo actualiza `billing_status`. La conexión entre la `sale` y la factura emitida vive en una carpeta de Drive externa.
+**Evidencia:** [BillingPage.jsx:97-104](../../src/pages/BillingPage.jsx:97) solo actualiza `billing_status`. La conexión entre la `sale` y la factura emitida vive en una carpeta de Drive externa.
 
 **Por qué importa:** trazabilidad fiscal nula. Ante una auditoría, no se puede demostrar que una venta tiene factura asociada.
 
@@ -200,7 +200,7 @@ Productos sin receta producen stock con costo 0 implícito en Reports.
 
 ## 3.2 🟠 `getPublicUrl` para facturas → URLs públicas adivinables
 
-**Evidencia:** [BillingPage.jsx:60-63](src/pages/BillingPage.jsx:60):
+**Evidencia:** [BillingPage.jsx:60-63](../../src/pages/BillingPage.jsx:60):
 
 ```js
 const path = `${Date.now()}_${file.name.replace(/\s+/g, "_")}`;
@@ -221,7 +221,7 @@ El path es `timestamp + filename`. **Cualquiera con la URL ve la factura**. Un a
 
 ## 3.3 🔴 EmailJS con destinatarios hardcoded
 
-**Evidencia:** [src/utils/emailAlerts.js:23](src/utils/emailAlerts.js:23):
+**Evidencia:** [src/utils/emailAlerts.js:23](../../src/utils/emailAlerts.js:23):
 
 ```js
 to_email: "facundoarroquy.w@gmail.com,garroquy@hotmail.com",
@@ -246,7 +246,7 @@ Además, **los SERVICE_ID, TEMPLATE_ID y PUBLIC_KEY de EmailJS también van en e
 
 ## 4.1 🔴 Cambiar `vatRate` aplica retroactivamente a gastos viejos
 
-**Evidencia:** [SettingsPage.jsx:432-438](src/pages/SettingsPage.jsx:432) actualiza `app_settings.vat_rate`. Pero el cálculo de IVA al cargar un gasto ([ExpensesPage.jsx:191-194](src/pages/ExpensesPage.jsx:191)):
+**Evidencia:** [SettingsPage.jsx:432-438](../../src/pages/SettingsPage.jsx:432) actualiza `app_settings.vat_rate`. Pero el cálculo de IVA al cargar un gasto ([ExpensesPage.jsx:191-194](../../src/pages/ExpensesPage.jsx:191)):
 
 ```js
 const effTotal = form.withVat ? (Number(l.totalPaid)||0) * (1 + vatRate / 100) : (Number(l.totalPaid)||0);
@@ -260,7 +260,7 @@ usa el `vatRate` actual al momento de cargar el gasto. Pero **no se guarda qué 
 
 ## 4.2 🔴 `frozenDiscount` y `vatRate` sin techo coherente
 
-**Evidencia:** [SettingsPage.jsx:430-431](src/pages/SettingsPage.jsx:430):
+**Evidencia:** [SettingsPage.jsx:430-431](../../src/pages/SettingsPage.jsx:430):
 
 ```js
 const frozen = Math.max(0, Math.min(100, Number(frozenInput) || 0));
@@ -275,7 +275,7 @@ const vat    = Math.max(0, Number(vatInput) || 0);
 
 ## 4.3 🟡 `app_settings` guardado como string, parseado como number
 
-**Evidencia:** `upsert({ value: String(frozen) })` ([SettingsPage.jsx:434](src/pages/SettingsPage.jsx:434)) y luego `Number(setting.value)`. Funciona para enteros, pero:
+**Evidencia:** `upsert({ value: String(frozen) })` ([SettingsPage.jsx:434](../../src/pages/SettingsPage.jsx:434)) y luego `Number(setting.value)`. Funciona para enteros, pero:
 - `"21.5"` parseado por `Number()` da `21.5`, pero `Number("21,5")` (coma local AR) da `NaN`.
 - Sin `NULL` semántica.
 
@@ -283,7 +283,7 @@ const vat    = Math.max(0, Number(vatInput) || 0);
 
 ## 4.4 🟡 `resetDemo` peligroso si `user.isDemo` se manipula
 
-**Evidencia:** [SettingsPage.jsx:723](src/pages/SettingsPage.jsx:723) lista las tablas a truncar. El botón solo se renderiza si `user.isDemo`, pero el flag vive en el state React. Manipular `window.user.isDemo = true` desde DevTools no es necesario porque la función `resetDemo` también vive en el cliente.
+**Evidencia:** [SettingsPage.jsx:723](../../src/pages/SettingsPage.jsx:723) lista las tablas a truncar. El botón solo se renderiza si `user.isDemo`, pero el flag vive en el state React. Manipular `window.user.isDemo = true` desde DevTools no es necesario porque la función `resetDemo` también vive en el cliente.
 
 **Por qué importa:** si por error se invoca en producción, **truncar `sales`, `expenses`, `account_payments`, `cash_shifts` borra el negocio**.
 
@@ -297,7 +297,7 @@ const vat    = Math.max(0, Number(vatInput) || 0);
 
 ## 5.1 🔴 `ImportPage` sobreescribe precios sin confirmación granular
 
-**Evidencia:** [ImportPage.jsx:204](src/pages/ImportPage.jsx:204):
+**Evidencia:** [ImportPage.jsx:204](../../src/pages/ImportPage.jsx:204):
 
 ```js
 const { error } = await supabase.from("products").update(productToDb(updated_data)).eq("id", existing.id);
@@ -326,7 +326,7 @@ El Excel manda `priceRetail` y se actualiza directo. Si el Excel viene mal (un d
 
 ## 6.1 🟠 Código compartido para acceder a precios mayoristas
 
-**Evidencia:** existe `/menu-mayorista` ([WholesaleMenuPage.jsx](src/pages/WholesaleMenuPage.jsx)) con un código de acceso (verificar implementación). Un código único compartido **no puede revocarse** por usuario.
+**Evidencia:** existe `/menu-mayorista` ([WholesaleMenuPage.jsx](../../src/pages/WholesaleMenuPage.jsx)) con un código de acceso (verificar implementación). Un código único compartido **no puede revocarse** por usuario.
 
 **Por qué importa:** competidores con el código ven la lista de precios mayoristas — información estratégica de pricing.
 
@@ -341,13 +341,13 @@ El Excel manda `priceRetail` y se actualiza directo. Si el Excel viene mal (un d
 
 ## 7.1 🔴 Rol derivado del email en cliente
 
-**Evidencia:** [App.jsx:65](src/App.jsx:65):
+**Evidencia:** [App.jsx:65](../../src/App.jsx:65):
 
 ```js
 const role = email.toLowerCase().startsWith("admin") ? "admin" : "vendor";
 ```
 
-Es un default antes de leer `business_users.role`, pero si la lectura falla o la fila no existe, queda admin por email. La gating de páginas ([App.jsx:452-456](src/App.jsx:452)):
+Es un default antes de leer `business_users.role`, pero si la lectura falla o la fila no existe, queda admin por email. La gating de páginas ([App.jsx:452-456](../../src/App.jsx:452)):
 
 ```js
 const PAGE_ROLES = { reports: ["admin"], import: ["admin"], "help-admin": ["admin"], "hours-bank": ["admin"] };
