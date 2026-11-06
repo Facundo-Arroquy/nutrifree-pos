@@ -1,10 +1,10 @@
-# 02 — Backend: `nutrifree-api` (fases B0–B10)
+# 02 — Backend: `nutrifree-api` (fases B0–B13)
 
 Cada fase se ejecuta como una o más tareas de Codex (una tarea = un PR). Las
 rutas de "Entradas" son del legado `../nutrifree-pos`. Antes de cada fase Codex
 lee [01-arquitectura.md](01-arquitectura.md) y el `AGENTS.md` del repo.
 
-Regla para todas las fases de negocio (B3–B9): **primero los tests de
+Regla para todas las fases de negocio (B3–B12): **primero los tests de
 caracterización** (los casos de los `*.test.js` del legado, traducidos a pytest),
 después la implementación. Si el comportamiento del legado parece un bug, no se
 "arregla" en silencio: se replica, se marca con `# LEGACY:` y se anota en el PR.
@@ -210,13 +210,12 @@ de `TABLAS.md`; RPC `complete_sale_stocks`, `cancel_order_stocks`.
 
 ---
 
-## B6 — Sitio público, cupones y MercadoPago · L
+## B6 — Sitio público y cupones · M
 
-**Entradas:** `MenuPage.jsx`, `WholesaleMenuPage.jsx`, `PagoResultadoPage.jsx`,
-`CouponField.jsx`, `CouponsSettings.jsx`; `utils/coupons.js`,
-`utils/createWebOrder.js`, `utils/webOrder.js`; RPC `create_web_order` y
-`validate_coupon`; `supabase/functions/*`; sección "Acceso anónimo" de
-`TABLAS.md`; `docs/reportes/BACKEND_PASARELA_PAGO.md` y `BUGS_PASARELA_PAGO.md`.
+**Entradas:** `MenuPage.jsx`, `WholesaleMenuPage.jsx`, `CouponField.jsx`,
+`CouponsSettings.jsx`; `utils/coupons.js`, `utils/createWebOrder.js`,
+`utils/webOrder.js`; RPC `create_web_order` y `validate_coupon`; sección
+"Acceso anónimo" de `TABLAS.md`.
 
 **Endpoints públicos** (con rate limit por IP)
 - `GET /api/v1/public/menu?priceList=retail|wholesale` → categorías y productos
@@ -224,26 +223,16 @@ de `TABLAS.md`; RPC `complete_sale_stocks`, `cancel_order_stocks`.
   actual de `WholesaleMenuPage`.
 - `POST /api/v1/public/coupons/validate` → `validate_coupon`.
 - `POST /api/v1/public/orders` → `create_web_order` (precios, descuento y total
-  en el servidor). Devuelve `saleId` y `total`.
-- `POST /api/v1/public/orders/{id}/payment-preference` → preferencia de MP
-  armada con los ítems y el total **guardados en `sales`**; `back_urls` con
-  `PUBLIC_BASE_URL`; `notification_url` apuntando a la API.
-- `POST /api/v1/public/payments/mercadopago/webhook`:
-  - Verifica el header `x-signature` (HMAC-SHA256 con `MP_WEBHOOK_SECRET`) → 401 si falla.
-  - Consulta el pago a MP y compara `transaction_amount` y moneda con la venta.
-  - Idempotencia con la tabla nueva `payment_events` (migración expand:
-    `mp_payment_id` único, `sale_id`, `status`, `amount`, `payload jsonb`, `received_at`).
-  - `approved` y monto correcto → `status=open`, `paid_at`, `payment_method=mercadopago`
-    y la nota que agrega hoy. `rejected`/`cancelled` → `cancelled` si no estaba pagada.
-    Monto distinto → no marca pagado, registra en `audit_log` y alerta.
-- `GET /api/v1/public/orders/{id}/status` → solo estado y total (para la página
-  de resultado de pago).
+  en el servidor). Devuelve `saleId` y `total`. Igual que hoy, el pedido entra
+  al calendario como pendiente (`open`), sin método de pago, y el cliente lo
+  confirma o cancela por WhatsApp.
 
 **Admin:** `/api/v1/coupons` — CRUD (solo `admin`).
 
-**Tests:** portar `coupons.test.js`, `createWebOrder.test.js`, `webOrder.test.js`;
-webhook con payloads de ejemplo (aprobado, duplicado, monto distinto, firma
-inválida) y MP simulado con `respx`.
+**Tests:** portar `coupons.test.js`, `createWebOrder.test.js`, `webOrder.test.js`.
+
+> El pago online con MercadoPago pasó a **B11**. Hoy el menú del legado tampoco
+> lo usa: el pedido web se confirma por WhatsApp.
 
 ---
 
@@ -271,13 +260,65 @@ inválida) y MP simulado con `respx`.
 
 ---
 
-## B8 — Producción y menú semanal · L
+## B8 — Menú semanal · M
+
+**Entradas:** `WeeklyMenuPage.jsx`, `WeeklyIngredientsPanel.jsx`,
+`WeeklyCostRulePanel.jsx`; `utils/weeklyMenu.js`, `weeklyMenuRules.js`,
+`weeklyProduction.js`, `dates.js`.
+
+**Endpoints**
+- `/api/v1/weekly-goals`, `/api/v1/vianda-plans`.
+- `/api/v1/weekly-menus/{weekStart}` — `GET`/`PUT` (`weekStart` siempre lunes);
+  `GET …/ingredients` (`weeklyProduction.js`); `GET …/cost-rule`
+  (`weeklyMenuRules.js`); `POST …/image` (sube la imagen que genera el front).
+
+**Tests:** portar `weeklyMenu.test.js`, `weeklyMenuRules.test.js`,
+`weeklyProduction.test.js` y `dates.test.js`.
+
+> Producción, kanban de producción y banco de horas pasaron a **B10**.
+
+---
+
+## B9 — Dashboard, reportes y configuración · L
+
+**Entradas:** `DashboardPage.jsx`, `ReportsPage.jsx`, `WeeklyReportPage.jsx`,
+`SettingsPage.jsx` (salvo empleados, que va en B10); `utils/auditCheck.js`,
+`emailAlerts.js`, `emailRecipients.js`; RPC `weekly_report`; `docs/AUDITORIA.md`.
+
+**Endpoints**
+- `GET /api/v1/dashboard` — KPIs que hoy se calculan en el navegador, ahora en SQL.
+- `GET /api/v1/reports/{tipo}?from=&to=` — un tipo por sección de `ReportsPage`.
+- `GET /api/v1/reports/weekly?weekStart=` → `weekly_report`.
+- `GET /api/v1/audit/integrity` — consultas de `docs/AUDITORIA.md` (solo `admin`).
+- `GET/PATCH /api/v1/settings` (`app_settings`).
+- `/api/v1/internal-notes`.
+- `GET /api/v1/audit-log` — paginado, solo `admin`.
+- `GET /api/v1/backup` — exportación completa en streaming (solo `admin`).
+
+Si un reporte muestra producción u horas, lee las tablas directamente: no
+espera a B10.
+
+**Tests:** `weekly_report` y cada reporte contra el seed con números esperados fijos.
+
+> Importación (Excel) y ayuda (FAQ y asistente) pasaron a **B12**.
+
+---
+
+# Bloque final
+
+Se postergó a pedido del dueño (2026-11-06) para no frenar el núcleo. Las tres
+fases son independientes entre sí y se pueden hacer en cualquier orden. Van
+antes de B13 porque el endurecimiento y la salida a producción tienen que
+cubrirlas.
+
+---
+
+## B10 — Producción y banco de horas · L
 
 **Entradas:** `ProductionPage.jsx`, `ProductionLogPage.jsx`,
-`ProductionKanbanSection.jsx` (+ test), `HoursBankPage.jsx`,
-`WeeklyMenuPage.jsx`, `WeeklyIngredientsPanel.jsx`, `WeeklyCostRulePanel.jsx`;
-`utils/weeklyMenu.js`, `weeklyMenuRules.js`, `weeklyProduction.js`, `dates.js`;
-RPC `apply_production`, `accumulate_employee_hours`, `adjust_product_stock`.
+`ProductionKanbanSection.jsx` (+ test), `HoursBankPage.jsx`, subsección de
+empleados de `SettingsPage.jsx`; RPC `apply_production`,
+`accumulate_employee_hours`, `adjust_product_stock`.
 
 **Endpoints**
 - `POST /api/v1/productions` — `apply_production` + empleados + horas
@@ -287,43 +328,63 @@ RPC `apply_production`, `accumulate_employee_hours`, `adjust_product_stock`.
   `qtyRequested`, `qtyStock`, `qtyToProduce`); `PATCH /{id}/status` (`ready` suma
   stock, volver atrás lo revierte, `stockUpdated`); `DELETE` (vaciar, solo `admin`,
   sin revertir).
-- `/api/v1/weekly-goals`, `/api/v1/vianda-plans`.
-- `/api/v1/weekly-menus/{weekStart}` — `GET`/`PUT` (`weekStart` siempre lunes);
-  `GET …/ingredients` (`weeklyProduction.js`); `GET …/cost-rule`
-  (`weeklyMenuRules.js`); `POST …/image` (sube la imagen que genera el front).
+- `/api/v1/employees` — CRUD con los mismos roles que la subsección de empleados
+  de hoy.
 
-**Tests:** portar `weeklyMenu.test.js`, `weeklyMenuRules.test.js`,
-`weeklyProduction.test.js`, `dates.test.js` y la lógica de
-`ProductionKanbanSection.test.js`; `ready` → atrás deja el stock igual que al principio.
+**Tests:** portar la lógica de `ProductionKanbanSection.test.js`; `ready` → atrás
+deja el stock igual que al principio.
+
+> Hasta esta fase, el stock de productos del sistema nuevo solo se carga con el
+> ajuste manual de B3.
 
 ---
 
-## B9 — Reportes, configuración, importación y ayuda · L
+## B11 — Pago online con MercadoPago · M
 
-**Entradas:** `DashboardPage.jsx`, `ReportsPage.jsx`, `WeeklyReportPage.jsx`,
-`SettingsPage.jsx`, `ImportPage.jsx`, `HelpAdminPage.jsx`, `ChatWidget.jsx`;
-`utils/priceImport.js`, `auditCheck.js`, `emailAlerts.js`,
-`emailRecipients.js`; RPC `weekly_report`; `docs/AUDITORIA.md`.
+**Entradas:** `PagoResultadoPage.jsx`; `supabase/functions/create-preference` y
+`mp-webhook`; RPC `descontar_stock_pedido` (revisar si sigue en uso);
+`docs/reportes/BACKEND_PASARELA_PAGO.md` y `BUGS_PASARELA_PAGO.md`.
+
+**Endpoints públicos** (con rate limit por IP)
+- `POST /api/v1/public/orders/{id}/payment-preference` → preferencia de MP
+  armada con los ítems y el total **guardados en `sales`**; `back_urls` con
+  `PUBLIC_BASE_URL`; `notification_url` apuntando a la API.
+- `POST /api/v1/public/payments/mercadopago/webhook`:
+  - Verifica el header `x-signature` (HMAC-SHA256 con `MP_WEBHOOK_SECRET`) → 401 si falla.
+  - Consulta el pago a MP y compara `transaction_amount` y moneda con la venta.
+  - Idempotencia con la tabla nueva `payment_events` (migración expand:
+    `mp_payment_id` único, `sale_id`, `status`, `amount`, `payload jsonb`, `received_at`).
+  - `approved` y monto correcto → `status=open`, `paid_at`, `payment_method=mercadopago`
+    y la nota que agrega hoy. `rejected`/`cancelled` → `cancelled` si no estaba pagada.
+    Monto distinto → no marca pagado, registra en `audit_log` y alerta.
+- `GET /api/v1/public/orders/{id}/status` → solo estado y total (para la página
+  de resultado de pago).
+
+**Tests:** webhook con payloads de ejemplo (aprobado, duplicado, monto distinto,
+firma inválida) y MP simulado con `respx`.
+
+---
+
+## B12 — Importación y ayuda · M
+
+**Entradas:** `ImportPage.jsx`, `HelpAdminPage.jsx`, `ChatWidget.jsx`;
+`utils/priceImport.js`.
 
 **Endpoints**
-- `GET /api/v1/dashboard` — KPIs que hoy se calculan en el navegador, ahora en SQL.
-- `GET /api/v1/reports/{tipo}?from=&to=` — un tipo por sección de `ReportsPage`.
-- `GET /api/v1/reports/weekly?weekStart=` → `weekly_report`.
-- `GET /api/v1/audit/integrity` — consultas de `docs/AUDITORIA.md` (solo `admin`).
-- `GET/PATCH /api/v1/settings` (`app_settings`).
-- `/api/v1/faq`, `POST /api/v1/faq/missed`, `/api/v1/internal-notes`.
-- `GET /api/v1/audit-log` — paginado, solo `admin`.
 - `POST /api/v1/imports/prices` (Excel → `openpyxl` → vista previa de cambios) y
-  `POST /api/v1/imports/prices/{id}/confirm`. Igual para el resto de las
-  importaciones de `ImportPage`.
-- `GET /api/v1/backup` — exportación completa en streaming (solo `admin`).
+  `POST /api/v1/imports/prices/{id}/confirm`. Igual para ingredientes, productos
+  y recetas (las otras pestañas de `ImportPage`).
+- `/api/v1/faq`, `POST /api/v1/faq/missed`.
 
-**Tests:** portar `priceImport.test.js`; `weekly_report` y cada reporte contra el
-seed con números esperados fijos.
+**Tests:** portar `priceImport.test.js`.
 
 ---
 
-## B10 — Endurecimiento y preparación de producción · M
+# Cierre
+
+---
+
+## B13 — Endurecimiento y preparación de producción · M
 
 **Tareas**
 - Rate limit en login y rutas públicas; headers de seguridad; CORS solo con los

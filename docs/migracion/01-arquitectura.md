@@ -139,12 +139,12 @@ se decida lo contrario.
 
 | Hallazgo | Riesgo | Se corrige en |
 |---|---|---|
-| `create-preference` arma la preferencia con los `price` que manda el navegador y `mp-webhook` no compara el monto pagado con `sales.total` ni verifica la firma de MercadoPago. | Un pedido web se puede pagar por menos de su total y quedar marcado como pagado. | B6 |
+| `create-preference` arma la preferencia con los `price` que manda el navegador y `mp-webhook` no compara el monto pagado con `sales.total` ni verifica la firma de MercadoPago. | Un pedido web se puede pagar por menos de su total y quedar marcado como pagado. | B11 |
 | Los roles se aplican solo en la UI. RLS (`solo_autenticados`) deja que **cualquier** usuario autenticado lea y escriba todas las tablas, incluso con rol `cocina` o inactivo. | Un empleado puede modificar ventas o saldos con la clave pública y su sesión. | B2 + P6 |
 | Rol inicial derivado del prefijo del email y acceso concedido si falla la sincronización con `business_users`. | Escalada de privilegios / usuario bloqueado que entra igual. | B2 |
 | Bucket `invoices` público. | Facturas con datos de clientes accesibles por URL. | P6 (bucket privado + URLs firmadas) |
-| Edge Functions con CORS `*`. | Cualquier sitio puede llamarlas. | B6 (CORS restringido) |
-| `xlsx@0.18.5` de npm tiene vulnerabilidades conocidas y no recibe actualizaciones ahí. | Archivos maliciosos al importar. | B9 (el Excel se procesa en la API con `openpyxl`) |
+| Edge Functions con CORS `*`. | Cualquier sitio puede llamarlas. | B6 y B11 (CORS restringido; se verifica en B13) |
+| `xlsx@0.18.5` de npm tiene vulnerabilidades conocidas y no recibe actualizaciones ahí. | Archivos maliciosos al importar. | B12 (el Excel se procesa en la API con `openpyxl`) |
 | El repo `nutrifree-pos` es público e incluye reportes internos de dinero y bugs. | Exposición de información del negocio. | P6 (pasarlo a privado y archivarlo) |
 
 ## Calidad

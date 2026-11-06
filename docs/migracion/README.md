@@ -25,8 +25,8 @@ Acceso a los repos: `Facundo-Arroquy` (dueño) y `FacundoArroquy` (colaborador).
 | Documento | Para qué |
 |---|---|
 | [01-arquitectura.md](01-arquitectura.md) | Arquitectura objetivo, decisiones, convenciones y seguridad |
-| [02-backend.md](02-backend.md) | Fases **B0–B10** del repo `nutrifree-api` |
-| [03-frontend.md](03-frontend.md) | Fases **F0–F10** del repo `nutrifree-web` |
+| [02-backend.md](02-backend.md) | Fases **B0–B13** del repo `nutrifree-api` |
+| [03-frontend.md](03-frontend.md) | Fases **F0–F13** del repo `nutrifree-web` |
 | [04-datos-y-produccion.md](04-datos-y-produccion.md) | Docker local, migraciones, conexión a Supabase y salida a producción (**P0–P6**) |
 | [05-prompts-codex.md](05-prompts-codex.md) | Prompts listos para pegar en Codex |
 | [anexos/inventario-legacy.md](anexos/inventario-legacy.md) | Qué existe hoy: tablas, funciones SQL, páginas y su destino |
@@ -61,10 +61,23 @@ Acceso a los repos: `Facundo-Arroquy` (dueño) y `FacundoArroquy` (colaborador).
 ```
 P0 (vos: backups, dump de esquema, datos de Supabase y MercadoPago)
  │
- ├─ API: B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9 → B10 ─┐
- │                     │    │    │    │    │    │    │    │      │
- └─ Web: F0 → F1 → F2 ─┴→ F3 → F4 → F5 → F6 → F7 → F8 → F9 → F10 ┴→ P1 → P2 → P3 → P4 → P5 → P6
+ ├─ API: B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9 ─┬→ B10 ─┐
+ │                                                         ├→ B11 ─┼→ B13 ─┐
+ │                                                         └→ B12 ─┘       │
+ └─ Web: F0 → F1 → F2 → F3 → F4 → F5 → F6 → F7 → F8 → F9 ─┬→ F10 ─┐       │
+                                                           ├→ F11 ─┼→ F13 ─┴→ P1 → P2 → P3 → P4 → P5 → P6
+                                                           └→ F12 ─┘
 ```
+
+**Bloque final (B10–B12 / F10–F12):** producción y banco de horas, pago online
+con MercadoPago e importación y ayuda se dejaron para el final a pedido del
+dueño (2026-11-06), para no frenar el núcleo del sistema. Las tres son
+independientes entre sí y se pueden hacer en cualquier orden o en paralelo;
+`B13` y `F13` (endurecimiento y QA final) esperan a las tres.
+
+Lo que ya no tiene que esperar: B6/F6 publica el menú y crea pedidos web sin
+pago online (el cliente confirma por WhatsApp, como hoy), y B8/F8 y B9/F9 no
+dependen de producción.
 
 `F(n)` consume los endpoints de `B(n)`: se arranca cuando `B(n)` está mergeado, o
 antes usando mocks (MSW) generados desde el contrato OpenAPI.
@@ -77,11 +90,17 @@ antes usando mocks (MSW) generados desde el contrato OpenAPI.
 | Catálogo, ingredientes y recetas | B3 | F3 | L |
 | Clientes y cuenta corriente | B4 | F4 | L |
 | Ventas, pedidos, POS y facturación | B5 | F5 | XL |
-| Sitio público, cupones y MercadoPago | B6 | F6 | L |
+| Sitio público y cupones | B6 | F6 | M |
 | Proveedores, gastos y caja | B7 | F7 | L |
-| Producción y menú semanal | B8 | F8 | L |
-| Reportes, configuración, importación y ayuda | B9 | F9 | L |
-| Endurecimiento y QA final | B10 | F10 | M |
+| Menú semanal | B8 | F8 | M |
+| Dashboard, reportes y configuración | B9 | F9 | L |
+| **Final:** producción y banco de horas | B10 | F10 | L |
+| **Final:** pago online con MercadoPago y páginas de resultado | B11 | F11 | M |
+| **Final:** importación y ayuda | B12 | F12 | M |
+| Endurecimiento y QA final | B13 | F13 | M |
+
+**Estado al 2026-11-06:** mergeadas B0–B5 y F0–F5 (más la identidad de marca).
+Sigue B6/F6.
 
 ## Decisiones
 

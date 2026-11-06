@@ -1,4 +1,4 @@
-# 03 — Frontend: `nutrifree-web` (fases F0–F10)
+# 03 — Frontend: `nutrifree-web` (fases F0–F13)
 
 El front se **reescribe** en TypeScript + Tailwind, módulo por módulo, contra la
 API nueva. No se copian las páginas tal cual: se toma el comportamiento del
@@ -139,13 +139,15 @@ login con credenciales inválidas muestra el error.
 
 ---
 
-## F6 — Sitio público · L
+## F6 — Sitio público · M
 
-**Legado:** `LandingPage`, `MenuPage`, `WholesaleMenuPage`, `PagoResultadoPage`,
-`landing.css`, `menu.css`. **API:** B6.
+**Legado:** `LandingPage`, `MenuPage`, `WholesaleMenuPage`, `landing.css`,
+`menu.css`. **API:** B6.
 
-- Landing, menú minorista, menú mayorista, carrito, cupón, checkout con
-  MercadoPago y páginas de resultado de pago.
+- Landing, menú minorista, menú mayorista, carrito, cupón y checkout que crea el
+  pedido web. Igual que hoy, termina en una pantalla de confirmación con el
+  resumen y el botón de WhatsApp para confirmar o cancelar; el pago online llega
+  en F11.
 - Celular primero; LCP < 2.5 s en 4G; imágenes lazy con tamaños fijos; meta
   tags y Open Graph.
 - Es la parte más expresiva: aplicar [anexos/frontend_design.md](anexos/frontend_design.md)
@@ -164,51 +166,96 @@ login con credenciales inválidas muestra el error.
 
 ---
 
-## F8 — Producción y menú semanal · L
+## F8 — Menú semanal · M
 
-**Legado:** `ProductionPage`, `ProductionLogPage`, `ProductionKanbanSection`,
-`HoursBankPage`, `WeeklyMenuPage`, `WeeklyIngredientsPanel`,
-`WeeklyCostRulePanel`, `utils/weeklyMenuImage.js`. **API:** B8.
+**Legado:** `WeeklyMenuPage`, `WeeklyIngredientsPanel`, `WeeklyCostRulePanel`,
+"Menú del Día" (modal del sidebar), `utils/weeklyMenuImage.js`. **API:** B8.
 
-- Registro de producción con empleados y horas; banco de horas.
-- Kanban de producción (generar, mover, vaciar) con refresco cada 10 s.
 - Menú semanal (almuerzo, cena y keto, lunes a viernes), ingredientes de la
   semana, regla de costos y la imagen para Instagram (se sigue generando en el
   navegador con canvas, portada a TS, y se sube por la API).
+- Menú del Día: reemplaza el aviso «Esta acción estará disponible en F8» del
+  sidebar.
 
 **Tests:** portar `WeeklyCostRulePanel.test.jsx`, `WeeklyIngredientsPanel.test.jsx`,
 `weeklyMenuImage.test.js` y `emailAlerts.weeklyMenu.test.js`.
 
 ---
 
-## F9 — Dashboard, reportes, configuración, importación y ayuda · L
+## F9 — Dashboard, reportes y configuración · L
 
 **Legado:** `DashboardPage`, `ReportsPage`, `WeeklyReportPage`,
-`SettingsPage`, `ImportPage`, `HelpAdminPage`, `ChatWidget`,
-`CouponsSettings`, `utils/emailAlerts.js`, `utils/emailRecipients.js`,
-`utils/auditCheck.js`. **API:** B9.
+`SettingsPage` (salvo empleados, que va en F10), `CouponsSettings`,
+`utils/emailAlerts.js`, `utils/emailRecipients.js`, `utils/auditCheck.js`.
+**API:** B9 (y B6 para los cupones).
 
 - Dashboard y reportes con gráficos (los números vienen hechos de la API).
 - Configuración con sus subsecciones y permisos por rol (general, sistema,
-  listas de precios, cupones, empleados, notas internas, backup, mi cuenta).
-- Importación: se sube el Excel, la API devuelve la vista previa, se confirma.
-- FAQ y asistente de ayuda.
+  listas de precios, cupones, notas internas, backup, mi cuenta).
 - Alertas por email: se mantiene EmailJS hasta resolver DP-4.
 
 **Tests:** portar `emailRecipients.test.js`.
 
 ---
 
-## F10 — QA final · M
+# Bloque final
+
+Se postergó a pedido del dueño (2026-11-06) para no frenar el núcleo. Las tres
+fases son independientes entre sí y se pueden hacer en cualquier orden. Van
+antes de F13 porque el QA final tiene que cubrirlas.
+
+---
+
+## F10 — Producción y banco de horas · L
+
+**Legado:** `ProductionPage`, `ProductionLogPage`, `ProductionKanbanSection`,
+`HoursBankPage` y la subsección de empleados de `SettingsPage`. **API:** B10.
+
+- Registro de producción con empleados y horas; banco de horas.
+- Kanban de producción (generar, mover, vaciar) con refresco cada 10 s.
+- Empleados dentro de Configuración, con los permisos por rol de hoy.
+
+**Tests:** portar la lógica de `ProductionKanbanSection.test.js`.
+
+---
+
+## F11 — Pago online y páginas de resultado · M
+
+**Legado:** `PagoResultadoPage`. **API:** B11.
+
+- Paso de pago en el checkout del sitio público: pide la preferencia a la API y
+  redirige a MercadoPago.
+- Páginas de resultado (aprobado, pendiente, rechazado) que consultan
+  `GET /public/orders/{id}/status`; nunca confían en los parámetros de la URL.
+- Sin cambios en F6 más allá de ese paso.
+
+---
+
+## F12 — Importación y ayuda · M
+
+**Legado:** `ImportPage`, `HelpAdminPage`, `ChatWidget`. **API:** B12.
+
+- Importación: se sube el Excel, la API devuelve la vista previa, se confirma.
+  Incluye la planilla de precios: en F3 solo existe la edición masiva manual.
+- FAQ, asistente de ayuda y administración de preguntas sin respuesta.
+
+---
+
+# Cierre
+
+---
+
+## F13 — QA final · M
 
 - E2E con Playwright contra el stack de Docker, uno por flujo crítico:
   1. Login con cada rol y lo que ve cada uno.
   2. Venta de mostrador → stock descontado.
   3. Pedido → listo → entregado → cobrado en cuenta corriente (stock y saldo).
-  4. Pedido web con cupón → pago aprobado (MP simulado) → aparece en el calendario.
+  4. Pedido web con cupón → aparece en el calendario (F6) → pago aprobado con
+     MP simulado (F11).
   5. Gasto con proveedor → pago parcial → estado `partial`.
   6. Apertura y cierre de caja.
-  7. Kanban de producción → `ready` suma stock → volver atrás lo revierte.
+  7. Kanban de producción → `ready` suma stock → volver atrás lo revierte (F10).
 - `axe` en todas las rutas; viewport de tablet (1024×768) y celular (390×844).
 - Code splitting por ruta y presupuesto de bundle en CI.
 - Checklist de paridad completo de [anexos/inventario-legacy.md](anexos/inventario-legacy.md#páginas).

@@ -40,17 +40,20 @@ pará y preguntá antes de seguir. Nunca te conectes a producción.
 | B3 | `feat/b3-catalogo` | — |
 | B4 | `feat/b4-clientes` | "Antes de implementar, documentá en el PR los casos de `computeAllocations` que encontraste en `CustomersPage.jsx`." |
 | B5 | `feat/b5-ventas` | Partir en 3 tareas: (a) alta y listado de ventas, (b) cambios de estado y stock, (c) edición de ítems, duplicados y facturación. |
-| B6 | `feat/b6-publico-pagos` | Partir en 2 tareas: (a) menú, cupones y pedido web, (b) MercadoPago. "Probá el webhook solo con payloads de ejemplo y MP simulado." |
+| B6 | `feat/b6-publico-cupones` | "El pedido web sale sin pago online: queda `open`, sin método de pago, como hoy. MercadoPago es B11." |
 | B7 | `feat/b7-compras-caja` | Partir en 2 tareas: (a) proveedores y gastos, (b) caja. |
-| B8 | `feat/b8-produccion` | Partir en 2 tareas: (a) producción y kanban, (b) menú semanal. |
-| B9 | `feat/b9-reportes-admin` | Partir en 2 tareas: (a) dashboard y reportes, (b) configuración, importación, FAQ, backup. |
-| B10 | `chore/b10-hardening` | — |
+| B8 | `feat/b8-menu-semanal` | — |
+| B9 | `feat/b9-reportes-config` | Partir en 2 tareas: (a) dashboard y reportes, (b) configuración, auditoría y backup. |
+| B10 | `feat/b10-produccion` | Bloque final. Partir en 2 tareas: (a) producción y kanban, (b) banco de horas y empleados. |
+| B11 | `feat/b11-mercadopago` | Bloque final. "Probá el webhook solo con payloads de ejemplo y MP simulado." |
+| B12 | `feat/b12-importacion-ayuda` | Bloque final. "El Excel se procesa con `openpyxl`; nunca con `xlsx` de npm." |
+| B13 | `chore/b13-hardening` | Va después de B10–B12 para cubrir sus rutas. |
 | F0 | `chore/f0-tooling` | "Copiá `plantillas/AGENTS.web.md` como `AGENTS.md` y `anexos/frontend_design.md` como `docs/frontend_design.md`." |
 | F1 | `feat/f1-design-system` | "Primero armá las **dos propuestas** visuales en `/_design` y pará: el dueño elige una antes de construir los componentes." |
 | F2 | `feat/f2-shell-auth` | "Probá contra la API real con `make up` en `../nutrifree-api`, además de MSW." |
-| F3–F9 | `feat/f<n>-<modulo>` | "Antes de abrir el PR completá el checklist de paridad contra cada página del legado de la sección y adjuntá capturas (escritorio, tablet y celular)." |
+| F3–F12 | `feat/f<n>-<modulo>` | "Antes de abrir el PR completá el checklist de paridad contra cada página del legado de la sección y adjuntá capturas (escritorio, tablet y celular)." |
 | F5 | `feat/f5-ventas` | Partir en 3 tareas: (a) POS, (b) calendario de pedidos, (c) pedidos y facturación. |
-| F10 | `chore/f10-qa` | — |
+| F13 | `chore/f13-qa` | Va después de F10–F12: los E2E 4 y 7 los necesitan. |
 
 ## Prompt de revisión (opcional, en una sesión aparte)
 

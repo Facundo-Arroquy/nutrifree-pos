@@ -88,8 +88,8 @@ Además:
 - Crear en GoTrue local usuarios de prueba con los emails de `business_users`
   (script) para entrar con cada rol.
 - Recorrer el checklist de paridad con el volumen real de datos y medir tiempos.
-- Probar el circuito de MercadoPago completo con credenciales de prueba y un
-  túnel (cloudflared o ngrok) para recibir el webhook.
+- Probar el circuito de MercadoPago completo (B11/F11) con credenciales de prueba
+  y un túnel (cloudflared o ngrok) para recibir el webhook.
 - Correr las consultas de `docs/AUDITORIA.md` antes y después de operar: los
   resultados tienen que dar lo esperado.
 
