@@ -17,12 +17,13 @@ Sirve de checklist: cada fila tiene que quedar cubierta por una fase.
 | `suppliers`, `supplier_payments` | suppliers | B7 |
 | `expenses`, `expense_categories`, `expense_subcategories` | expenses | B7 |
 | `cash_shifts` | cash | B7 |
-| `productions`, `production_employees`, `employee_hours`, `production_kanban` | production | B8 |
+| `productions`, `production_employees`, `employee_hours`, `production_kanban` | production | B10 |
 | `weekly_goals`, `weekly_menus`, `vianda_plans`, `vianda_plan_items` | weekly | B8 |
-| `app_settings`, `faq_entries`, `faq_missed`, `internal_notes`, `audit_log` | admin | B9 |
+| `app_settings`, `internal_notes`, `audit_log` | admin | B9 |
+| `faq_entries`, `faq_missed` | admin | B12 |
 | `backup_customers_20260630` | — (sin modelo; se evalúa borrar en P6) | P6 |
 
-Nuevas: `payment_events` (B6) y el esquema `nutrifree_meta` para Alembic (B1).
+Nuevas: `payment_events` (B11) y el esquema `nutrifree_meta` para Alembic (B1).
 
 ## Funciones y triggers de Postgres
 
@@ -30,11 +31,11 @@ Nuevas: `payment_events` (B6) y el esquema `nutrifree_meta` para Alembic (B1).
 |---|---|---|---|
 | `complete_sale_stocks` | RPC | `utils/stock.js` | B5, desde `SalesService` |
 | `cancel_order_stocks` | RPC | `utils/stock.js` | B5 |
-| `descontar_stock_pedido` | RPC | (pago web, legado) | B6 — revisar si sigue en uso |
-| `adjust_product_stock` | RPC | `ProductionKanbanSection`, `ProductionLogPage` | B3, B8 |
+| `descontar_stock_pedido` | RPC | (pago web, legado) | B11 — revisar si sigue en uso |
+| `adjust_product_stock` | RPC | `ProductionKanbanSection`, `ProductionLogPage` | B3, B10 |
 | `adjust_ingredient_stock` | RPC | `ExpensesPage`, `IngredientsPage` | B3, B7 |
-| `apply_production` | RPC | `ProductionPage` | B8 |
-| `accumulate_employee_hours` | RPC | `HoursBankPage`, `ProductionLogPage` | B8 |
+| `apply_production` | RPC | `ProductionPage` | B10 |
+| `accumulate_employee_hours` | RPC | `HoursBankPage`, `ProductionLogPage` | B10 |
 | `weekly_report` | RPC | `WeeklyReportPage` | B9 |
 | `validate_coupon` | RPC (anon) | `utils/coupons.js` | B6 |
 | `create_web_order` | RPC (anon, `SECURITY DEFINER`) | `utils/createWebOrder.js` | B6 |
@@ -49,9 +50,9 @@ Nuevas: `payment_events` (B6) y el esquema `nutrifree_meta` para Alembic (B1).
 | Supabase Auth | `supabase.auth` en `App.jsx` | Proxy en la API (B2) |
 | Supabase Realtime | 10 canales en `App.jsx` | Polling + invalidación (F2–F9) |
 | Supabase Storage | bucket `invoices` (público) en `BillingPage`, `WeeklyMenuPage` | `StorageBackend` (B5, B8); privado en P6 |
-| MercadoPago | Edge Functions `create-preference`, `mp-webhook` | API (B6) |
+| MercadoPago | Edge Functions `create-preference`, `mp-webhook` | API (B11) |
 | EmailJS | `utils/emailAlerts.js` desde el navegador | Front en v1, API después (DP-4) |
-| Excel (`xlsx`) | `ImportPage`, `utils/priceImport.js` | `openpyxl` en la API (B9) |
+| Excel (`xlsx`) | `ImportPage`, `utils/priceImport.js` | `openpyxl` en la API (B12) |
 
 ## Páginas
 
@@ -60,7 +61,7 @@ Nuevas: `payment_events` (B6) y el esquema `nutrifree_meta` para Alembic (B1).
 | `LandingPage` | 110 | público | B6 | F6 |
 | `MenuPage` | 728 | público | B6 | F6 |
 | `WholesaleMenuPage` | 370 | público con código | B6 | F6 |
-| `PagoResultadoPage` | 75 | público | B6 | F6 |
+| `PagoResultadoPage` | 75 | público | B11 | F11 |
 | `DashboardPage` | 313 | admin, vendor | B9 | F9 |
 | `POSPage` | 627 | admin, vendor | B5 | F5 |
 | `WeeklyMenuPage` | 243 | admin, vendor, cocina | B8 | F8 |
@@ -71,17 +72,18 @@ Nuevas: `payment_events` (B6) y el esquema `nutrifree_meta` para Alembic (B1).
 | `ProductsPage` | 298 | admin, vendor | B3 | F3 |
 | `RecipesPage` | 633 | admin, vendor, cocina | B3 | F3 |
 | `IngredientsPage` | 460 | admin, vendor | B3 | F3 |
-| `ProductionPage` | 133 | admin, vendor, cocina | B8 | F8 |
-| `ProductionLogPage` | 406 | admin, vendor, cocina | B8 | F8 |
-| `HoursBankPage` | 211 | admin | B8 | F8 |
+| `ProductionPage` | 133 | admin, vendor, cocina | B10 | F10 |
+| `ProductionLogPage` | 406 | admin, vendor, cocina | B10 | F10 |
+| `HoursBankPage` | 211 | admin | B10 | F10 |
 | `CashShiftPage` | 445 | admin, vendor | B7 | F7 |
 | `ExpensesPage` | 749 | admin, vendor | B7 | F7 |
 | `SuppliersPage` | 308 | admin, vendor | B7 | F7 |
-| `ImportPage` | 639 | admin | B9 | F9 |
+| `ImportPage` | 639 | admin | B12 | F12 |
 | `ReportsPage` | 968 | admin | B9 | F9 |
 | `WeeklyReportPage` | 309 | admin | B9 | F9 |
-| `HelpAdminPage` | 252 | admin, cocina | B9 | F9 |
-| `SettingsPage` | 1011 | admin, vendor (subsecciones por rol) | B2, B6, B9 | F9 |
+| `HelpAdminPage` | 252 | admin, cocina | B12 | F12 |
+| `SettingsPage` | 1011 | admin, vendor (subsecciones por rol) | B2, B6, B9, B10 (empleados) | F9, F10 (empleados) |
+| `ChatWidget` (componente global) | — | admin, cocina | B12 | F12 |
 | "Menú del Día" (modal del sidebar) | — | admin, vendor, cocina | B8 | F8 |
 
 ## Tests del legado a portar
@@ -93,10 +95,10 @@ Nuevas: `payment_events` (B6) y el esquema `nutrifree_meta` para Alembic (B1).
 | `supplierAccount` | B7 | — |
 | `coupons`, `createWebOrder`, `webOrder` | B6 | — |
 | `weeklyMenu`, `weeklyMenuRules`, `weeklyProduction`, `dates` | B8 | — |
-| `priceImport` | B9 | — |
+| `priceImport` | B12 | — |
 | `paths` | B2 (matriz de roles) | F2 |
 | `supabasePagination`, `supabaseEnvironment` | B0 (guarda de entorno) | — |
-| `ProductionKanbanSection` | B8 | F8 |
+| `ProductionKanbanSection` | B10 | F10 |
 | `WeeklyCostRulePanel`, `WeeklyIngredientsPanel`, `weeklyMenuImage`, `emailAlerts.weeklyMenu` | — | F8 |
 | `emailRecipients` | — | F9 |
 
