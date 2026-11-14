@@ -2,7 +2,11 @@
  * POSPage — Punto de venta (caja).
  *
  * Flujo: seleccionar cliente (opcional) → agregar productos al carrito →
- * aplicar descuento → cobrar (estado + método de pago) → confirmar.
+ * aplicar descuento o cupón → cobrar (estado + método de pago) → confirmar.
+ *
+ * Cupón: quien vende carga el código, se valida con `validate_coupon` y fija el
+ * descuento en ese % (el campo manual queda bloqueado mientras esté aplicado).
+ * La venta guarda el cupón en las notas, igual que un pedido web.
  *
  * Al guardar un pedido abierto, ofrece registrar una fecha de entrega.
  * Los pedidos "account" generan automáticamente un cargo en cuenta corriente.
@@ -17,6 +21,8 @@ import { useState, useEffect } from "react";
 import { Ico, Modal, $, PAY_ORDER_LABELS, uid, todayStr } from "../shared.jsx";
 import { supabase, saleToDb, accountPaymentToDb } from "../supabase.js";
 import { sendBillingAlert } from "../utils/emailAlerts.js";
+import { withCouponNote } from "../utils/coupons.js";
+import PosCouponField from "../components/PosCouponField.jsx";
 import { deductSaleStock, applyStockResults, stockWarning, availableStock } from "../utils/stock.js";
 import { findDuplicateSales, duplicateWarning } from "../utils/duplicateSale.js";
 
@@ -36,6 +42,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
   const [orderNotes, setOrderNotes] = useState("");
   const [discountType, setDiscountType] = useState("pct"); // "pct" | "fixed"
   const [discountValue, setDiscountValue] = useState("");
+  const [coupon, setCoupon] = useState(null); // { code, discountPct } | null
   const [editingPrice, setEditingPrice] = useState(null);
   const [deliveryModal, setDeliveryModal] = useState(null); // { id, customerName }
   const [deliveryDate, setDeliveryDate] = useState("");
@@ -134,8 +141,15 @@ export default function POSPage({ products, setProducts, customers, setCustomers
     : Math.min(Number(discountValue)||0, subtotal);
   const total = subtotal - discountAmt;
 
+  // El cupón fija el descuento en su %; al quitarlo el descuento vuelve a cero.
+  const changeCoupon = (next) => {
+    setCoupon(next);
+    setDiscountType("pct");
+    setDiscountValue(next ? String(next.discountPct) : "");
+  };
+
   const clearCart = () => {
-    setCart([]); setSelectedCustomer(null); setOrderNotes("");
+    setCart([]); setSelectedCustomer(null); setOrderNotes(""); setCoupon(null);
     setPriceList("retail"); setDiscountType("pct"); setDiscountValue(""); setEditingPrice(null);
     setBillSale(false);
   };
@@ -177,7 +191,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
       priceList,
       paymentMethod: payMethod,
       status,
-      notes: orderNotes,
+      notes: withCouponNote(orderNotes, coupon),
       createdAt: now,
       paidAt: status === "closed" ? now : null,
       discountType,
@@ -243,7 +257,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
     const cliente = selectedCustomer?.name || "Anónimo";
     const metodo = PAY_ORDER_LABELS?.[payMethod] || payMethod;
     logAction?.(status === "closed" ? "venta" : "pedido", "pos",
-      `$${total} — ${cliente} — ${metodo}${discountAmt > 0 ? ` (desc. $${discountAmt})` : ""}`);
+      `$${total} — ${cliente} — ${metodo}${discountAmt > 0 ? ` (desc. $${discountAmt}${coupon ? `, cupón ${coupon.code}` : ""})` : ""}`);
     if (sale.needsBilling) {
       sendBillingAlert(sale).catch(err =>
         console.error("[emailAlerts] No se pudo enviar el mail:", err)
@@ -440,15 +454,17 @@ export default function POSPage({ products, setProducts, customers, setCustomers
           <div className="tot-row" style={{ alignItems:"center", gap:6 }}>
             <span style={{ color:"var(--t2)", flexShrink:0 }}>Descuento</span>
             <div style={{ display:"flex", alignItems:"center", gap:5, flex:1, justifyContent:"flex-end" }}>
-              <div style={{ display:"flex", border:"1px solid var(--border)", borderRadius:6, overflow:"hidden" }}>
-                <button style={{ padding:"2px 8px", background:discountType==="pct"?"var(--green)":"var(--s2)", color:discountType==="pct"?"white":"var(--t2)", border:"none", cursor:"pointer", fontWeight:700, fontSize:".74em" }} onClick={()=>setDiscountType("pct")}>%</button>
-                <button style={{ padding:"2px 8px", background:discountType==="fixed"?"var(--green)":"var(--s2)", color:discountType==="fixed"?"white":"var(--t2)", border:"none", cursor:"pointer", fontWeight:700, fontSize:".74em" }} onClick={()=>setDiscountType("fixed")}>$</button>
+              <div style={{ display:"flex", border:"1px solid var(--border)", borderRadius:6, overflow:"hidden", opacity: coupon ? .5 : 1 }}>
+                <button disabled={!!coupon} style={{ padding:"2px 8px", background:discountType==="pct"?"var(--green)":"var(--s2)", color:discountType==="pct"?"white":"var(--t2)", border:"none", cursor:coupon?"not-allowed":"pointer", fontWeight:700, fontSize:".74em" }} onClick={()=>setDiscountType("pct")}>%</button>
+                <button disabled={!!coupon} style={{ padding:"2px 8px", background:discountType==="fixed"?"var(--green)":"var(--s2)", color:discountType==="fixed"?"white":"var(--t2)", border:"none", cursor:coupon?"not-allowed":"pointer", fontWeight:700, fontSize:".74em" }} onClick={()=>setDiscountType("fixed")}>$</button>
               </div>
               <input type="number" min="0" value={discountValue} onChange={e=>setDiscountValue(e.target.value)}
+                disabled={!!coupon} title={coupon ? "Quitá el cupón para cargar un descuento manual" : undefined}
                 style={{ width:58, padding:"2px 6px", fontSize:".86em", textAlign:"right", borderRadius:6, border:"1px solid var(--border)", background:"var(--s1)" }} placeholder="0"/>
               {discountAmt>0 && <span style={{ color:"var(--red)", fontWeight:600, minWidth:54, textAlign:"right" }}>-{$(discountAmt)}</span>}
             </div>
           </div>
+          <PosCouponField coupon={coupon} onChange={changeCoupon}/>
           <div className="tot-row total"><span>TOTAL</span><span style={{color:"var(--green)"}}>{$(total)}</span></div>
           <div style={{ display:"flex", gap:8, marginTop:14 }}>
             <button className="btn btn-secondary" style={{ flex:1 }} disabled={cart.length===0}
@@ -487,7 +503,8 @@ export default function POSPage({ products, setProducts, customers, setCustomers
                 onClick={()=>{
                   setSelectedCustomer(c);
                   setPriceList(c.priceList);
-                  if ((c.discountPct||0) > 0) { setDiscountType("pct"); setDiscountValue(String(c.discountPct)); }
+                  // Un cupón ya aplicado manda sobre el descuento del cliente.
+                  if (!coupon && (c.discountPct||0) > 0) { setDiscountType("pct"); setDiscountValue(String(c.discountPct)); }
                   setBillSale(c.defaultBilling || false);
                   setCustModal(false);
                   setCustSearch("");
@@ -551,7 +568,7 @@ export default function POSPage({ products, setProducts, customers, setCustomers
           {discountAmt > 0 && (
             <div className="tot-row" style={{ marginBottom:10 }}>
               <span style={{ color:"var(--red)" }}>
-                Descuento {discountType==="pct" ? `${discountValue}%` : "fijo"}
+                {coupon ? `Cupón ${coupon.code} (${coupon.discountPct}%)` : `Descuento ${discountType==="pct" ? `${discountValue}%` : "fijo"}`}
               </span>
               <span style={{ color:"var(--red)", fontWeight:600 }}>-{$(discountAmt)}</span>
             </div>

@@ -4,7 +4,29 @@ import {
   validateCouponInput,
   couponSaleFields,
   lookupCoupon,
+  withCouponNote,
 } from "./coupons.js";
+
+describe("withCouponNote", () => {
+  const coupon = { code: "EFECTIVO", discountPct: 8.33 };
+
+  it("sin cupón devuelve las notas tal cual (sin espacios de más)", () => {
+    expect(withCouponNote("  entregar 13hs ", null)).toBe("entregar 13hs");
+    expect(withCouponNote(undefined, null)).toBe("");
+  });
+
+  it("agrega el cupón con el mismo formato que el pedido web", () => {
+    expect(withCouponNote("entregar 13hs", coupon)).toBe("entregar 13hs | Cupón EFECTIVO (-8.33%)");
+  });
+
+  it("sin notas deja solo el cupón", () => {
+    expect(withCouponNote("", coupon)).toBe("Cupón EFECTIVO (-8.33%)");
+  });
+
+  it("no muestra ceros decimales de más", () => {
+    expect(withCouponNote("", { code: "PROMO", discountPct: 10.0 })).toBe("Cupón PROMO (-10%)");
+  });
+});
 
 describe("normalizeCouponCode", () => {
   it("saca espacios y pasa a mayúsculas", () => {

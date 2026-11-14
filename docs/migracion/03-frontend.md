@@ -127,11 +127,16 @@ login con credenciales inválidas muestra el error.
 ## F5 — Ventas, pedidos, POS y facturación · XL
 
 **Legado:** `POSPage`, `OrdersPage`, `OrdersKanbanPage`, `BillingPage`,
-`CouponField`. **API:** B5.
+`CouponField`, `PosCouponField`. **API:** B5.
 
 - **POS:** búsqueda rápida, carrito, lista de precios, descuentos, método de
   pago, cliente con facturación por defecto, aviso de faltante de stock. Usable
   solo con teclado. `Idempotency-Key` por venta para evitar cargas dobles.
+- **Cupón en el POS:** campo "Cupón" en el carrito; valida con
+  `POST /api/v1/coupons/validate`, muestra código y % con botón "Quitar". Mientras
+  está aplicado bloquea el descuento manual (%/$) y el descuento del cliente no lo
+  pisa. Al cobrar manda `couponCode` (no el monto): el total final es el que
+  devuelve la API. Si responde `coupon_not_found`, quita el cupón y avisa.
 - **Calendario de pedidos:** columnas por estado, cambio de estado, edición de
   ítems mientras el pedido esté vivo, refresco cada 10 s (D-09), vista tablet para cocina.
 - **Pedidos:** listado con filtros, aviso de posibles duplicados.

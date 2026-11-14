@@ -54,6 +54,21 @@ export function couponSaleFields(subtotal, coupon) {
 }
 
 /**
+ * Suma el cupón a las notas de la venta con el mismo formato que usa
+ * `create_web_order` ("… | Cupón CODIGO (-N%)"), para verlo igual en el
+ * Calendario de Pedidos venga del menú web o del POS.
+ *
+ * @param {string} notes notas que cargó quien vende
+ * @param {{code:string, discountPct:number}|null} coupon
+ */
+export function withCouponNote(notes, coupon) {
+  const base = String(notes ?? "").trim();
+  if (!coupon) return base;
+  const tag = `Cupón ${coupon.code} (-${Number(coupon.discountPct)}%)`;
+  return base ? `${base} | ${tag}` : tag;
+}
+
+/**
  * Consulta un código en la base (función `validate_coupon`).
  *
  * @param {{rpc:Function}} client cliente de Supabase
