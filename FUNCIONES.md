@@ -302,6 +302,13 @@ descuento del POS. Las notas del pedido suman `Cupón CODIGO (-N%)` para verlo e
 Calendario de Pedidos. El descuento se calcula sobre el subtotal de los productos y se
 redondea a peso entero.
 
+En el **POS** quien vende carga el código en el campo "Cupón" del carrito
+(`src/components/PosCouponField.jsx`). Se valida con la misma `lookupCoupon` y fija el
+descuento del carrito en el % del cupón: mientras está aplicado, el descuento manual
+(%/$) queda bloqueado y el descuento automático del cliente no lo pisa. Al cobrar, la
+venta guarda el cupón en las notas con `withCouponNote` (mismo formato que el pedido
+web) y el registro de auditoría lo menciona. Quitar el cupón deja el descuento en cero.
+
 | Función | Definida en | Qué hace |
 |---|---|---|
 | `validate_coupon(p_code)` | `supabase/migrations/20261027120000_coupons.sql` | RPC pública (`security definer`): devuelve `code` y `discount_pct` si el código existe, 0 filas si no. Permite validar sin dar lectura de la tabla `coupons`. |
@@ -309,12 +316,13 @@ redondea a peso entero.
 | `validateCouponInput(input, existingCodes)` | `src/utils/coupons.js` | Valida el alta (formato del código, 0 < % ≤ 100, sin duplicados). Devuelve `{ ok, code, discountPct }` o `{ ok:false, error }`. |
 | `couponSaleFields(subtotal, coupon)` | `src/utils/coupons.js` | Vista previa del checkout: descuento y total con el cupón aplicado. El valor que se guarda lo calcula el servidor. |
 | `lookupCoupon(client, rawCode)` | `src/utils/coupons.js` | Llama a `validate_coupon`. Devuelve `{ coupon }` o `{ error }`. |
+| `withCouponNote(notes, coupon)` | `src/utils/coupons.js` | Suma `Cupón CODIGO (-N%)` a las notas de la venta del POS (separado con ` \| `). Sin cupón devuelve las notas recortadas. |
 
 El checkout revalida el cupón justo antes de enviar para avisar si cambió el porcentaje
 mientras el cliente completaba el pedido; si lo borraron, el servidor rechaza el pedido
 (`coupon_not_found`) y el checkout lo quita.
 
-Tests en `src/utils/coupons.test.js` (`npm test`).
+Tests en `src/utils/coupons.test.js` y `src/components/PosCouponField.test.jsx` (`npm test`).
 
 ### Pedido web calculado en el servidor
 

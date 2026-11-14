@@ -13,7 +13,7 @@ Sirve de checklist: cada fila tiene que quedar cubierta por una fase.
 | `stock_movements` | catalog / sales | B3, B5 |
 | `customers`, `account_payments`, `customer_inactive_dismissed` | customers | B4 |
 | `sales` | sales | B5 |
-| `coupons` | coupons | B6 |
+| `coupons` | coupons | B6 (CRUD), B5 (lectura desde el POS) |
 | `suppliers`, `supplier_payments` | suppliers | B7 |
 | `expenses`, `expense_categories`, `expense_subcategories` | expenses | B7 |
 | `cash_shifts` | cash | B7 |
@@ -37,7 +37,7 @@ Nuevas: `payment_events` (B11) y el esquema `nutrifree_meta` para Alembic (B1).
 | `apply_production` | RPC | `ProductionPage` | B10 |
 | `accumulate_employee_hours` | RPC | `HoursBankPage`, `ProductionLogPage` | B10 |
 | `weekly_report` | RPC | `WeeklyReportPage` | B9 |
-| `validate_coupon` | RPC (anon) | `utils/coupons.js` | B6 |
+| `validate_coupon` | RPC (anon, authenticated) | `utils/coupons.js` (menú web y POS) | B5 (POS), B6 (público) |
 | `create_web_order` | RPC (anon, `SECURITY DEFINER`) | `utils/createWebOrder.js` | B6 |
 | `handle_new_auth_user` | trigger en `auth.users` | Auth | B1 (se conserva) |
 | `sync_customer_balance` | trigger | `account_payments` | B1 (se conserva) |
@@ -93,7 +93,8 @@ Nuevas: `payment_events` (B11) y el esquema `nutrifree_meta` para Alembic (B1).
 | `stock`, `orderPricing`, `duplicateSale`, `money` | B5 | — |
 | `costTier`, `supabase.costTier`, `recipeIngredients`, `productImages` | B3 | F3 (`productImages`) |
 | `supplierAccount` | B7 | — |
-| `coupons`, `createWebOrder`, `webOrder` | B6 | — |
+| `coupons`, `createWebOrder`, `webOrder` | B6 (`withCouponNote`: B5) | — |
+| `PosCouponField` | — | F5 |
 | `weeklyMenu`, `weeklyMenuRules`, `weeklyProduction`, `dates` | B8 | — |
 | `priceImport` | B12 | — |
 | `paths` | B2 (matriz de roles) | F2 |

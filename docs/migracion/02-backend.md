@@ -178,15 +178,24 @@ filas después de cada operación.
 ## B5 — Ventas, pedidos, stock y facturación · XL
 
 **Entradas:** `POSPage.jsx`, `OrdersPage.jsx`, `OrdersKanbanPage.jsx`,
-`BillingPage.jsx`; `utils/stock.js`, `utils/orderPricing.js`,
-`utils/duplicateSale.js`, `utils/money.js`; sección "Estados de `sales` y stock"
-de `TABLAS.md`; RPC `complete_sale_stocks`, `cancel_order_stocks`.
+`BillingPage.jsx`, `PosCouponField.jsx`; `utils/stock.js`, `utils/orderPricing.js`,
+`utils/duplicateSale.js`, `utils/money.js`, `withCouponNote` de `utils/coupons.js`;
+sección "Estados de `sales` y stock" de `TABLAS.md` y "Cupones de descuento" de
+`FUNCIONES.md`; RPC `complete_sale_stocks`, `cancel_order_stocks`, `validate_coupon`.
 
 **Endpoints**
 - `POST /api/v1/sales` — venta de mostrador (nace `closed`, descuenta stock) o
   pedido (nace `open`). Si el método es cuenta corriente crea el cargo en
   `account_payments`. Devuelve `stockWarning` (faltantes / inexistentes).
   `Idempotency-Key` obligatorio.
+  Acepta `couponCode` opcional (cupón que carga quien vende en el POS): el
+  servidor vuelve a buscar el cupón en `coupons`, ignora el descuento que mande
+  el cliente, guarda `discount_type = pct` con el % del cupón y suma
+  `Cupón CODIGO (-N%)` a las notas (mismo formato que `create_web_order`).
+  Cupón inexistente → 422 `coupon_not_found`.
+- `POST /api/v1/coupons/validate` (autenticado, `admin`/`vendor`) — vista previa
+  del cupón en el POS. Misma lógica que el endpoint público de B6; el valor que
+  vale es el que calcula `POST /api/v1/sales`.
 - `GET /api/v1/sales` — filtros `status`, `from`, `to`, `deliveryDate`,
   `customerId`, `needsBilling`; paginado.
 - `PATCH /api/v1/sales/{id}/status` — cambio de estado y movimiento de stock
@@ -202,7 +211,10 @@ de `TABLAS.md`; RPC `complete_sale_stocks`, `cancel_order_stocks`.
   `POST /api/v1/sales/{id}/invoice` (multipart → `StorageBackend`).
 
 **Tests**
-- Portar `stock.test.js`, `orderPricing.test.js`, `duplicateSale.test.js`, `money.test.js`.
+- Portar `stock.test.js`, `orderPricing.test.js`, `duplicateSale.test.js`, `money.test.js`
+  y los casos de `withCouponNote` de `coupons.test.js`.
+- Venta con cupón: el total sale del % guardado en `coupons` aunque el cliente
+  mande otro descuento; un cupón borrado entre la vista previa y el cobro → 422.
 - Matriz de transiciones: para cada par de estados, el invariante "stock
   descontado ⇔ estado en `ready`/`delivered`/`closed`" se cumple.
 - Concurrencia: dos cambios de estado simultáneos sobre la misma venta no
@@ -227,7 +239,9 @@ de `TABLAS.md`; RPC `complete_sale_stocks`, `cancel_order_stocks`.
   al calendario como pendiente (`open`), sin método de pago, y el cliente lo
   confirma o cancela por WhatsApp.
 
-**Admin:** `/api/v1/coupons` — CRUD (solo `admin`).
+**Admin:** `/api/v1/coupons` — CRUD (solo `admin`). El uso de cupones en el POS
+(validación autenticada y `couponCode` en la venta) se resuelve en **B5**, que
+lee la tabla `coupons` del baseline de B1; B6 solo agrega el CRUD y lo público.
 
 **Tests:** portar `coupons.test.js`, `createWebOrder.test.js`, `webOrder.test.js`.
 
